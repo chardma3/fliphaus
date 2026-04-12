@@ -6,16 +6,8 @@ const { analyzeListingImages } = require("./analyze");
 puppeteer.use(StealthPlugin());
 
 const LOCATION_IDS = {
-  Bromma: 898740,
-  Blackeberg: 473450,
   Rissne: 473493,
-  Kista: 925951,
-  Sollentuna: 18027,
-  Skarpnäck: 898478,
-  Bagarmossen: 473340,
   Farsta: 925962,
-  Enskede: 925961,
-  Hökarängen: 473375,
 };
 
 const MAX_PRICE = 4000000;

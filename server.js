@@ -144,6 +144,18 @@ app.post("/api/preference", requireAuth, async (req, res) => {
   }
 });
 
+// Saved listings
+app.get("/api/favorites", requireAuth, async (req, res) => {
+  try {
+    const prefs = await Preference.find({ userId: req.user.id, status: "saved" });
+    const ids = prefs.map((p) => p.listingId);
+    const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 });
+    res.json({ total: listings.length, listings: listings.map((l) => ({ ...l.toObject(), status: "saved" })) });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch favorites" });
+  }
+});
+
 // Scrape trigger
 app.get("/api/scrape", async (req, res) => {
   try {
@@ -155,6 +167,7 @@ app.get("/api/scrape", async (req, res) => {
   }
 });
 
+app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
