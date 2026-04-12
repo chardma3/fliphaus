@@ -155,6 +155,14 @@
       .reno-badge.medium { background: rgba(90,70,10,0.9); color: #ffd43b; }
       .reno-badge.low    { background: rgba(60,60,60,0.85); color: #aaa; }
 
+      .new-badge {
+        position: absolute; top: 10px; right: 10px; z-index: 3;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 600;
+        background: rgba(59,130,246,0.9); color: #fff;
+        backdrop-filter: blur(6px);
+      }
+
       .reno-summary {
         font-size: 0.78rem; color: #aaa; margin-bottom: 8px;
         padding: 6px 10px; background: #252525; border-radius: 6px;
@@ -353,6 +361,8 @@
           const renoBadgeHtml = listing.renovationScore != null
             ? `<div class="reno-badge ${renoCls}">${listing.renovationScore}/10 — ${renoLabel(listing.renovationScore)}</div>`
             : "";
+          const isNew = listing.publishedAt && (Date.now() - new Date(listing.publishedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
+          const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
           const renoSummaryHtml = listing.renovationSummary
             ? `<div class="reno-summary ${renoCls}">
                 ${listing.renovationSummary}
@@ -364,6 +374,7 @@
             <div style="position:relative">
               ${carouselHtml}
               ${renoBadgeHtml}
+              ${newBadgeHtml}
             </div>
             <div class="listing-body">
               <div class="listing-header">
