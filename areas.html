@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Area Insights — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #121212;
+        color: #e0e0e0;
+        min-height: 100vh;
+      }
+
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header {
+        width: 100%; max-width: 700px;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+
+      .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+      .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+      .signout-link:hover { color: #888; }
+
+      .nav-bar {
+        width: 100%; max-width: 700px;
+        display: flex; gap: 10px; margin-bottom: 16px;
+      }
+      .nav-link {
+        padding: 6px 14px; border-radius: 20px;
+        font-family: "Poppins", sans-serif; font-size: 0.82rem;
+        text-decoration: none; color: #888;
+        border: 1px solid #333; background: #1e1e1e;
+        transition: all 0.2s;
+      }
+      .nav-link:hover { border-color: #555; color: #ccc; }
+      .nav-link.active { background: #1a2a3a; border-color: #7eb8f7; color: #7eb8f7; }
+
+      .content { width: 100%; max-width: 700px; }
+
+      .section {
+        background: #1e1e1e; border-radius: 10px;
+        padding: 20px; margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .section h3 {
+        font-size: 1.1rem; color: #fff; margin-bottom: 12px;
+        padding-bottom: 8px; border-bottom: 1px solid #2a2a2a;
+      }
+      .section p { font-size: 0.88rem; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+      .section p:last-child { margin-bottom: 0; }
+
+      .highlight { color: #69db7c; font-weight: 600; }
+      .highlight-blue { color: #7eb8f7; font-weight: 600; }
+      .highlight-yellow { color: #ffd43b; font-weight: 600; }
+
+      .area-card {
+        background: #252525; border-radius: 8px;
+        padding: 16px; margin-bottom: 12px;
+        border-left: 3px solid #69db7c;
+      }
+      .area-card h4 { font-size: 1rem; color: #fff; margin-bottom: 8px; }
+      .area-card p { font-size: 0.82rem; color: #aaa; line-height: 1.5; margin-bottom: 6px; }
+      .area-card p:last-child { margin-bottom: 0; }
+
+      .stat-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        margin-top: 12px;
+      }
+      .stat-box {
+        background: #252525; border-radius: 8px; padding: 14px;
+        text-align: center;
+      }
+      .stat-box .stat-value { font-size: 1.4rem; font-weight: 600; color: #69db7c; }
+      .stat-box .stat-label { font-size: 0.75rem; color: #888; margin-top: 4px; }
+
+      .term {
+        display: inline-block;
+        border-bottom: 1px dashed #666;
+        cursor: help;
+      }
+
+      .timeline {
+        position: relative; padding-left: 20px;
+        border-left: 2px solid #333;
+      }
+      .timeline-item {
+        position: relative; margin-bottom: 16px;
+        padding-left: 16px;
+      }
+      .timeline-item::before {
+        content: ""; position: absolute;
+        left: -25px; top: 6px;
+        width: 10px; height: 10px;
+        border-radius: 50%; background: #69db7c;
+      }
+      .timeline-item .year { font-size: 0.78rem; color: #69db7c; font-weight: 600; }
+      .timeline-item p { font-size: 0.82rem; color: #aaa; margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div>
+          <h1>FlipHaus</h1>
+          <h2>Area insights</h2>
+        </div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+
+      <div class="nav-bar">
+        <a href="/" class="nav-link">All listings</a>
+        <a href="/favorites" class="nav-link">Favorites</a>
+        <a href="/areas" class="nav-link active">Areas</a>
+      </div>
+
+      <div class="content">
+        <!-- Live stats -->
+        <div class="section">
+          <h3>Market snapshot</h3>
+          <div class="stat-grid" id="live-stats">
+            <div class="stat-box"><div class="stat-value" id="stat-total">—</div><div class="stat-label">Active listings</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-avg-price">—</div><div class="stat-label">Avg. asking price</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-high-reno">—</div><div class="stat-label">High renovation potential</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-avg-sqm">—</div><div class="stat-label">Avg. price/m²</div></div>
+          </div>
+        </div>
+
+        <!-- Why these areas -->
+        <div class="section">
+          <h3>Why these areas?</h3>
+          <p>FlipHaus currently focuses on <span class="highlight">Rissne</span> and <span class="highlight">Farsta</span> — two Stockholm suburbs with an outsized concentration of renovation opportunity. Both are dominated by <span class="term" title="Sweden's massive public housing program (1965-1974) that built over one million homes in a decade">miljonprogrammet</span> housing from the late 1960s and early 1970s, meaning the building stock is now <span class="highlight-yellow">50-60 years old</span> and entering a major renovation cycle.</p>
+          <p>These areas combine <span class="highlight-blue">below-average prices</span> with <span class="highlight-blue">excellent transit connections</span> and growing demand from young professionals priced out of inner Stockholm — the textbook setup for renovation-driven value creation.</p>
+        </div>
+
+        <!-- Area cards -->
+        <div class="section">
+          <h3>Target areas</h3>
+
+          <div class="area-card">
+            <h4>Rissne</h4>
+            <p><strong>Municipality:</strong> Sundbybergs kommun</p>
+            <p><strong>Built:</strong> 1967-1971 (miljonprogrammet)</p>
+            <p><strong>Transit:</strong> Rissne tunnelbana (Blue line) — 15 min to T-Centralen</p>
+            <p><strong>Why it's high potential:</strong> Rissne's housing stock is almost entirely miljonprogrammet-era apartments with original kitchens, bathrooms, and flooring. Prices sit 30-40% below neighbouring Sundbyberg centrum, but the tunnel station gives identical commute times. As Sundbyberg's city centre gentrifies (Marabouparken, Ursvik development), Rissne is the next domino. Renovated apartments here consistently sell for 15-25% above unrenovated equivalents.</p>
+          </div>
+
+          <div class="area-card">
+            <h4>Farsta</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> 1956-1965 (early miljonprogrammet / folkhem era)</p>
+            <p><strong>Transit:</strong> Farsta strand tunnelbana (Green line) — 18 min to T-Centralen</p>
+            <p><strong>Why it's high potential:</strong> Farsta was Sweden's first planned suburb and is now undergoing its biggest transformation since the 1960s. Stockholm stad is investing heavily in the Farsta centrum masterplan — new housing, retail, and public spaces. The existing apartment stock features classic 1960s layouts with dated wet rooms and kitchens ripe for modernisation. Prices per square metre remain among the lowest within the tunnelbana network, creating a wide margin for renovation uplift.</p>
+          </div>
+        </div>
+
+        <!-- Miljonprogrammet explainer -->
+        <div class="section">
+          <h3>What is the miljonprogrammet?</h3>
+          <p>Between <span class="highlight">1965 and 1974</span>, the Swedish government built over <span class="highlight">one million homes</span> in a single decade — the most ambitious public housing program in Western history. The goal was to eliminate the post-war housing shortage and give every Swede a modern home.</p>
+          <p>The result was vast suburban estates of standardised concrete apartment blocks, built quickly and efficiently. The construction quality was solid, but the interiors — kitchens, bathrooms, flooring, plumbing — were designed for a 30-year lifespan.</p>
+          <p>That lifespan expired <span class="highlight-yellow">20-30 years ago</span>. While some buildings have been renovated by their housing associations (BRF), a large proportion still have original interiors. This creates a massive, predictable renovation opportunity:</p>
+          <p>
+            <span class="highlight">Original bathroom</span> = linoleum floors, dated tiles, old fixtures<br/>
+            <span class="highlight">Original kitchen</span> = white appliances, metallic benchtops, no dishwasher<br/>
+            <span class="highlight">Original flooring</span> = worn parquet or vinyl throughout
+          </p>
+          <p>FlipHaus uses AI to identify these indicators from listing photos, then estimates renovation cost based on room sizes — giving investors a data-driven view of which properties have the most upside.</p>
+        </div>
+
+        <!-- Timeline -->
+        <div class="section">
+          <h3>Stockholm housing timeline</h3>
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="year">1930s-1950s</div>
+              <p><strong>Folkhem era</strong> — Sweden builds its welfare state. Early planned suburbs like Farsta and Vällingby are created as self-contained "ABC cities" (Arbete, Bostad, Centrum).</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">1965-1974</div>
+              <p><strong>Miljonprogrammet</strong> — One million homes built in a decade. Rissne, Tensta, Rinkeby, and hundreds of other suburbs are constructed. Standardised designs prioritise speed and cost.</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">1990s-2000s</div>
+              <p><strong>First renovation wave</strong> — Plumbing and facades updated in many buildings, but interior renovations left to individual apartment owners. Many skip it due to cost.</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">2010s</div>
+              <p><strong>Inner city prices surge</strong> — Stockholm's population grows rapidly. Young professionals begin looking outward. Suburbs with good transit see renewed interest.</p>
+            </div>
+            <div class="timeline-item">
+              <div class="year">2020s</div>
+              <p><strong>The renovation gap</strong> — Unrenovated miljonprogrammet apartments trade at significant discounts to renovated ones. AI and data make it possible to identify and quantify this gap at scale. FlipHaus enters here.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function init() {
+        // User auth
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        const headerRight = document.getElementById("header-right");
+        if (data.user) {
+          headerRight.innerHTML = `
+            <img src="${data.user.avatar}" alt="" />
+            <span>${data.user.name.split(" ")[0]}</span>
+            <a href="/auth/logout" class="signout-link">Sign out</a>
+          `;
+        } else {
+          headerRight.innerHTML = `
+            <a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>
+          `;
+        }
+
+        // Live stats from listings
+        try {
+          const listRes = await fetch("/api/listings");
+          const listData = await listRes.json();
+          const listings = listData.listings || [];
+
+          document.getElementById("stat-total").textContent = listings.length;
+
+          const prices = listings.map(l => l.askingPriceNum).filter(Boolean);
+          const avgPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+          document.getElementById("stat-avg-price").textContent = avgPrice ? (avgPrice / 1000000).toFixed(1) + "M kr" : "—";
+
+          const highReno = listings.filter(l => l.renovationScore >= 7).length;
+          document.getElementById("stat-high-reno").textContent = highReno;
+
+          const sqmPrices = listings.map(l => {
+            if (!l.squareMeterPrice) return null;
+            const n = parseInt(l.squareMeterPrice.replace(/\D/g, ""), 10);
+            return n > 0 ? n : null;
+          }).filter(Boolean);
+          const avgSqm = sqmPrices.length ? Math.round(sqmPrices.reduce((a, b) => a + b, 0) / sqmPrices.length) : 0;
+          document.getElementById("stat-avg-sqm").textContent = avgSqm ? avgSqm.toLocaleString("sv-SE") + " kr" : "—";
+        } catch (e) {
+          console.error("Failed to load stats", e);
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>

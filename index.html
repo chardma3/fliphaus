@@ -237,6 +237,7 @@
       <div class="nav-bar" style="width:100%;max-width:700px;display:flex;gap:10px;margin-bottom:12px;">
         <a href="/" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1a3a1a;border:1px solid #69db7c;color:#69db7c;font-family:Poppins,sans-serif;">All listings</a>
         <a href="/favorites" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Favorites</a>
+        <a href="/areas" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Areas</a>
       </div>
 
       <div class="instructions">
@@ -273,6 +274,26 @@
       function formatSEK(n) {
         if (!n) return null;
         return n.toLocaleString("sv-SE") + " kr";
+      }
+
+      function translateRooms(str) {
+        if (!str) return null;
+        return str.replace("rum", "rooms").replace("rooms", "rooms");
+      }
+
+      function translateFloor(str) {
+        if (!str) return null;
+        return str.replace(/^vån\s*/i, "Floor ");
+      }
+
+      function translateFee(str) {
+        if (!str) return null;
+        return str.replace("kr/mån", "kr/mo");
+      }
+
+      function isApartmentType(str) {
+        if (!str) return false;
+        return /lägenhet|bostadsrätt/i.test(str);
       }
 
       function buildFilterBar(listings) {
@@ -392,11 +413,11 @@
               <div class="location">${listing.locationDescription}</div>
               <div class="listing-meta">
                 <span class="price-tag">${listing.askingPrice}</span>
-                ${listing.rooms ? `<span>${listing.rooms}</span>` : ""}
+                ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
                 ${listing.size ? `<span>${listing.size}</span>` : ""}
-                ${listing.housingForm ? `<span>${listing.housingForm}</span>` : ""}
-                ${listing.fee ? `<span>Avgift ${listing.fee}</span>` : ""}
-                ${listing.floor ? `<span>${listing.floor}</span>` : ""}
+                ${listing.housingForm && !isApartmentType(listing.housingForm) ? `<span>${listing.housingForm}</span>` : ""}
+                ${listing.fee ? `<span>Fee ${translateFee(listing.fee)}</span>` : ""}
+                ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
               ${listing.brokerAgencyName ? `<div class="listing-agency">🏢 ${listing.brokerAgencyName}</div>` : ""}

@@ -174,6 +174,7 @@
       <div class="nav-bar">
         <a href="/" class="nav-link">All listings</a>
         <a href="/favorites" class="nav-link active">Favorites</a>
+        <a href="/areas" class="nav-link">Areas</a>
       </div>
 
       <div id="stats"></div>
@@ -198,6 +199,26 @@
       function formatSEK(n) {
         if (!n) return null;
         return n.toLocaleString("sv-SE") + " kr";
+      }
+
+      function translateRooms(str) {
+        if (!str) return null;
+        return str.replace("rum", "rooms");
+      }
+
+      function translateFloor(str) {
+        if (!str) return null;
+        return str.replace(/^vån\s*/i, "Floor ");
+      }
+
+      function translateFee(str) {
+        if (!str) return null;
+        return str.replace("kr/mån", "kr/mo");
+      }
+
+      function isApartmentType(str) {
+        if (!str) return false;
+        return /lägenhet|bostadsrätt/i.test(str);
       }
 
       async function removeFromFavorites(listingId, cardEl) {
@@ -277,11 +298,11 @@
               <div class="location">${listing.locationDescription}</div>
               <div class="listing-meta">
                 <span class="price-tag">${listing.askingPrice}</span>
-                ${listing.rooms ? `<span>${listing.rooms}</span>` : ""}
+                ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
                 ${listing.size ? `<span>${listing.size}</span>` : ""}
-                ${listing.housingForm ? `<span>${listing.housingForm}</span>` : ""}
-                ${listing.fee ? `<span>Avgift ${listing.fee}</span>` : ""}
-                ${listing.floor ? `<span>${listing.floor}</span>` : ""}
+                ${listing.housingForm && !isApartmentType(listing.housingForm) ? `<span>${listing.housingForm}</span>` : ""}
+                ${listing.fee ? `<span>Fee ${translateFee(listing.fee)}</span>` : ""}
+                ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
