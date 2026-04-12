@@ -169,6 +169,7 @@ app.get("/api/scrape", async (req, res) => {
 
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
+app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
