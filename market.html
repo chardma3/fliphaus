@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Market Landscape — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #121212;
+        color: #e0e0e0;
+        min-height: 100vh;
+      }
+
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header {
+        width: 100%; max-width: 700px;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+
+      .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+      .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+      .signout-link:hover { color: #888; }
+
+      .nav-bar {
+        width: 100%; max-width: 700px;
+        display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+      }
+      .nav-link {
+        padding: 6px 14px; border-radius: 20px;
+        font-family: "Poppins", sans-serif; font-size: 0.82rem;
+        text-decoration: none; color: #888;
+        border: 1px solid #333; background: #1e1e1e;
+        transition: all 0.2s;
+      }
+      .nav-link:hover { border-color: #555; color: #ccc; }
+      .nav-link.active { background: #2a1a2a; border-color: #d4a0ff; color: #d4a0ff; }
+
+      .content { width: 100%; max-width: 700px; }
+
+      .section {
+        background: #1e1e1e; border-radius: 10px;
+        padding: 20px; margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .section h3 {
+        font-size: 1.1rem; color: #fff; margin-bottom: 12px;
+        padding-bottom: 8px; border-bottom: 1px solid #2a2a2a;
+      }
+      .section p { font-size: 0.88rem; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+      .section p:last-child { margin-bottom: 0; }
+
+      .highlight { color: #69db7c; font-weight: 600; }
+      .highlight-blue { color: #7eb8f7; font-weight: 600; }
+      .highlight-yellow { color: #ffd43b; font-weight: 600; }
+      .highlight-purple { color: #d4a0ff; font-weight: 600; }
+
+      .competitor {
+        background: #252525; border-radius: 8px;
+        padding: 16px; margin-bottom: 12px;
+        border-left: 3px solid #333;
+      }
+      .competitor.listing-platform { border-left-color: #7eb8f7; }
+      .competitor.analytics { border-left-color: #ffd43b; }
+      .competitor.crowdfunding { border-left-color: #69db7c; }
+      .competitor.renovation { border-left-color: #ff8888; }
+      .competitor.international { border-left-color: #d4a0ff; }
+
+      .competitor-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .competitor h4 { font-size: 0.95rem; color: #fff; }
+      .competitor-tag {
+        font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+        background: #333; color: #888;
+      }
+      .competitor-tag.listing-platform { background: #1a2a3a; color: #7eb8f7; }
+      .competitor-tag.analytics { background: #2a2a1a; color: #ffd43b; }
+      .competitor-tag.crowdfunding { background: #1a2a1a; color: #69db7c; }
+      .competitor-tag.renovation { background: #2a1a1a; color: #ff8888; }
+      .competitor-tag.international { background: #2a1a2a; color: #d4a0ff; }
+
+      .competitor p { font-size: 0.82rem; color: #aaa; line-height: 1.5; margin-bottom: 6px; }
+      .competitor p:last-child { margin-bottom: 0; }
+      .competitor .what-they-do { color: #ccc; }
+      .competitor .gap { color: #ffd43b; font-size: 0.78rem; font-style: italic; }
+
+      .matrix {
+        width: 100%; border-collapse: collapse; margin-top: 12px;
+        font-size: 0.78rem;
+      }
+      .matrix th {
+        text-align: left; padding: 8px 6px;
+        color: #888; font-weight: 400; text-transform: uppercase;
+        letter-spacing: 0.5px; border-bottom: 1px solid #333;
+        font-size: 0.7rem;
+      }
+      .matrix td {
+        padding: 8px 6px; border-bottom: 1px solid #2a2a2a;
+        color: #ccc;
+      }
+      .matrix td:first-child { color: #fff; font-weight: 500; }
+      .check { color: #69db7c; }
+      .cross { color: #555; }
+      .partial { color: #ffd43b; }
+
+      .moat-card {
+        background: #252525; border-radius: 8px;
+        padding: 14px; margin-bottom: 10px;
+        display: flex; gap: 12px; align-items: flex-start;
+      }
+      .moat-icon {
+        min-width: 36px; height: 36px; border-radius: 8px;
+        background: #1a3a1a; color: #69db7c;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; flex-shrink: 0;
+      }
+      .moat-content h5 { font-size: 0.88rem; color: #fff; margin-bottom: 4px; }
+      .moat-content p { font-size: 0.78rem; color: #aaa; margin: 0; line-height: 1.4; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div>
+          <h1>FlipHaus</h1>
+          <h2>Market landscape</h2>
+        </div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+
+      <div class="nav-bar">
+        <a href="/" class="nav-link">All listings</a>
+        <a href="/favorites" class="nav-link">Favorites</a>
+        <a href="/areas" class="nav-link">Areas</a>
+        <a href="/methodology" class="nav-link">How it works</a>
+        <a href="/account" class="nav-link">Account</a>
+        <a href="/market" class="nav-link active">Market</a>
+      </div>
+
+      <div class="content">
+
+        <!-- Positioning -->
+        <div class="section">
+          <h3>Where FlipHaus fits</h3>
+          <p>Nobody in Sweden is combining <span class="highlight">AI-powered renovation analysis</span> with <span class="highlight-blue">real-time listing data</span> and an <span class="highlight-yellow">investment-ready framework</span>. The market has listing platforms, analytics tools, crowdfunding platforms, and renovation services — but they exist in silos.</p>
+          <p>FlipHaus sits at the intersection: identifying which specific properties have renovation upside, quantifying it, and (in the future) enabling co-investment through an SPV-per-property model.</p>
+        </div>
+
+        <!-- Swedish competitors -->
+        <div class="section">
+          <h3>Swedish market players</h3>
+
+          <div class="competitor listing-platform">
+            <div class="competitor-header">
+              <h4>Hemnet</h4>
+              <span class="competitor-tag listing-platform">Listing platform</span>
+            </div>
+            <p class="what-they-do">Sweden's dominant property marketplace. ~95% of all Swedish property listings. Public company (HEMN:SS) valued at ~20B SEK.</p>
+            <p class="gap">Gap: Pure marketplace — no renovation analysis, no investment tools. Shows listings, not opportunity.</p>
+          </div>
+
+          <div class="competitor analytics">
+            <div class="competitor-header">
+              <h4>Booli</h4>
+              <span class="competitor-tag analytics">Analytics</span>
+            </div>
+            <p class="what-they-do">Property analytics platform (owned by Hemnet since 2021). Historical price data, price estimates, area statistics. The "Zillow Zestimate" of Sweden.</p>
+            <p class="gap">Gap: Backward-looking analytics. Tells you what a property is worth today — not what it could be worth after renovation.</p>
+          </div>
+
+          <div class="competitor crowdfunding">
+            <div class="competitor-header">
+              <h4>Tessin</h4>
+              <span class="competitor-tag crowdfunding">Crowdfunding</span>
+            </div>
+            <p class="what-they-do">Real estate crowdfunding platform. Primarily funds new construction and development projects. Minimum investment ~10,000 SEK. Licensed by Finansinspektionen.</p>
+            <p class="gap">Gap: Focuses on new-build development, not renovation flips. Fund-level structure, not property-level. No AI analysis of individual units.</p>
+          </div>
+
+          <div class="competitor crowdfunding">
+            <div class="competitor-header">
+              <h4>Kameo</h4>
+              <span class="competitor-tag crowdfunding">Crowdfunding</span>
+            </div>
+            <p class="what-they-do">Nordic real estate lending platform. Investors provide loans to property developers. Operates in Sweden, Norway, Denmark, Finland.</p>
+            <p class="gap">Gap: Debt instrument (lending), not equity. Investors earn interest, not renovation upside. No property selection intelligence.</p>
+          </div>
+
+          <div class="competitor analytics">
+            <div class="competitor-header">
+              <h4>Valueguard / HOX Index</h4>
+              <span class="competitor-tag analytics">Analytics</span>
+            </div>
+            <p class="what-they-do">Academic-grade Swedish housing price indices. Used by banks, government, and institutional investors. Tracks price movements at city/suburb level.</p>
+            <p class="gap">Gap: Macro-level data only. No property-specific analysis or renovation assessment.</p>
+          </div>
+
+          <div class="competitor renovation">
+            <div class="competitor-header">
+              <h4>Byggahus / Renoveringsguiden</h4>
+              <span class="competitor-tag renovation">Renovation services</span>
+            </div>
+            <p class="what-they-do">Consumer renovation guides and contractor matching platforms. Help homeowners plan and price renovations.</p>
+            <p class="gap">Gap: Serves homeowners doing their own place, not investors. No connection to live listings or market opportunity.</p>
+          </div>
+        </div>
+
+        <!-- International comparisons -->
+        <div class="section">
+          <h3>International comparisons</h3>
+
+          <div class="competitor international">
+            <div class="competitor-header">
+              <h4>Opendoor (US)</h4>
+              <span class="competitor-tag international">iBuyer</span>
+            </div>
+            <p class="what-they-do">Buys homes directly, renovates, and resells. Uses algorithms for pricing. Publicly traded (OPEN). Revenue ~$6B but has struggled with profitability.</p>
+            <p class="gap">Relevance: Proves the market for tech-driven property flipping exists at scale. FlipHaus takes a lighter approach — identifying opportunity rather than buying directly.</p>
+          </div>
+
+          <div class="competitor international">
+            <div class="competitor-header">
+              <h4>Zillow Offers (US, discontinued)</h4>
+              <span class="competitor-tag international">iBuyer</span>
+            </div>
+            <p class="what-they-do">Zillow's iBuying arm. Shut down in 2021 after $881M in losses — their pricing algorithm consistently overpaid for homes.</p>
+            <p class="gap">Lesson: Buying properties at scale is capital-intensive and risky. FlipHaus avoids this by being an intelligence layer + co-investment platform rather than a buyer.</p>
+          </div>
+
+          <div class="competitor international">
+            <div class="competitor-header">
+              <h4>Nested (UK)</h4>
+              <span class="competitor-tag international">PropTech</span>
+            </div>
+            <p class="what-they-do">UK estate agency that advances sellers money before their home sells. Uses data for pricing. Raised ~$160M.</p>
+            <p class="gap">Relevance: Similar data-driven approach to property value, but focused on selling, not renovation investment.</p>
+          </div>
+
+          <div class="competitor international">
+            <div class="competitor-header">
+              <h4>Properly (Canada) / Casavo (EU)</h4>
+              <span class="competitor-tag international">iBuyer</span>
+            </div>
+            <p class="what-they-do">European and Canadian iBuyers. Casavo operates in Italy/Spain, Properly in Canada. Both use tech for pricing and quick transactions.</p>
+            <p class="gap">Relevance: No equivalent exists in Sweden yet. The BRF (co-op) structure makes Swedish iBuying harder — another reason the FlipHaus model (identify + co-invest) is better suited to this market.</p>
+          </div>
+        </div>
+
+        <!-- Feature matrix -->
+        <div class="section">
+          <h3>Feature comparison</h3>
+          <table class="matrix">
+            <tr>
+              <th></th>
+              <th>Live listings</th>
+              <th>AI analysis</th>
+              <th>Reno cost est.</th>
+              <th>Investment</th>
+              <th>Area insights</th>
+            </tr>
+            <tr>
+              <td>FlipHaus</td>
+              <td class="check">Yes</td>
+              <td class="check">Yes</td>
+              <td class="check">Yes</td>
+              <td class="partial">Planned</td>
+              <td class="check">Yes</td>
+            </tr>
+            <tr>
+              <td>Hemnet</td>
+              <td class="check">Yes</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="partial">Basic</td>
+            </tr>
+            <tr>
+              <td>Booli</td>
+              <td class="check">Yes</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="check">Yes</td>
+            </tr>
+            <tr>
+              <td>Tessin</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="check">Yes</td>
+              <td class="cross">No</td>
+            </tr>
+            <tr>
+              <td>Kameo</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="cross">No</td>
+              <td class="check">Yes</td>
+              <td class="cross">No</td>
+            </tr>
+            <tr>
+              <td>Opendoor</td>
+              <td class="check">Yes</td>
+              <td class="partial">Pricing AI</td>
+              <td class="check">Yes</td>
+              <td class="cross">No</td>
+              <td class="partial">Basic</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- FlipHaus moat -->
+        <div class="section">
+          <h3>The FlipHaus advantage</h3>
+
+          <div class="moat-card">
+            <div class="moat-icon">1</div>
+            <div class="moat-content">
+              <h5>Sweden-specific AI model</h5>
+              <p>Trained on Swedish apartment renovation indicators — miljonprogrammet-era kitchens, bathrooms, and flooring. Generic property AI doesn't know what a Swedish "plastiga" range hood means.</p>
+            </div>
+          </div>
+
+          <div class="moat-card">
+            <div class="moat-icon">2</div>
+            <div class="moat-content">
+              <h5>Renovation-first, not listing-first</h5>
+              <p>Hemnet shows you properties. FlipHaus shows you opportunities. Every listing is scored by renovation potential before you see it.</p>
+            </div>
+          </div>
+
+          <div class="moat-card">
+            <div class="moat-icon">3</div>
+            <div class="moat-content">
+              <h5>Cost estimation at scale</h5>
+              <p>Individual renovation quotes take weeks and cost money. FlipHaus provides directional cost estimates on every listing, instantly, using AI photo analysis and current market rates.</p>
+            </div>
+          </div>
+
+          <div class="moat-card">
+            <div class="moat-icon">4</div>
+            <div class="moat-content">
+              <h5>SPV co-investment model (planned)</h5>
+              <p>One SPV per property. Investors fund a specific apartment, not a fund. Clear entry, clear exit upon sale. Avoids fund classification and regulatory complexity.</p>
+            </div>
+          </div>
+
+          <div class="moat-card">
+            <div class="moat-icon">5</div>
+            <div class="moat-content">
+              <h5>BRF market expertise</h5>
+              <p>Sweden's bostadsratt (co-op) system is unique. FlipHaus understands avgift structures, BRF financials, and how they impact renovation ROI — something no international competitor can replicate without deep local knowledge.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Why no one else is doing this -->
+        <div class="section">
+          <h3>Why hasn't someone done this already?</h3>
+          <p><span class="highlight-blue">Hemnet could</span> — they have the listing data and the traffic. But they're a marketplace, not an investment platform. Adding renovation scores would imply property recommendations, which creates regulatory and liability risk they've avoided.</p>
+          <p><span class="highlight-yellow">Booli could</span> — they have the analytics DNA. But they were acquired by Hemnet and now serve the same marketplace model. Their innovation pipeline is constrained by the parent company's strategy.</p>
+          <p><span class="highlight">Tessin/Kameo could</span> — they have the investment infrastructure. But they lack the property-level intelligence. They fund what developers bring them, rather than proactively identifying opportunity.</p>
+          <p>The gap exists because renovation analysis requires <span class="highlight-purple">multimodal AI</span> (reading photos + understanding Swedish construction), <span class="highlight-purple">real estate domain expertise</span> (knowing what makes a good flip), and <span class="highlight-purple">investment platform thinking</span> (SPV structure, investor experience). That combination hasn't existed until now.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      async function init() {
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        const headerRight = document.getElementById("header-right");
+        if (data.user) {
+          headerRight.innerHTML = `
+            <img src="${data.user.avatar}" alt="" />
+            <span>${data.user.name.split(" ")[0]}</span>
+            <a href="/auth/logout" class="signout-link">Sign out</a>
+          `;
+        } else {
+          headerRight.innerHTML = `
+            <a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>
+          `;
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>
