@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #121212;
+        color: #e0e0e0;
+        min-height: 100vh;
+      }
+
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header {
+        width: 100%; max-width: 700px;
+        display: flex; align-items: flex-start; justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+
+      .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+      .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+      .signout-link:hover { color: #888; }
+
+      .nav-bar {
+        width: 100%; max-width: 700px;
+        display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+      }
+      .nav-link {
+        padding: 6px 14px; border-radius: 20px;
+        font-family: "Poppins", sans-serif; font-size: 0.82rem;
+        text-decoration: none; color: #888;
+        border: 1px solid #333; background: #1e1e1e;
+        transition: all 0.2s;
+      }
+      .nav-link:hover { border-color: #555; color: #ccc; }
+      .nav-link.active { background: #2a2a1a; border-color: #ffd43b; color: #ffd43b; }
+
+      .content { width: 100%; max-width: 700px; }
+
+      .section {
+        background: #1e1e1e; border-radius: 10px;
+        padding: 20px; margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      }
+      .section h3 {
+        font-size: 1.1rem; color: #fff; margin-bottom: 12px;
+        padding-bottom: 8px; border-bottom: 1px solid #2a2a2a;
+      }
+
+      .login-msg {
+        text-align: center; padding: 60px 20px;
+        color: #666; font-size: 0.95rem;
+      }
+      .login-msg a { color: #7eb8f7; text-decoration: none; }
+      .login-msg a:hover { text-decoration: underline; }
+
+      .profile-row {
+        display: flex; align-items: center; gap: 16px;
+        margin-bottom: 16px;
+      }
+      .profile-avatar {
+        width: 56px; height: 56px; border-radius: 50%;
+        object-fit: cover; border: 2px solid #333;
+      }
+      .profile-info h4 { font-size: 1rem; color: #fff; margin-bottom: 2px; }
+      .profile-info p { font-size: 0.82rem; color: #888; }
+
+      .form-group { margin-bottom: 16px; }
+      .form-group label {
+        display: block; font-size: 0.78rem; color: #888;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+      .form-group input, .form-group select {
+        width: 100%; padding: 10px 12px;
+        background: #252525; border: 1px solid #333; border-radius: 6px;
+        color: #e0e0e0; font-family: "Poppins", sans-serif; font-size: 0.88rem;
+        outline: none; transition: border-color 0.2s;
+      }
+      .form-group input:focus, .form-group select:focus {
+        border-color: #69db7c;
+      }
+      .form-group .hint {
+        font-size: 0.75rem; color: #555; margin-top: 4px;
+      }
+
+      .area-chips {
+        display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;
+      }
+      .area-chip {
+        padding: 5px 12px; border-radius: 20px;
+        font-family: "Poppins", sans-serif; font-size: 0.78rem;
+        border: 1px solid #333; background: #252525; color: #888;
+        cursor: pointer; transition: all 0.2s; user-select: none;
+      }
+      .area-chip:hover { border-color: #555; color: #ccc; }
+      .area-chip.selected { background: #1a3a1a; border-color: #69db7c; color: #69db7c; }
+
+      .btn {
+        padding: 10px 20px; border: none; border-radius: 6px;
+        font-family: "Poppins", sans-serif; font-size: 0.85rem;
+        cursor: pointer; transition: opacity 0.2s;
+      }
+      .btn:hover { opacity: 0.85; }
+      .btn-primary { background: #1a3a1a; color: #69db7c; }
+      .btn-danger { background: #3a1a1a; color: #ff8888; }
+      .btn-secondary { background: #252525; color: #aaa; margin-left: 10px; }
+
+      .btn-row { display: flex; align-items: center; margin-top: 16px; }
+
+      .toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: #1a3a1a; color: #69db7c; padding: 10px 20px;
+        border-radius: 8px; font-size: 0.85rem;
+        opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        z-index: 100;
+      }
+      .toast.visible { opacity: 1; }
+
+      .danger-zone {
+        border: 1px solid #3a1a1a; border-radius: 8px;
+        padding: 16px; margin-top: 8px;
+      }
+      .danger-zone p { font-size: 0.82rem; color: #888; margin-bottom: 12px; line-height: 1.5; }
+
+      .confirm-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.7); z-index: 100;
+        align-items: center; justify-content: center;
+      }
+      .confirm-overlay.visible { display: flex; }
+      .confirm-box {
+        background: #1e1e1e; border-radius: 12px;
+        padding: 28px 24px; text-align: center; max-width: 360px; width: 90%;
+      }
+      .confirm-box h4 { color: #ff8888; margin-bottom: 8px; font-size: 1rem; }
+      .confirm-box p { color: #888; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <div class="confirm-overlay" id="confirm-delete">
+      <div class="confirm-box">
+        <h4>Delete your account?</h4>
+        <p>This will permanently remove your profile, saved preferences, and all associated data. This action cannot be undone.</p>
+        <button class="btn btn-danger" id="confirm-delete-btn">Yes, delete my account</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('confirm-delete').classList.remove('visible')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">Settings saved</div>
+
+    <div id="app">
+      <header>
+        <div>
+          <h1>FlipHaus</h1>
+          <h2>Account settings</h2>
+        </div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+
+      <div class="nav-bar">
+        <a href="/" class="nav-link">All listings</a>
+        <a href="/favorites" class="nav-link">Favorites</a>
+        <a href="/areas" class="nav-link">Areas</a>
+        <a href="/methodology" class="nav-link">How it works</a>
+        <a href="/account" class="nav-link active">Account</a>
+      </div>
+
+      <div class="content" id="content"></div>
+    </div>
+
+    <script>
+      const ALL_AREAS = [
+        "Bromma", "Blackeberg", "Rissne", "Kista", "Sollentuna",
+        "Skarpnäck", "Bagarmossen", "Farsta", "Enskede", "Hökarängen"
+      ];
+
+      let currentUser = null;
+      let selectedAreas = [];
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("visible");
+        setTimeout(() => t.classList.remove("visible"), 2000);
+      }
+
+      function renderLoggedOut() {
+        document.getElementById("content").innerHTML = `
+          <div class="section">
+            <div class="login-msg">
+              <p>Sign in to manage your account and preferences.</p>
+              <br/>
+              <a href="/auth/google" style="padding:10px 20px;border-radius:6px;background:#fff;color:#333;font-size:0.88rem;text-decoration:none;font-family:Poppins,sans-serif;display:inline-block;">Sign in with Google</a>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderAccount(user) {
+        selectedAreas = [...(user.settings?.areas || ALL_AREAS)];
+        const maxPrice = user.settings?.maxPrice || 4000000;
+
+        document.getElementById("content").innerHTML = `
+          <div class="section">
+            <h3>Profile</h3>
+            <div class="profile-row">
+              <img class="profile-avatar" src="${user.avatar}" alt="" />
+              <div class="profile-info">
+                <h4>${user.name}</h4>
+                <p>${user.email}</p>
+              </div>
+            </div>
+            <p style="font-size:0.78rem;color:#555;">Profile details are managed through your Google account.</p>
+          </div>
+
+          <div class="section">
+            <h3>Search preferences</h3>
+            <div class="form-group">
+              <label>Maximum price (SEK)</label>
+              <input type="number" id="max-price" value="${maxPrice}" step="100000" min="500000" max="10000000" />
+              <div class="hint">Only listings at or below this price will be shown</div>
+            </div>
+            <div class="form-group">
+              <label>Areas of interest</label>
+              <div class="area-chips" id="area-chips"></div>
+              <div class="hint">Select the areas you want to see listings for</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="save-settings-btn">Save settings</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Sign out</h3>
+            <p style="font-size:0.85rem;color:#888;margin-bottom:12px;">Sign out of FlipHaus on this device. Your data will be preserved.</p>
+            <a href="/auth/logout" class="btn btn-secondary" style="text-decoration:none;display:inline-block;">Sign out</a>
+          </div>
+
+          <div class="section">
+            <h3 style="color:#ff8888;">Danger zone</h3>
+            <div class="danger-zone">
+              <p>Permanently delete your FlipHaus account, including all saved preferences and data. This cannot be undone.</p>
+              <button class="btn btn-danger" id="delete-btn">Delete account</button>
+            </div>
+          </div>
+        `;
+
+        // Render area chips
+        const chipsEl = document.getElementById("area-chips");
+        ALL_AREAS.forEach(area => {
+          const chip = document.createElement("span");
+          chip.className = "area-chip" + (selectedAreas.includes(area) ? " selected" : "");
+          chip.textContent = area;
+          chip.addEventListener("click", () => {
+            if (selectedAreas.includes(area)) {
+              selectedAreas = selectedAreas.filter(a => a !== area);
+              chip.classList.remove("selected");
+            } else {
+              selectedAreas.push(area);
+              chip.classList.add("selected");
+            }
+          });
+          chipsEl.appendChild(chip);
+        });
+
+        // Save settings
+        document.getElementById("save-settings-btn").addEventListener("click", async () => {
+          const maxPrice = parseInt(document.getElementById("max-price").value, 10);
+          if (!maxPrice || maxPrice < 500000) return showToast("Enter a valid price");
+          if (selectedAreas.length === 0) return showToast("Select at least one area");
+
+          const res = await fetch("/api/settings", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ maxPrice, areas: selectedAreas }),
+          });
+          if (res.ok) showToast("Settings saved");
+          else showToast("Failed to save");
+        });
+
+        // Delete account
+        document.getElementById("delete-btn").addEventListener("click", () => {
+          document.getElementById("confirm-delete").classList.add("visible");
+        });
+
+        document.getElementById("confirm-delete-btn").addEventListener("click", async () => {
+          const res = await fetch("/api/account", { method: "DELETE" });
+          if (res.ok) {
+            window.location.href = "/";
+          } else {
+            showToast("Failed to delete account");
+            document.getElementById("confirm-delete").classList.remove("visible");
+          }
+        });
+      }
+
+      async function init() {
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        currentUser = data.user;
+
+        const headerRight = document.getElementById("header-right");
+        if (currentUser) {
+          headerRight.innerHTML = `
+            <img src="${currentUser.avatar}" alt="" />
+            <span>${currentUser.name.split(" ")[0]}</span>
+            <a href="/auth/logout" class="signout-link">Sign out</a>
+          `;
+          renderAccount(currentUser);
+        } else {
+          headerRight.innerHTML = `
+            <a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>
+          `;
+          renderLoggedOut();
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>

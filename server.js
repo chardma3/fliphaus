@@ -89,6 +89,31 @@ app.get("/api/me", (req, res) => {
   res.json({ user: { name: req.user.name, email: req.user.email, avatar: req.user.avatar, settings: req.user.settings } });
 });
 
+// Update settings
+app.patch("/api/settings", requireAuth, async (req, res) => {
+  try {
+    const { maxPrice, areas } = req.body;
+    const update = {};
+    if (maxPrice != null) update["settings.maxPrice"] = maxPrice;
+    if (areas != null) update["settings.areas"] = areas;
+    await User.findByIdAndUpdate(req.user.id, update);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save settings" });
+  }
+});
+
+// Delete account
+app.delete("/api/account", requireAuth, async (req, res) => {
+  try {
+    await Preference.deleteMany({ userId: req.user.id });
+    await User.findByIdAndDelete(req.user.id);
+    req.logout(() => res.json({ ok: true }));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete account" });
+  }
+});
+
 // Listings — public, preferences injected if logged in
 app.get("/api/listings", async (req, res) => {
   try {
@@ -170,6 +195,7 @@ app.get("/api/scrape", async (req, res) => {
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
 app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
+app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.html")));
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
