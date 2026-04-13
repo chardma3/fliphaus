@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Listing — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      .back { width: 100%; max-width: 700px; margin-bottom: 16px; }
+      .back a { color: #7eb8f7; text-decoration: none; font-size: 0.85rem; }
+
+      .content { width: 100%; max-width: 700px; }
+      .section { background: #1e1e1e; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+      .section h3 { font-size: 1.1rem; color: #fff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a; }
+      .section p { font-size: 0.88rem; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+
+      .carousel { position: relative; width: 100%; height: 300px; background: #2a2a2a; overflow: hidden; border-radius: 10px; margin-bottom: 16px; }
+      .carousel-track { display: flex; height: 100%; transition: transform 0.3s ease; }
+      .carousel-slide { min-width: 100%; height: 100%; object-fit: cover; }
+      .carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.55); border: none; color: #fff; font-size: 1.4rem; padding: 10px 16px; cursor: pointer; border-radius: 6px; z-index: 2; }
+      .carousel-prev { left: 8px; }
+      .carousel-next { right: 8px; }
+      .carousel-counter { position: absolute; bottom: 10px; right: 12px; background: rgba(0,0,0,0.55); color: #ddd; font-size: 0.8rem; padding: 3px 10px; border-radius: 12px; z-index: 2; }
+
+      .listing-title { font-size: 1.4rem; color: #fff; margin-bottom: 4px; }
+      .listing-location { font-size: 0.88rem; color: #888; margin-bottom: 12px; }
+
+      .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+      .meta-item { background: #252525; border-radius: 8px; padding: 10px 14px; }
+      .meta-item .label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+      .meta-item .value { font-size: 0.95rem; color: #fff; font-weight: 500; margin-top: 2px; }
+      .meta-item .value.green { color: #69db7c; }
+
+      /* Funding section */
+      .funding-visual { display: flex; align-items: center; gap: 24px; margin-bottom: 16px; }
+      .big-pie { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
+      .big-pie svg { width: 120px; height: 120px; transform: rotate(-90deg); }
+      .big-pie .bg { fill: none; stroke: #2a2a2a; stroke-width: 10; }
+      .big-pie .fill { fill: none; stroke: #69db7c; stroke-width: 10; stroke-linecap: round; transition: stroke-dasharray 0.6s ease; }
+      .big-pie .fill.full { stroke: #ffd43b; }
+      .big-pie .text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .big-pie .pct { font-size: 1.4rem; font-weight: 600; color: #fff; }
+      .big-pie .label { font-size: 0.7rem; color: #888; }
+
+      .funding-breakdown { flex: 1; }
+      .fund-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2a2a2a; font-size: 0.82rem; }
+      .fund-row:last-child { border-bottom: none; font-weight: 600; color: #fff; }
+      .fund-row .fund-label { color: #888; }
+      .fund-row .fund-value { color: #ccc; }
+
+      .invest-section { text-align: center; margin-top: 16px; }
+      .invest-big-btn { padding: 12px 40px; border: none; border-radius: 8px; background: #1a3a1a; color: #69db7c; font-family: "Poppins", sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+      .invest-big-btn:hover { opacity: 0.85; }
+      .invest-big-btn.funded { background: #2a2a1a; color: #ffd43b; cursor: default; }
+
+      .investors-list { margin-top: 12px; }
+      .investor-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.82rem; color: #aaa; border-bottom: 1px solid #1a1a1a; }
+
+      /* Area context */
+      .highlight { color: #69db7c; font-weight: 600; }
+      .highlight-blue { color: #7eb8f7; font-weight: 600; }
+      .highlight-yellow { color: #ffd43b; font-weight: 600; }
+
+      .reno-summary { font-size: 0.85rem; color: #aaa; padding: 10px 14px; background: #252525; border-radius: 8px; border-left: 3px solid #ffd43b; margin-bottom: 12px; }
+      .reno-summary .score { color: #ffd43b; font-weight: 600; font-size: 1rem; }
+
+      .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a3a1a; color: #69db7c; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
+      .toast.visible { opacity: 1; }
+
+      .invest-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+      .invest-modal.visible { display: flex; }
+      .invest-box { background: #1e1e1e; border-radius: 12px; padding: 28px 24px; max-width: 360px; width: 90%; }
+      .invest-box h4 { color: #fff; margin-bottom: 12px; }
+      .invest-box input { width: 100%; padding: 10px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: "Poppins", sans-serif; font-size: 1rem; outline: none; margin-bottom: 12px; }
+      .invest-box .btn-row { display: flex; gap: 10px; }
+      .invest-box .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-family: "Poppins", sans-serif; font-size: 0.85rem; cursor: pointer; }
+      .invest-box .btn-confirm { background: #1a3a1a; color: #69db7c; }
+      .invest-box .btn-cancel { background: #252525; color: #888; }
+    </style>
+  </head>
+  <body>
+    <div class="toast" id="toast"></div>
+    <div class="invest-modal" id="invest-modal">
+      <div class="invest-box">
+        <h4>Invest in this property</h4>
+        <input type="number" id="modal-amount" placeholder="Amount in SEK" />
+        <div class="btn-row">
+          <button class="btn btn-confirm" id="modal-confirm">Confirm investment</button>
+          <button class="btn btn-cancel" id="modal-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app">
+      <div class="back"><a href="/invest">&larr; Back to listings</a></div>
+      <div class="content" id="content"><p style="color:#666;text-align:center;padding:40px;">Loading...</p></div>
+    </div>
+    <script>
+      const CIRC = 2 * Math.PI * 48;
+      const listingId = window.location.pathname.split("/").pop();
+
+      const AREA_CONTEXT = {
+        "Rissne": {
+          built: "1967-1971 (miljonprogrammet)",
+          transit: "Rissne tunnelbana (Blue line) — 15 min to T-Centralen",
+          context: "Rissne's housing stock is almost entirely miljonprogrammet-era apartments with original kitchens, bathrooms, and flooring. Prices sit 30-40% below neighbouring Sundbyberg centrum, but the tunnel station gives identical commute times. Renovated apartments here consistently sell for 15-25% above unrenovated equivalents."
+        },
+        "Farsta": {
+          built: "1956-1965 (early miljonprogrammet / folkhem era)",
+          transit: "Farsta strand tunnelbana (Green line) — 18 min to T-Centralen",
+          context: "Sweden's first planned suburb, now undergoing its biggest transformation since the 1960s. Stockholm stad is investing in the Farsta centrum masterplan — new housing, retail, and public spaces. Prices per square metre remain among the lowest within the tunnelbana network, creating wide margin for renovation uplift."
+        },
+        "Bromma": { built: "Mixed eras, 1940s-1970s", transit: "Tram/bus — 20 min to city", context: "Established, leafy suburb with a mix of villas and apartments. Renovation potential in older BRF buildings near Blackeberg and Vällingby." },
+        "Kista": { built: "1970s miljonprogrammet", transit: "Kista tunnelbana (Blue line) — 20 min to T-Centralen", context: "Sweden's tech hub. Strong rental demand from IT workers. Miljonprogrammet housing with significant renovation backlog." },
+        "Sollentuna": { built: "1960s-1980s", transit: "Pendeltåg — 20 min to Stockholm C", context: "Family-oriented suburb with good schools. Growing demand pushing prices up, creating renovation upside." },
+      };
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg; t.classList.add("visible");
+        setTimeout(() => t.classList.remove("visible"), 2000);
+      }
+
+      function formatSEK(n) { return n ? n.toLocaleString("sv-SE") + " SEK" : "—"; }
+
+      function getAreaName(locationDesc) {
+        if (!locationDesc) return null;
+        for (const area of Object.keys(AREA_CONTEXT)) {
+          if (locationDesc.toLowerCase().includes(area.toLowerCase())) return area;
+        }
+        return null;
+      }
+
+      async function loadListing() {
+        const res = await fetch("/api/invest/listing/" + listingId);
+        if (!res.ok) { document.getElementById("content").innerHTML = '<p style="color:#ff8888;text-align:center;padding:40px;">Listing not found.</p>'; return; }
+        const data = await res.json();
+        const l = data.listing;
+        const f = data.funding;
+        const p = data.proposal;
+        const b = data.builder;
+
+        const imgs = l.images?.length ? l.images : (l.thumbnail ? [l.thumbnail] : []);
+        const pct = f.percent;
+        const dashFill = (pct / 100) * CIRC;
+        const isFull = pct >= 100;
+        const areaName = getAreaName(l.locationDescription);
+        const area = areaName ? AREA_CONTEXT[areaName] : null;
+
+        const carouselHtml = imgs.length ? `
+          <div class="carousel" data-idx="0">
+            <div class="carousel-track">${imgs.map(u => `<img class="carousel-slide" src="${u}" />`).join("")}</div>
+            ${imgs.length > 1 ? `<button class="carousel-btn carousel-prev">&#8249;</button><button class="carousel-btn carousel-next">&#8250;</button><div class="carousel-counter">1 / ${imgs.length}</div>` : ""}
+          </div>
+        ` : "";
+
+        document.getElementById("content").innerHTML = `
+          ${carouselHtml}
+
+          <div class="section">
+            <h2 class="listing-title">${l.streetAddress}</h2>
+            <div class="listing-location">${l.locationDescription}</div>
+            <div class="meta-grid">
+              <div class="meta-item"><div class="label">Asking price</div><div class="value green">${l.askingPrice}</div></div>
+              <div class="meta-item"><div class="label">Size</div><div class="value">${l.size || '—'}</div></div>
+              <div class="meta-item"><div class="label">Rooms</div><div class="value">${l.rooms || '—'}</div></div>
+              <div class="meta-item"><div class="label">Monthly fee</div><div class="value">${l.fee || '—'}</div></div>
+              <div class="meta-item"><div class="label">Floor</div><div class="value">${l.floor || '—'}</div></div>
+              <div class="meta-item"><div class="label">Price/m²</div><div class="value">${l.squareMeterPrice || '—'}</div></div>
+            </div>
+            ${l.brokerAgencyName ? `<p style="font-size:0.82rem;color:#666;">${l.brokerAgencyName}</p>` : ''}
+          </div>
+
+          ${l.renovationScore != null ? `
+          <div class="section">
+            <h3>Renovation analysis</h3>
+            <div class="reno-summary">
+              Score: <span class="score">${l.renovationScore}/10</span>
+              ${l.renovationSummary ? ` — ${l.renovationSummary}` : ''}
+              ${l.totalEstimatedCostSEK ? `<br/>AI estimate: ${formatSEK(l.totalEstimatedCostSEK)}` : ''}
+            </div>
+          </div>
+          ` : ''}
+
+          ${p ? `
+          <div class="section">
+            <h3>Builder proposal</h3>
+            ${b ? `<p style="font-size:0.82rem;color:#888;">Builder: <strong style="color:#ccc;">${b.name}</strong>${b.company ? ' · ' + b.company : ''}</p>` : ''}
+            <div class="meta-grid">
+              <div class="meta-item"><div class="label">Renovation cost</div><div class="value green">${formatSEK(p.estimatedCostSEK)}</div></div>
+              <div class="meta-item"><div class="label">Timeline</div><div class="value">${p.timelineWeeks} weeks + ${p.bufferWeeks}w buffer</div></div>
+              <div class="meta-item"><div class="label">Start date</div><div class="value">${new Date(p.startDate).toLocaleDateString()}</div></div>
+              <div class="meta-item"><div class="label">Total duration</div><div class="value">${p.timelineWeeks + (p.bufferWeeks || 4)} weeks</div></div>
+            </div>
+            ${p.costBreakdown ? `<p style="font-size:0.82rem;color:#aaa;">Breakdown: ${p.costBreakdown}</p>` : ''}
+            ${p.notes ? `<p style="font-size:0.82rem;color:#aaa;">Notes: ${p.notes}</p>` : ''}
+          </div>
+          ` : ''}
+
+          <div class="section">
+            <h3>Funding</h3>
+            <div class="funding-visual">
+              <div class="big-pie">
+                <svg viewBox="0 0 120 120">
+                  <circle class="bg" cx="60" cy="60" r="48" />
+                  <circle class="fill ${isFull ? 'full' : ''}" cx="60" cy="60" r="48" stroke-dasharray="${dashFill} ${CIRC}" />
+                </svg>
+                <div class="text">
+                  <div class="pct">${pct}%</div>
+                  <div class="label">funded</div>
+                </div>
+              </div>
+              <div class="funding-breakdown">
+                <div class="fund-row"><span class="fund-label">Deposit (15%)</span><span class="fund-value">${formatSEK(f.deposit)}</span></div>
+                <div class="fund-row"><span class="fund-label">Renovation</span><span class="fund-value">${formatSEK(f.renoCost)}</span></div>
+                <div class="fund-row"><span class="fund-label">Carrying cost</span><span class="fund-value">${formatSEK(f.carryingCost)}</span></div>
+                <div class="fund-row"><span>Total needed</span><span>${formatSEK(f.totalNeeded)}</span></div>
+              </div>
+            </div>
+            ${f.myInvestment ? `<p style="font-size:0.85rem;color:#69db7c;margin-bottom:12px;">Your investment: <strong>${formatSEK(f.myInvestment)}</strong></p>` : ''}
+            <div class="invest-section">
+              ${isFull
+                ? `<button class="invest-big-btn funded">Fully funded</button>`
+                : `<button class="invest-big-btn" id="invest-btn">Invest — ${formatSEK(f.totalNeeded - f.funded)} remaining</button>`
+              }
+            </div>
+            ${f.investors?.length ? `
+            <div class="investors-list">
+              <h4 style="font-size:0.82rem;color:#888;margin:12px 0 6px;">Investors</h4>
+              ${f.investors.map(i => `<div class="investor-row"><span>${i.name}</span><span>${formatSEK(i.amount)}</span></div>`).join('')}
+            </div>
+            ` : ''}
+          </div>
+
+          ${area ? `
+          <div class="section">
+            <h3>About ${areaName}</h3>
+            <p><strong>Built:</strong> ${area.built}</p>
+            <p><strong>Transit:</strong> ${area.transit}</p>
+            <p>${area.context}</p>
+          </div>
+          ` : ''}
+
+          <div class="section">
+            <a href="${l.link}" target="_blank" style="color:#7eb8f7;text-decoration:none;font-size:0.88rem;">View original listing on Hemnet &rarr;</a>
+          </div>
+        `;
+
+        // Carousel
+        const carousel = document.querySelector(".carousel");
+        if (carousel && imgs.length > 1) {
+          const track = carousel.querySelector(".carousel-track");
+          const counter = carousel.querySelector(".carousel-counter");
+          let idx = 0;
+          function goTo(n) { idx = (n + imgs.length) % imgs.length; track.style.transform = `translateX(-${idx*100}%)`; counter.textContent = `${idx+1} / ${imgs.length}`; }
+          carousel.querySelector(".carousel-prev").addEventListener("click", () => goTo(idx-1));
+          carousel.querySelector(".carousel-next").addEventListener("click", () => goTo(idx+1));
+        }
+
+        // Invest button
+        const investBtn = document.getElementById("invest-btn");
+        if (investBtn) {
+          investBtn.addEventListener("click", () => {
+            document.getElementById("modal-amount").value = "";
+            document.getElementById("invest-modal").classList.add("visible");
+            document.getElementById("modal-amount").focus();
+          });
+        }
+      }
+
+      document.getElementById("modal-cancel").addEventListener("click", () => {
+        document.getElementById("invest-modal").classList.remove("visible");
+      });
+
+      document.getElementById("modal-confirm").addEventListener("click", async () => {
+        const amount = parseInt(document.getElementById("modal-amount").value, 10);
+        if (!amount || amount <= 0) return showToast("Enter a valid amount");
+        const res = await fetch("/api/invest", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ listingId, amountSEK: amount }),
+        });
+        document.getElementById("invest-modal").classList.remove("visible");
+        if (res.ok) { showToast("Investment recorded!"); loadListing(); }
+        else { const d = await res.json(); showToast(d.error || "Failed"); }
+      });
+
+      document.getElementById("modal-amount").addEventListener("keydown", e => {
+        if (e.key === "Enter") document.getElementById("modal-confirm").click();
+      });
+
+      loadListing();
+    </script>
+  </body>
+</html>

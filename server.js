@@ -14,6 +14,7 @@ const Preference = require("./models/preference.model");
 const Builder = require("./models/builder.model");
 const Assignment = require("./models/assignment.model");
 const Proposal = require("./models/proposal.model");
+const Investment = require("./models/investment.model");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -79,17 +80,60 @@ const requireAuth = (req, res, next) =>
   req.user ? next() : res.status(401).json({ error: "Not authenticated" });
 
 // Auth
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+function roleRedirect(user) {
+  if (user.role === "admin") return "/";
+  return "/invest";
+}
+
+app.get("/auth/google", (req, res, next) => {
+  req.session.authIntent = req.query.intent;
+  passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+});
 app.get("/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => res.redirect("/")
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  (req, res) => res.redirect(roleRedirect(req.user))
 );
-app.get("/auth/logout", (req, res) => req.logout(() => res.redirect("/")));
+app.get("/auth/logout", (req, res) => req.logout(() => res.redirect("/login")));
+
+// Email/password signup
+app.post("/auth/signup", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: "All fields required" });
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ error: "Email already registered" });
+    const user = await User.create({ name, email, password, role: "investor" });
+    req.login(user, (err) => {
+      if (err) return res.status(500).json({ error: "Login failed" });
+      res.json({ ok: true, redirect: roleRedirect(user) });
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Signup failed" });
+  }
+});
+
+// Email/password login
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user || !user.password) return res.status(401).json({ error: "Invalid email or password" });
+    const valid = await user.comparePassword(password);
+    if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+    req.login(user, (err) => {
+      if (err) return res.status(500).json({ error: "Login failed" });
+      res.json({ ok: true, redirect: roleRedirect(user) });
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Login failed" });
+  }
+});
 
 // Current user
 app.get("/api/me", (req, res) => {
   if (!req.user) return res.json({ user: null });
-  res.json({ user: { name: req.user.name, email: req.user.email, avatar: req.user.avatar, settings: req.user.settings } });
+  res.json({ user: { name: req.user.name, email: req.user.email, avatar: req.user.avatar, role: req.user.role, settings: req.user.settings } });
 });
 
 // Update settings
@@ -354,6 +398,106 @@ app.get("/api/admin/assignments", requireAuth, async (req, res) => {
   }
 });
 
+// ── Investor API ──
+
+// Get investable listings (builder-accepted only) with funding status
+app.get("/api/invest/listings", async (req, res) => {
+  try {
+    const accepted = await Assignment.find({ status: "accepted" });
+    const listingIds = [...new Set(accepted.map((a) => a.listingId))];
+    if (!listingIds.length) return res.json({ listings: [] });
+
+    const listings = await Listing.find({ id: { $in: listingIds } }, { __v: 0 });
+    const proposals = await Proposal.find({ listingId: { $in: listingIds } });
+    const proposalMap = {};
+    for (const p of proposals) {
+      const a = accepted.find((a) => a._id.toString() === p.assignmentId.toString() && a.status === "accepted");
+      if (a) proposalMap[p.listingId] = p.toObject();
+    }
+
+    const investments = await Investment.find({ listingId: { $in: listingIds } });
+    const fundingMap = {};
+    investments.forEach((inv) => {
+      if (!fundingMap[inv.listingId]) fundingMap[inv.listingId] = { total: 0, investors: [] };
+      fundingMap[inv.listingId].total += inv.amountSEK;
+      fundingMap[inv.listingId].investors.push({ userId: inv.userId, amount: inv.amountSEK });
+    });
+
+    const result = listings.map((l) => {
+      const lo = l.toObject();
+      const proposal = proposalMap[l.id];
+      const deposit = Math.round((lo.askingPriceNum || 0) * 0.15);
+      const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
+      const fee = lo.fee ? parseInt(lo.fee.replace(/\D/g, ""), 10) || 0 : 0;
+      const timelineMonths = proposal ? Math.ceil((proposal.timelineWeeks + (proposal.bufferWeeks || 4)) / 4.33) : 6;
+      const carryingCost = fee * timelineMonths;
+      const totalNeeded = deposit + renoCost + carryingCost;
+      const funding = fundingMap[l.id] || { total: 0, investors: [] };
+      const userInvestment = req.user ? funding.investors.find((i) => i.userId.toString() === req.user.id) : null;
+
+      return {
+        ...lo,
+        proposal: proposal ? { estimatedCostSEK: proposal.estimatedCostSEK, costBreakdown: proposal.costBreakdown, timelineWeeks: proposal.timelineWeeks, bufferWeeks: proposal.bufferWeeks, startDate: proposal.startDate } : null,
+        funding: { deposit, renoCost, carryingCost, totalNeeded, funded: funding.total, percent: totalNeeded > 0 ? Math.min(100, Math.round((funding.total / totalNeeded) * 100)) : 0, investorCount: funding.investors.length, myInvestment: userInvestment?.amount || 0 },
+      };
+    });
+
+    res.json({ listings: result });
+  } catch (err) {
+    console.error("Invest listings error:", err);
+    res.status(500).json({ error: "Failed to fetch listings" });
+  }
+});
+
+// Get single listing detail for investor view
+app.get("/api/invest/listing/:listingId", async (req, res) => {
+  try {
+    const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 });
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+
+    const assignment = await Assignment.findOne({ listingId: req.params.listingId, status: "accepted" });
+    const proposal = assignment ? await Proposal.findOne({ assignmentId: assignment._id }) : null;
+    const builder = assignment ? await Builder.findById(assignment.builderId, "name company") : null;
+
+    const investments = await Investment.find({ listingId: req.params.listingId }).populate("userId", "name");
+    const lo = listing.toObject();
+    const deposit = Math.round((lo.askingPriceNum || 0) * 0.15);
+    const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
+    const fee = lo.fee ? parseInt(lo.fee.replace(/\D/g, ""), 10) || 0 : 0;
+    const timelineMonths = proposal ? Math.ceil((proposal.timelineWeeks + (proposal.bufferWeeks || 4)) / 4.33) : 6;
+    const carryingCost = fee * timelineMonths;
+    const totalNeeded = deposit + renoCost + carryingCost;
+    const funded = investments.reduce((s, i) => s + i.amountSEK, 0);
+    const userInvestment = req.user ? investments.filter((i) => i.userId._id.toString() === req.user.id).reduce((s, i) => s + i.amountSEK, 0) : 0;
+
+    res.json({
+      listing: lo,
+      proposal: proposal ? { estimatedCostSEK: proposal.estimatedCostSEK, costBreakdown: proposal.costBreakdown, timelineWeeks: proposal.timelineWeeks, bufferWeeks: proposal.bufferWeeks, startDate: proposal.startDate, notes: proposal.notes } : null,
+      builder: builder ? { name: builder.name, company: builder.company } : null,
+      funding: { deposit, renoCost, carryingCost, totalNeeded, funded, percent: totalNeeded > 0 ? Math.min(100, Math.round((funded / totalNeeded) * 100)) : 0, investorCount: investments.length, myInvestment: userInvestment, investors: investments.map((i) => ({ name: i.userId.name, amount: i.amountSEK, date: i.investedAt })) },
+    });
+  } catch (err) {
+    console.error("Listing detail error:", err);
+    res.status(500).json({ error: "Failed to fetch listing" });
+  }
+});
+
+// Make an investment
+app.post("/api/invest", requireAuth, async (req, res) => {
+  try {
+    const { listingId, amountSEK } = req.body;
+    if (!listingId || !amountSEK || amountSEK <= 0) return res.status(400).json({ error: "Invalid investment" });
+
+    const accepted = await Assignment.findOne({ listingId, status: "accepted" });
+    if (!accepted) return res.status(400).json({ error: "This listing is not available for investment" });
+
+    await Investment.create({ listingId, userId: req.user.id, amountSEK });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to invest" });
+  }
+});
+
 // Scrape trigger
 app.get("/api/scrape", async (req, res) => {
   try {
@@ -365,8 +509,11 @@ app.get("/api/scrape", async (req, res) => {
   }
 });
 
+app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
+app.get("/invest", (req, res) => res.sendFile(path.join(__dirname, "investor.html")));
+app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "listing-detail.html")));
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
-app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
+// areas.html kept but no longer routed — area context moved into listing detail
 app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
 app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.html")));
 app.get("/market", (req, res) => res.sendFile(path.join(__dirname, "market.html")));

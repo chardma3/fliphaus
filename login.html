@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+      .container { max-width: 380px; width: 90%; }
+      .card { background: #1e1e1e; border-radius: 12px; padding: 36px 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+      h1 { font-size: 1.6rem; color: #fff; text-align: center; margin-bottom: 4px; }
+      .subtitle { font-size: 0.85rem; color: #666; text-align: center; margin-bottom: 24px; }
+      .tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #2a2a2a; }
+      .tab { flex: 1; padding: 10px; text-align: center; font-size: 0.88rem; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+      .tab.active { color: #69db7c; border-bottom-color: #69db7c; }
+      .form { display: none; }
+      .form.active { display: block; }
+      .form-group { margin-bottom: 14px; }
+      .form-group label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .form-group input { width: 100%; padding: 10px 12px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: "Poppins", sans-serif; font-size: 0.88rem; outline: none; }
+      .form-group input:focus { border-color: #69db7c; }
+      .btn { width: 100%; padding: 11px; border: none; border-radius: 6px; font-family: "Poppins", sans-serif; font-size: 0.88rem; cursor: pointer; transition: opacity 0.2s; }
+      .btn:hover { opacity: 0.85; }
+      .btn-primary { background: #1a3a1a; color: #69db7c; margin-bottom: 12px; }
+      .divider { text-align: center; color: #444; font-size: 0.78rem; margin: 14px 0; position: relative; }
+      .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background: #2a2a2a; }
+      .divider::before { left: 0; }
+      .divider::after { right: 0; }
+      .google-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: #fff; color: #333; border: none; border-radius: 6px; font-family: "Poppins", sans-serif; font-size: 0.85rem; cursor: pointer; text-decoration: none; }
+      .google-btn:hover { background: #f0f0f0; }
+      .google-btn img { width: 18px; height: 18px; }
+      .error-msg { color: #ff8888; font-size: 0.82rem; margin-bottom: 12px; display: none; }
+      .builder-link { text-align: center; margin-top: 16px; font-size: 0.78rem; }
+      .builder-link a { color: #7eb8f7; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>FlipHaus</h1>
+        <p class="subtitle">Renovation investment platform</p>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="login">Sign in</div>
+          <div class="tab" data-tab="signup">Create account</div>
+        </div>
+
+        <div class="error-msg" id="error"></div>
+
+        <div class="form active" id="form-login">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="login-email" />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="login-password" />
+          </div>
+          <button class="btn btn-primary" id="login-btn">Sign in</button>
+          <div class="divider">or</div>
+          <a href="/auth/google" class="google-btn">
+            <img src="https://www.google.com/favicon.ico" alt="" /> Continue with Google
+          </a>
+        </div>
+
+        <div class="form" id="form-signup">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="signup-name" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="signup-email" />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="signup-password" placeholder="Min 6 characters" />
+          </div>
+          <button class="btn btn-primary" id="signup-btn">Create account</button>
+          <div class="divider">or</div>
+          <a href="/auth/google" class="google-btn">
+            <img src="https://www.google.com/favicon.ico" alt="" /> Sign up with Google
+          </a>
+        </div>
+      </div>
+      <div class="builder-link">Builder? <a href="/builder/login">Go to builder portal</a></div>
+    </div>
+    <script>
+      // Check if already logged in
+      fetch("/api/me").then(r => r.json()).then(d => {
+        if (d.user) window.location.href = d.user.role === "admin" ? "/" : "/invest";
+      });
+
+      const tabs = document.querySelectorAll(".tab");
+      const forms = document.querySelectorAll(".form");
+      tabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+          tabs.forEach(t => t.classList.remove("active"));
+          forms.forEach(f => f.classList.remove("active"));
+          tab.classList.add("active");
+          document.getElementById("form-" + tab.dataset.tab).classList.add("active");
+          document.getElementById("error").style.display = "none";
+        });
+      });
+
+      function showError(msg) {
+        const el = document.getElementById("error");
+        el.textContent = msg; el.style.display = "block";
+      }
+
+      document.getElementById("login-btn").addEventListener("click", async () => {
+        const email = document.getElementById("login-email").value.trim();
+        const password = document.getElementById("login-password").value;
+        if (!email || !password) return showError("Enter email and password");
+        const res = await fetch("/auth/login", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({email, password}) });
+        const data = await res.json();
+        if (res.ok) window.location.href = data.redirect;
+        else showError(data.error);
+      });
+
+      document.getElementById("signup-btn").addEventListener("click", async () => {
+        const name = document.getElementById("signup-name").value.trim();
+        const email = document.getElementById("signup-email").value.trim();
+        const password = document.getElementById("signup-password").value;
+        if (!name || !email || !password) return showError("All fields required");
+        const res = await fetch("/auth/signup", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name, email, password}) });
+        const data = await res.json();
+        if (res.ok) window.location.href = data.redirect;
+        else showError(data.error);
+      });
+
+      // Enter key submits
+      document.querySelectorAll("input").forEach(el => {
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            const form = el.closest(".form");
+            form.querySelector(".btn-primary").click();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

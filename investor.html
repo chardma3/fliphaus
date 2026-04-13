@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invest — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header { width: 100%; max-width: 700px; display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+      .header-right { display: flex; align-items: center; gap: 10px; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+
+      #stats { width: 100%; max-width: 700px; font-size: 0.85rem; color: #666; margin-bottom: 12px; }
+      #feed { width: 100%; display: flex; flex-direction: column; align-items: center; }
+
+      .listing { background: #1e1e1e; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); width: 100%; max-width: 700px; margin-bottom: 16px; overflow: hidden; display: flex; }
+      .listing-left { flex: 1; }
+      .listing-img { width: 100%; height: 200px; object-fit: cover; display: block; }
+      .listing-body { padding: 14px 16px; }
+      .listing-body h3 { font-size: 1rem; color: #fff; margin-bottom: 4px; }
+      .listing-body h3 a { color: #fff; text-decoration: none; }
+      .listing-body h3 a:hover { color: #7eb8f7; }
+      .location { font-size: 0.82rem; color: #888; margin-bottom: 8px; }
+      .listing-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.82rem; color: #ccc; margin-bottom: 8px; }
+      .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
+      .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
+      .funding-summary { font-size: 0.78rem; color: #aaa; margin-top: 6px; }
+      .funding-summary strong { color: #69db7c; }
+
+      .pie-col { width: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; border-left: 1px solid #2a2a2a; flex-shrink: 0; }
+      .pie-container { position: relative; width: 80px; height: 80px; margin-bottom: 8px; }
+      .pie-svg { width: 80px; height: 80px; transform: rotate(-90deg); }
+      .pie-bg { fill: none; stroke: #2a2a2a; stroke-width: 8; }
+      .pie-fill { fill: none; stroke: #69db7c; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.5s ease; }
+      .pie-fill.full { stroke: #ffd43b; }
+      .pie-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600; color: #fff; }
+      .invest-btn { padding: 6px 16px; border: none; border-radius: 6px; background: #1a3a1a; color: #69db7c; font-family: "Poppins", sans-serif; font-size: 0.78rem; cursor: pointer; transition: opacity 0.2s; }
+      .invest-btn:hover { opacity: 0.85; }
+      .invest-btn.funded { background: #2a2a1a; color: #ffd43b; cursor: default; }
+
+      .empty { text-align: center; padding: 60px; color: #555; font-size: 0.95rem; width: 100%; max-width: 700px; }
+
+      .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a3a1a; color: #69db7c; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
+      .toast.visible { opacity: 1; }
+
+      .invest-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+      .invest-modal.visible { display: flex; }
+      .invest-box { background: #1e1e1e; border-radius: 12px; padding: 28px 24px; max-width: 360px; width: 90%; }
+      .invest-box h4 { color: #fff; font-size: 1rem; margin-bottom: 4px; }
+      .invest-box .sub { color: #888; font-size: 0.82rem; margin-bottom: 16px; }
+      .invest-box input { width: 100%; padding: 10px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: "Poppins", sans-serif; font-size: 1rem; outline: none; margin-bottom: 12px; }
+      .invest-box input:focus { border-color: #69db7c; }
+      .invest-box .btn-row { display: flex; gap: 10px; }
+      .invest-box .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-family: "Poppins", sans-serif; font-size: 0.85rem; cursor: pointer; }
+      .invest-box .btn-confirm { background: #1a3a1a; color: #69db7c; }
+      .invest-box .btn-cancel { background: #252525; color: #888; }
+
+      @media (max-width: 500px) {
+        .listing { flex-direction: column; }
+        .pie-col { width: 100%; flex-direction: row; gap: 16px; border-left: none; border-top: 1px solid #2a2a2a; padding: 12px 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toast" id="toast"></div>
+    <div class="invest-modal" id="invest-modal">
+      <div class="invest-box">
+        <h4 id="modal-title"></h4>
+        <div class="sub" id="modal-sub"></div>
+        <input type="number" id="modal-amount" placeholder="Amount in SEK" />
+        <div class="btn-row">
+          <button class="btn btn-confirm" id="modal-confirm">Invest</button>
+          <button class="btn btn-cancel" id="modal-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app">
+      <header>
+        <div><h1>FlipHaus</h1><h2>Investment opportunities</h2></div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+      <div id="stats"></div>
+      <div id="feed"></div>
+    </div>
+    <script>
+      const CIRC = 2 * Math.PI * 32;
+      let modalListingId = null;
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg; t.classList.add("visible");
+        setTimeout(() => t.classList.remove("visible"), 2000);
+      }
+
+      function formatK(n) {
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+        if (n >= 1000) return Math.round(n / 1000) + "K";
+        return n.toString();
+      }
+
+      function renderListings(listings) {
+        const feed = document.getElementById("feed");
+        feed.innerHTML = "";
+        if (!listings.length) {
+          feed.innerHTML = '<div class="empty">No investment opportunities available yet. Check back soon.</div>';
+          document.getElementById("stats").textContent = "";
+          return;
+        }
+        document.getElementById("stats").innerHTML = `<strong>${listings.length}</strong> investment ${listings.length === 1 ? 'opportunity' : 'opportunities'}`;
+
+        listings.forEach(l => {
+          const f = l.funding;
+          const pct = f.percent;
+          const dashFill = (pct / 100) * CIRC;
+          const isFull = pct >= 100;
+          const img = l.images?.[0] || l.thumbnail;
+
+          const div = document.createElement("div");
+          div.className = "listing";
+          div.innerHTML = `
+            <div class="listing-left">
+              ${img ? `<img class="listing-img" src="${img}" />` : ''}
+              <div class="listing-body">
+                <h3><a href="/invest/${l.id}">${l.streetAddress}</a></h3>
+                <div class="location">${l.locationDescription}</div>
+                <div class="listing-meta">
+                  <span class="price-tag">${l.askingPrice}</span>
+                  ${l.rooms ? `<span>${l.rooms}</span>` : ''}
+                  ${l.size ? `<span>${l.size}</span>` : ''}
+                </div>
+                <div class="funding-summary">
+                  Total needed: <strong>${formatK(f.totalNeeded)} SEK</strong> ·
+                  Funded: <strong>${formatK(f.funded)} SEK</strong>
+                  ${f.investorCount ? ` · ${f.investorCount} investor${f.investorCount > 1 ? 's' : ''}` : ''}
+                  ${f.myInvestment ? `<br/>Your investment: <strong>${formatK(f.myInvestment)} SEK</strong>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="pie-col">
+              <div class="pie-container">
+                <svg class="pie-svg" viewBox="0 0 80 80">
+                  <circle class="pie-bg" cx="40" cy="40" r="32" />
+                  <circle class="pie-fill ${isFull ? 'full' : ''}" cx="40" cy="40" r="32"
+                    stroke-dasharray="${dashFill} ${CIRC}" />
+                </svg>
+                <div class="pie-text">${pct}%</div>
+              </div>
+              ${isFull
+                ? `<button class="invest-btn funded">Funded</button>`
+                : `<button class="invest-btn" data-id="${l.id}" data-address="${l.streetAddress}" data-remaining="${f.totalNeeded - f.funded}">Invest</button>`
+              }
+            </div>
+          `;
+          feed.appendChild(div);
+        });
+
+        feed.querySelectorAll(".invest-btn:not(.funded)").forEach(btn => {
+          btn.addEventListener("click", () => {
+            modalListingId = btn.dataset.id;
+            document.getElementById("modal-title").textContent = btn.dataset.address;
+            document.getElementById("modal-sub").textContent = `${formatK(parseInt(btn.dataset.remaining))} SEK remaining`;
+            document.getElementById("modal-amount").value = "";
+            document.getElementById("invest-modal").classList.add("visible");
+            document.getElementById("modal-amount").focus();
+          });
+        });
+      }
+
+      document.getElementById("modal-cancel").addEventListener("click", () => {
+        document.getElementById("invest-modal").classList.remove("visible");
+      });
+
+      document.getElementById("modal-confirm").addEventListener("click", async () => {
+        const amount = parseInt(document.getElementById("modal-amount").value, 10);
+        if (!amount || amount <= 0) return showToast("Enter a valid amount");
+        const res = await fetch("/api/invest", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ listingId: modalListingId, amountSEK: amount }),
+        });
+        document.getElementById("invest-modal").classList.remove("visible");
+        if (res.ok) { showToast("Investment recorded!"); loadListings(); }
+        else { const d = await res.json(); showToast(d.error || "Failed"); }
+      });
+
+      document.getElementById("modal-amount").addEventListener("keydown", e => {
+        if (e.key === "Enter") document.getElementById("modal-confirm").click();
+      });
+
+      async function loadListings() {
+        const res = await fetch("/api/invest/listings");
+        const data = await res.json();
+        renderListings(data.listings || []);
+      }
+
+      async function init() {
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        const headerRight = document.getElementById("header-right");
+        if (data.user) {
+          headerRight.innerHTML = `<span>${data.user.name}</span><a href="/auth/logout" class="signout-link">Sign out</a>`;
+        } else {
+          headerRight.innerHTML = '<a href="/login" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>';
+        }
+        loadListings();
+      }
+      init();
+    </script>
+  </body>
+</html>
