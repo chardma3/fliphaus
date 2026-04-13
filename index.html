@@ -241,6 +241,7 @@
         <a href="/methodology" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">How it works</a>
         <a href="/account" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Account</a>
         <a href="/market" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Market</a>
+        <a href="/builders" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Builders</a>
       </div>
 
       <div class="instructions">
@@ -429,6 +430,7 @@
               ${floorPlanHtml}
               <div class="listing-actions">
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
+                ${currentUser ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
               </div>
             </div>
           `;
@@ -458,6 +460,31 @@
               await savePreference(listing.id, null);
             }
           });
+
+          const sendBtn = div.querySelector(".send-builders-btn");
+          if (sendBtn) {
+            sendBtn.addEventListener("click", async function() {
+              const res = await fetch("/api/admin/builders");
+              const data = await res.json();
+              if (!data.builders?.length) { alert("No builders invited yet. Go to /builders to add some."); return; }
+              const names = data.builders.map((b,i) => `${i+1}. ${b.name} (${b.company || b.email})`).join("\n");
+              const pick = prompt("Send to which builders? Enter numbers separated by commas:\n\n" + names);
+              if (!pick) return;
+              const indices = pick.split(",").map(s => parseInt(s.trim(),10) - 1).filter(i => i >= 0 && i < data.builders.length);
+              if (!indices.length) return;
+              const builderIds = indices.map(i => data.builders[i]._id);
+              const note = prompt("Add a note for the builders (optional):") || "";
+              const assignRes = await fetch("/api/admin/assign", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({ listingId: listing.id, builderIds, note }),
+              });
+              if (assignRes.ok) {
+                this.textContent = "Sent!";
+                this.style.color = "#69db7c";
+                this.style.background = "#1a3a1a";
+              }
+            });
+          }
 
           // Carousel navigation
           const carousel = div.querySelector(".carousel");

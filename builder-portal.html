@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Builder Portal — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header { width: 100%; max-width: 700px; display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+      .header-right { display: flex; align-items: center; gap: 10px; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+
+      .content { width: 100%; max-width: 700px; }
+      .section { background: #1e1e1e; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+      .section h3 { font-size: 1.1rem; color: #fff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a; }
+
+      .listing-card { background: #252525; border-radius: 8px; overflow: hidden; margin-bottom: 16px; border-left: 3px solid #ffd43b; }
+      .listing-card.proposed { border-left-color: #7eb8f7; }
+      .listing-card.accepted { border-left-color: #69db7c; }
+      .listing-card.declined { border-left-color: #ff8888; }
+
+      .listing-img { width: 100%; height: 180px; object-fit: cover; display: block; background: #333; }
+      .listing-body { padding: 14px 16px; }
+      .listing-body h4 { font-size: 1rem; color: #fff; margin-bottom: 4px; }
+      .listing-body .location { font-size: 0.82rem; color: #888; margin-bottom: 8px; }
+
+      .listing-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.82rem; color: #ccc; margin-bottom: 10px; }
+      .listing-meta span { background: #333; padding: 3px 10px; border-radius: 20px; }
+      .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
+
+      .reno-info { font-size: 0.82rem; color: #aaa; padding: 8px 10px; background: #1e1e1e; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #ffd43b; }
+      .reno-info .score { color: #ffd43b; font-weight: 600; }
+
+      .status-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .status-tag { font-size: 0.75rem; padding: 3px 10px; border-radius: 10px; text-transform: uppercase; font-weight: 600; }
+      .status-tag.pending { background: #2a2a1a; color: #ffd43b; }
+      .status-tag.proposed { background: #1a2a3a; color: #7eb8f7; }
+      .status-tag.accepted { background: #1a2a1a; color: #69db7c; }
+      .status-tag.declined { background: #2a1a1a; color: #ff8888; }
+      .assigned-date { font-size: 0.75rem; color: #555; }
+
+      .proposal-form { background: #1e1e1e; border-radius: 8px; padding: 14px; margin-top: 10px; }
+      .proposal-form h5 { font-size: 0.88rem; color: #fff; margin-bottom: 10px; }
+      .form-group { margin-bottom: 10px; }
+      .form-group label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .form-group input, .form-group textarea { width: 100%; padding: 8px 10px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: "Poppins", sans-serif; font-size: 0.85rem; outline: none; }
+      .form-group input:focus, .form-group textarea:focus { border-color: #7eb8f7; }
+      .form-group textarea { resize: vertical; min-height: 60px; }
+      .form-group .hint { font-size: 0.7rem; color: #555; margin-top: 3px; }
+      .form-row { display: flex; gap: 10px; }
+      .form-row .form-group { flex: 1; }
+
+      .btn { padding: 10px 20px; border: none; border-radius: 6px; font-family: "Poppins", sans-serif; font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s; }
+      .btn:hover { opacity: 0.85; }
+      .btn-primary { background: #1a2a3a; color: #7eb8f7; }
+      .btn-success { background: #1a3a1a; color: #69db7c; }
+
+      .submitted-summary { background: #1e1e1e; border-radius: 8px; padding: 14px; margin-top: 10px; }
+      .submitted-summary h5 { font-size: 0.88rem; color: #7eb8f7; margin-bottom: 8px; }
+      .submitted-summary p { font-size: 0.82rem; color: #aaa; margin-bottom: 4px; }
+      .submitted-summary p span { color: #ccc; }
+
+      .empty { text-align: center; padding: 40px; color: #555; font-size: 0.88rem; }
+
+      .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a3a1a; color: #69db7c; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
+      .toast.visible { opacity: 1; }
+
+      a.listing-link { color: #7eb8f7; font-size: 0.78rem; text-decoration: none; }
+      a.listing-link:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="toast" id="toast"></div>
+    <div id="app">
+      <header>
+        <div><h1>FlipHaus</h1><h2>Builder portal</h2></div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+      <div class="content" id="content"><div class="empty">Loading...</div></div>
+    </div>
+    <script>
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg; t.classList.add("visible");
+        setTimeout(() => t.classList.remove("visible"), 2000);
+      }
+
+      function renderAssignments(assignments) {
+        const el = document.getElementById("content");
+        if (!assignments.length) {
+          el.innerHTML = '<div class="section"><div class="empty">No assignments yet. You\'ll see listings here when the FlipHaus team sends them to you.</div></div>';
+          return;
+        }
+
+        el.innerHTML = '<div class="section"><h3>Your assignments</h3><div id="cards"></div></div>';
+        const cards = document.getElementById("cards");
+
+        assignments.forEach(a => {
+          const l = a.listing;
+          if (!l) return;
+          const p = a.proposal;
+          const div = document.createElement("div");
+          div.className = "listing-card " + a.status;
+
+          const img = l.images?.[0] || l.thumbnail;
+          const renoHtml = l.renovationScore != null
+            ? `<div class="reno-info">AI renovation score: <span class="score">${l.renovationScore}/10</span>${l.renovationSummary ? ' — ' + l.renovationSummary : ''}${l.totalEstimatedCostSEK ? '<br/>AI cost estimate: ' + l.totalEstimatedCostSEK.toLocaleString('sv-SE') + ' SEK' : ''}</div>`
+            : '';
+
+          let actionHtml = '';
+          if (a.status === 'pending') {
+            actionHtml = `
+              <div class="proposal-form">
+                <h5>Submit your proposal</h5>
+                <div class="form-group">
+                  <label>Your cost estimate (SEK)</label>
+                  <input type="number" class="p-cost" placeholder="e.g. 350000" />
+                </div>
+                <div class="form-group">
+                  <label>Cost breakdown (optional)</label>
+                  <textarea class="p-breakdown" placeholder="e.g. Kitchen 120k, Bathroom 150k, Flooring 50k, Paint 30k"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Timeline (weeks)</label>
+                    <input type="number" class="p-timeline" placeholder="e.g. 8" />
+                  </div>
+                  <div class="form-group">
+                    <label>Buffer (weeks)</label>
+                    <input type="number" class="p-buffer" value="4" />
+                    <div class="hint">Mandatory 4-week minimum</div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Earliest start date</label>
+                  <input type="date" class="p-start" />
+                </div>
+                <div class="form-group">
+                  <label>Notes (optional)</label>
+                  <textarea class="p-notes" placeholder="Anything else — availability, material preferences, concerns..."></textarea>
+                </div>
+                <button class="btn btn-primary submit-proposal" data-id="${a._id}">Submit proposal</button>
+              </div>
+            `;
+          } else if (p) {
+            actionHtml = `
+              <div class="submitted-summary">
+                <h5>${a.status === 'accepted' ? 'Proposal accepted' : a.status === 'declined' ? 'Proposal declined' : 'Proposal submitted'}</h5>
+                <p>Cost: <span>${p.estimatedCostSEK?.toLocaleString('sv-SE')} SEK</span></p>
+                ${p.costBreakdown ? `<p>Breakdown: <span>${p.costBreakdown}</span></p>` : ''}
+                <p>Timeline: <span>${p.timelineWeeks} weeks + ${p.bufferWeeks}w buffer</span></p>
+                <p>Start: <span>${new Date(p.startDate).toLocaleDateString()}</span></p>
+                ${p.notes ? `<p>Notes: <span>${p.notes}</span></p>` : ''}
+              </div>
+            `;
+          }
+
+          div.innerHTML = `
+            ${img ? `<img class="listing-img" src="${img}" />` : ''}
+            <div class="listing-body">
+              <div class="status-bar">
+                <span class="status-tag ${a.status}">${a.status}</span>
+                <span class="assigned-date">Assigned ${new Date(a.assignedAt).toLocaleDateString()}</span>
+              </div>
+              <h4>${l.streetAddress}</h4>
+              <div class="location">${l.locationDescription}</div>
+              <div class="listing-meta">
+                <span class="price-tag">${l.askingPrice}</span>
+                ${l.rooms ? `<span>${l.rooms}</span>` : ''}
+                ${l.size ? `<span>${l.size}</span>` : ''}
+              </div>
+              ${renoHtml}
+              ${a.note ? `<p style="font-size:0.82rem;color:#aaa;margin-bottom:10px;">Note from FlipHaus: <em>${a.note}</em></p>` : ''}
+              <a href="${l.link}" target="_blank" class="listing-link">View on Hemnet</a>
+              ${actionHtml}
+            </div>
+          `;
+
+          if (a.status === 'pending') {
+            div.querySelector(".submit-proposal").addEventListener("click", async function() {
+              const card = this.closest(".listing-card");
+              const cost = parseInt(card.querySelector(".p-cost").value, 10);
+              const costBreakdown = card.querySelector(".p-breakdown").value.trim();
+              const timelineWeeks = parseInt(card.querySelector(".p-timeline").value, 10);
+              const bufferWeeks = Math.max(4, parseInt(card.querySelector(".p-buffer").value, 10) || 4);
+              const startDate = card.querySelector(".p-start").value;
+              const notes = card.querySelector(".p-notes").value.trim();
+
+              if (!cost || !timelineWeeks || !startDate) return showToast("Fill in cost, timeline, and start date");
+
+              const res = await fetch("/api/builder/proposal", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({ assignmentId: this.dataset.id, estimatedCostSEK: cost, costBreakdown, timelineWeeks, bufferWeeks, startDate, notes }),
+              });
+              if (res.ok) {
+                showToast("Proposal submitted!");
+                loadAssignments();
+              } else {
+                showToast("Failed to submit");
+              }
+            });
+          }
+
+          cards.appendChild(div);
+        });
+      }
+
+      async function loadAssignments() {
+        const res = await fetch("/api/builder/assignments");
+        if (res.status === 401) {
+          window.location.href = "/builder/login";
+          return;
+        }
+        const data = await res.json();
+        renderAssignments(data.assignments || []);
+      }
+
+      async function init() {
+        const res = await fetch("/api/builder/me");
+        if (res.status === 401) {
+          window.location.href = "/builder/login";
+          return;
+        }
+        const data = await res.json();
+        const b = data.builder;
+        document.getElementById("header-right").innerHTML = `
+          <span>${b.name}${b.company ? ' · ' + b.company : ''}</span>
+          <a href="/auth/builder/logout" class="signout-link">Sign out</a>
+        `;
+        loadAssignments();
+      }
+      init();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Builder Login — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+      .login-box { background: #1e1e1e; border-radius: 12px; padding: 40px 32px; text-align: center; max-width: 380px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+      .login-box h1 { font-size: 1.5rem; color: #fff; margin-bottom: 8px; }
+      .login-box p { font-size: 0.88rem; color: #888; margin-bottom: 24px; line-height: 1.5; }
+      .error { color: #ff8888; font-size: 0.85rem; margin-bottom: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="login-box">
+      <h1>FlipHaus</h1>
+      <p>Builder portal</p>
+      <div id="error"></div>
+      <p style="font-size:0.82rem;color:#666;">Use the invite link sent to you by the FlipHaus team to access your dashboard.</p>
+    </div>
+    <script>
+      if (new URLSearchParams(window.location.search).get("error") === "invalid") {
+        document.getElementById("error").textContent = "Invalid or expired invite link. Please contact the FlipHaus team.";
+        document.getElementById("error").className = "error";
+      }
+    </script>
+  </body>
+</html>
