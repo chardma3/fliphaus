@@ -86,12 +86,16 @@ function roleRedirect(user) {
 }
 
 app.get("/auth/google", (req, res, next) => {
-  req.session.authIntent = req.query.intent;
+  req.session.returnTo = req.query.returnTo || null;
   passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
 });
 app.get("/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login" }),
-  (req, res) => res.redirect(roleRedirect(req.user))
+  (req, res) => {
+    const returnTo = req.session.returnTo;
+    delete req.session.returnTo;
+    res.redirect(returnTo || roleRedirect(req.user));
+  }
 );
 app.get("/auth/logout", (req, res) => req.logout(() => res.redirect("/login")));
 
