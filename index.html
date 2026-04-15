@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -163,6 +165,26 @@
         backdrop-filter: blur(6px);
       }
 
+      .invest-calc {
+        background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
+        border-left: 3px solid #69db7c;
+      }
+      .invest-calc h5 { font-size: 0.82rem; color: #fff; margin-bottom: 8px; }
+      .calc-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.78rem; }
+      .calc-row .calc-label { color: #888; }
+      .calc-row .calc-value { color: #ccc; }
+      .calc-row.total { border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; font-weight: 600; }
+      .calc-row.total .calc-label { color: #fff; }
+      .calc-row.total .calc-value { color: #fff; }
+      .calc-row.profit .calc-value { color: #69db7c; font-weight: 600; }
+      .calc-row.profit .calc-label { color: #69db7c; }
+      .calc-row.loss .calc-value { color: #ff8888; }
+      .calc-row.loss .calc-label { color: #ff8888; }
+      .calc-row.sale .calc-value { color: #7eb8f7; font-weight: 600; }
+      .calc-divider { border-top: 1px solid #333; margin: 6px 0; }
+
+      .listing-map { width: 100%; height: 150px; border-radius: 8px; margin-bottom: 8px; z-index: 1; }
+
       .reno-summary {
         font-size: 0.78rem; color: #aaa; margin-bottom: 8px;
         padding: 6px 10px; background: #252525; border-radius: 6px;
@@ -300,6 +322,30 @@
         return /lägenhet|bostadsrätt/i.test(str);
       }
 
+      // Avg renovated sqm price from our data (~44,500 kr/m² for score 1-3)
+      const RENOVATED_SQM_PRICE = 44500;
+
+      function calcInvestment(listing) {
+        const price = listing.askingPriceNum || 0;
+        const sizeNum = parseFloat((listing.size || "").replace(",", ".")) || 0;
+        const feeNum = listing.fee ? parseInt(listing.fee.replace(/\D/g, ""), 10) || 0 : 0;
+        const renoCost = listing.totalEstimatedCostSEK || 0;
+        const deposit = Math.round(price * 0.15);
+        const months = 7; // avg 6-8 months
+        const carryingCost = feeNum * months;
+        const totalInvestment = deposit + renoCost + carryingCost;
+        const estSalePrice = sizeNum > 0 ? Math.round(sizeNum * RENOVATED_SQM_PRICE) : 0;
+        const profit = estSalePrice > 0 ? estSalePrice - price - renoCost - carryingCost : 0;
+        const roi = totalInvestment > 0 && profit > 0 ? Math.round((profit / totalInvestment) * 100) : 0;
+        return { price, deposit, renoCost, carryingCost, feeNum, months, totalInvestment, estSalePrice, profit, roi, sizeNum };
+      }
+
+      function formatSEKShort(n) {
+        if (!n) return "—";
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M kr";
+        return Math.round(n / 1000) + "K kr";
+      }
+
       function buildFilterBar(listings) {
         const bar = document.getElementById("reno-filters");
         const scores = new Set();
@@ -427,6 +473,22 @@
               ${listing.brokerAgencyName ? `<div class="listing-agency">🏢 ${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">📅 ${listing.nextShowing}</div>` : ""}
               ${renoSummaryHtml}
+              ${listing.askingPriceNum && listing.totalEstimatedCostSEK ? (() => {
+                const c = calcInvestment(listing);
+                const profitClass = c.profit > 0 ? "profit" : "loss";
+                return `<div class="invest-calc">
+                  <h5>Investment analysis</h5>
+                  <div class="calc-row"><span class="calc-label">Purchase price</span><span class="calc-value">${formatSEKShort(c.price)}</span></div>
+                  <div class="calc-row"><span class="calc-label">Deposit (15%)</span><span class="calc-value">${formatSEKShort(c.deposit)}</span></div>
+                  <div class="calc-row"><span class="calc-label">Renovation</span><span class="calc-value">${formatSEKShort(c.renoCost)}</span></div>
+                  <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
+                  <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
+                  <div class="calc-divider"></div>
+                  <div class="calc-row sale"><span class="calc-label">Est. sale price (renovated)</span><span class="calc-value">${formatSEKShort(c.estSalePrice)}</span></div>
+                  <div class="calc-row ${profitClass}"><span class="calc-label">Est. profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}</span><span class="calc-value">${c.profit > 0 ? '+' : ''}${formatSEKShort(c.profit)}</span></div>
+                </div>`;
+              })() : ""}
+              ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
               ${floorPlanHtml}
               <div class="listing-actions">
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
@@ -502,6 +564,16 @@
           }
 
           document.getElementById("feed").appendChild(div);
+
+          // Init map if coordinates exist
+          if (listing.coordinates?.lat) {
+            const mapEl = document.getElementById("map-" + listing.id);
+            if (mapEl) {
+              const map = L.map(mapEl, { scrollWheelZoom: false, dragging: false, zoomControl: false }).setView([listing.coordinates.lat, listing.coordinates.lng], 14);
+              L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(map);
+              L.marker([listing.coordinates.lat, listing.coordinates.lng]).addTo(map);
+            }
+          }
         });
       }
 

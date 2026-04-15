@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Listing — FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
@@ -70,6 +72,17 @@
 
       .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a3a1a; color: #69db7c; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
       .toast.visible { opacity: 1; }
+
+      .listing-map { width: 100%; height: 200px; border-radius: 8px; z-index: 1; }
+
+      .profit-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #2a2a2a; }
+      .profit-row:last-child { border-bottom: none; }
+      .profit-row .label { color: #888; }
+      .profit-row .value { color: #ccc; }
+      .profit-row.total .label, .profit-row.total .value { color: #fff; font-weight: 600; }
+      .profit-row.profit .label, .profit-row.profit .value { color: #69db7c; font-weight: 600; }
+      .profit-row.loss .label, .profit-row.loss .value { color: #ff8888; font-weight: 600; }
+      .profit-row.sale .value { color: #7eb8f7; font-weight: 600; }
 
       .invest-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
       .invest-modal.visible { display: flex; }
@@ -236,6 +249,40 @@
             ` : ''}
           </div>
 
+          ${(() => {
+            const RENO_SQM = 44500;
+            const sizeNum = parseFloat((l.size || "").replace(",", ".")) || 0;
+            const feeNum = l.fee ? parseInt(l.fee.replace(/\D/g, ""), 10) || 0 : 0;
+            const renoCost = p?.estimatedCostSEK || l.totalEstimatedCostSEK || 0;
+            const deposit = Math.round((l.askingPriceNum || 0) * 0.15);
+            const months = p ? Math.ceil((p.timelineWeeks + (p.bufferWeeks || 4)) / 4.33) : 7;
+            const carrying = feeNum * months;
+            const totalInvest = deposit + renoCost + carrying;
+            const estSale = sizeNum > 0 ? Math.round(sizeNum * RENO_SQM) : 0;
+            const profit = estSale > 0 ? estSale - (l.askingPriceNum || 0) - renoCost - carrying : 0;
+            const roi = totalInvest > 0 && profit > 0 ? Math.round((profit / totalInvest) * 100) : 0;
+            if (!l.askingPriceNum) return '';
+            return `
+          <div class="section">
+            <h3>Profit analysis</h3>
+            <div class="profit-row"><span class="label">Purchase price</span><span class="value">${formatSEK(l.askingPriceNum)}</span></div>
+            <div class="profit-row"><span class="label">Deposit (15%)</span><span class="value">${formatSEK(deposit)}</span></div>
+            <div class="profit-row"><span class="label">Renovation cost</span><span class="value">${formatSEK(renoCost)}</span></div>
+            <div class="profit-row"><span class="label">Carrying cost (${months}mo × ${formatSEK(feeNum)}/mo)</span><span class="value">${formatSEK(carrying)}</span></div>
+            <div class="profit-row total"><span class="label">Total investment needed</span><span class="value">${formatSEK(totalInvest)}</span></div>
+            <div style="border-top:1px solid #333;margin:10px 0;"></div>
+            <div class="profit-row sale"><span class="label">Est. sale price (renovated, ${formatSEK(RENO_SQM)}/m²)</span><span class="value">${formatSEK(estSale)}</span></div>
+            <div class="profit-row ${profit > 0 ? 'profit' : 'loss'}"><span class="label">Est. profit${roi > 0 ? ' (' + roi + '% ROI)' : ''}</span><span class="value">${profit > 0 ? '+' : ''}${formatSEK(profit)}</span></div>
+          </div>`;
+          })()}
+
+          ${l.coordinates?.lat ? `
+          <div class="section">
+            <h3>Location</h3>
+            <div class="listing-map" id="detail-map"></div>
+          </div>
+          ` : ''}
+
           ${area ? `
           <div class="section">
             <h3>About ${areaName}</h3>
@@ -259,6 +306,14 @@
           function goTo(n) { idx = (n + imgs.length) % imgs.length; track.style.transform = `translateX(-${idx*100}%)`; counter.textContent = `${idx+1} / ${imgs.length}`; }
           carousel.querySelector(".carousel-prev").addEventListener("click", () => goTo(idx-1));
           carousel.querySelector(".carousel-next").addEventListener("click", () => goTo(idx+1));
+        }
+
+        // Map
+        const mapEl = document.getElementById("detail-map");
+        if (mapEl && l.coordinates?.lat) {
+          const map = L.map(mapEl).setView([l.coordinates.lat, l.coordinates.lng], 14);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: '&copy; OpenStreetMap' }).addTo(map);
+          L.marker([l.coordinates.lat, l.coordinates.lng]).addTo(map).bindPopup(l.streetAddress).openPopup();
         }
 
         // Invest button
