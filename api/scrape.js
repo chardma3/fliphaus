@@ -10,6 +10,30 @@ const LOCATION_IDS = {
   Farsta: 925962,
 };
 
+const TRANSIT_INFO = {
+  Rissne: { minutes: 15, station: "Rissne", line: "Blue line (T-bana)" },
+  Sundbyberg: { minutes: 12, station: "Sundbybergs centrum", line: "Blue line (T-bana)" },
+  Farsta: { minutes: 18, station: "Farsta strand", line: "Green line (T-bana)" },
+  Tallkrogen: { minutes: 16, station: "Tallkrogen", line: "Green line (T-bana)" },
+  Hökarängen: { minutes: 15, station: "Hökarängen", line: "Green line (T-bana)" },
+  Sköndal: { minutes: 20, station: "Farsta strand", line: "Green line (T-bana)" },
+  Bromma: { minutes: 20, station: "Abrahamsberg", line: "Green line (T-bana)" },
+  Blackeberg: { minutes: 18, station: "Blackeberg", line: "Green line (T-bana)" },
+  Kista: { minutes: 20, station: "Kista", line: "Blue line (T-bana)" },
+  Sollentuna: { minutes: 20, station: "Sollentuna", line: "Pendeltåg" },
+  Skarpnäck: { minutes: 15, station: "Skarpnäck", line: "Green line (T-bana)" },
+  Bagarmossen: { minutes: 14, station: "Bagarmossen", line: "Green line (T-bana)" },
+  Enskede: { minutes: 12, station: "Enskede Gård", line: "Green line (T-bana)" },
+};
+
+function getTransitForLocation(locationDesc) {
+  if (!locationDesc) return null;
+  for (const [area, info] of Object.entries(TRANSIT_INFO)) {
+    if (locationDesc.toLowerCase().includes(area.toLowerCase())) return info;
+  }
+  return null;
+}
+
 const MAX_PRICE = 4000000;
 
 function buildUrl(locationId) {
@@ -67,7 +91,16 @@ async function scrapeArea(page, areaName, locationId) {
       });
   });
 
-  return listings.map((l) => ({ ...l, area: areaName }));
+  return listings.map((l) => {
+    const transit = getTransitForLocation(l.locationDescription) || TRANSIT_INFO[areaName];
+    return {
+      ...l,
+      area: areaName,
+      transitMinutes: transit?.minutes || null,
+      nearestStation: transit?.station || null,
+      transitLine: transit?.line || null,
+    };
+  });
 }
 
 module.exports = async () => {
@@ -120,12 +153,27 @@ module.exports = async () => {
             return urlKey ? img[urlKey] : null;
           }).filter(Boolean);
           const hasFloorPlan = (listing.floorPlanImages || []).length > 0;
-          return { allImages, hasFloorPlan };
+
+          // BRF and building info from Apollo data
+          const association = Object.values(apollo).find((v) => v.__typename === "HousingCooperative" || v.__typename === "Association");
+          const brfName = association?.name || listing.housingCooperativeName || null;
+          const buildYear = listing.constructionYear || listing.buildYear || null;
+
+          // Look for description text for stambyte/renovation clues
+          const descText = (listing.description || "").toLowerCase();
+          let stambyteStatus = null;
+          if (/stambyte.*(gjord|klar|genomförd|2\d{3})/.test(descText)) stambyteStatus = "done";
+          else if (/stambyte.*(planerad|kommande|snart)/.test(descText)) stambyteStatus = "planned";
+
+          return { allImages, hasFloorPlan, brfName, buildYear, stambyteStatus, description: listing.description || null };
         } catch { return null; }
       });
       if (detail) {
         if (detail.allImages.length > 0) l.images = detail.allImages;
         l.hasFloorPlan = detail.hasFloorPlan;
+        if (detail.brfName) l.brfName = detail.brfName;
+        if (detail.buildYear) l.buildYear = detail.buildYear;
+        if (detail.stambyteStatus) l.stambyteStatus = detail.stambyteStatus;
       }
     } catch { /* keep search-page images */ }
 
@@ -169,6 +217,10 @@ module.exports = async () => {
       scrapeDate,
     };
     if (l.hasFloorPlan !== undefined) update.hasFloorPlan = l.hasFloorPlan;
+    if (l.transitMinutes) { update.transitMinutes = l.transitMinutes; update.nearestStation = l.nearestStation; update.transitLine = l.transitLine; }
+    if (l.brfName) update.brfName = l.brfName;
+    if (l.buildYear) update.buildYear = l.buildYear;
+    if (l.stambyteStatus) update.stambyteStatus = l.stambyteStatus;
     if (l.renovationScore != null) {
       update.renovationScore = l.renovationScore;
       update.renovationConfidence = l.renovationConfidence;

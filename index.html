@@ -470,8 +470,10 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
-              ${listing.brokerAgencyName ? `<div class="listing-agency">🏢 ${listing.brokerAgencyName}</div>` : ""}
-              ${listing.nextShowing ? `<div class="listing-showing">📅 ${listing.nextShowing}</div>` : ""}
+              ${listing.transitMinutes ? `<div class="listing-agency">${listing.transitMinutes} min to T-Centralen · ${listing.nearestStation} · ${listing.transitLine}</div>` : ""}
+              ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
+              ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
+              ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Stambyte: ' + listing.stambyteStatus : ''}</div>` : ""}
               ${renoSummaryHtml}
               ${listing.askingPriceNum && listing.totalEstimatedCostSEK ? (() => {
                 const c = calcInvestment(listing);

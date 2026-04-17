@@ -23,6 +23,18 @@ const listingSchema = new mongoose.Schema({
   coordinates: { lat: Number, lng: Number },
   publishedAt: Date,
   scrapeDate: String,
+  // Transit
+  transitMinutes: { type: Number, default: null },
+  nearestStation: { type: String, default: null },
+  transitLine: { type: String, default: null },
+  // BRF info
+  brfName: { type: String, default: null },
+  buildYear: { type: Number, default: null },
+  totalApartments: { type: Number, default: null },
+  brfDebtPerSqm: { type: Number, default: null },
+  stambyteYear: { type: Number, default: null },
+  stambyteStatus: { type: String, enum: ["done", "planned", "needed", "unknown", null], default: null },
+  renovationRules: { type: String, default: null },
   // AI renovation analysis
   renovationScore: { type: Number, default: null },
   renovationConfidence: { type: Number, default: null },

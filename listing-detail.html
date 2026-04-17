@@ -185,8 +185,24 @@
               <div class="meta-item"><div class="label">Floor</div><div class="value">${l.floor || '—'}</div></div>
               <div class="meta-item"><div class="label">Price/m²</div><div class="value">${l.squareMeterPrice || '—'}</div></div>
             </div>
-            ${l.brokerAgencyName ? `<p style="font-size:0.82rem;color:#666;">${l.brokerAgencyName}</p>` : ''}
+            ${l.transitMinutes ? `<div class="meta-item"><div class="label">T-Centralen</div><div class="value">${l.transitMinutes} min · ${l.nearestStation} · ${l.transitLine}</div></div>` : ''}
+            ${l.brokerAgencyName ? `<p style="font-size:0.82rem;color:#666;margin-top:8px;">${l.brokerAgencyName}</p>` : ''}
           </div>
+
+          ${l.brfName || l.buildYear || l.stambyteStatus ? `
+          <div class="section">
+            <h3>Building & BRF</h3>
+            <div class="meta-grid">
+              ${l.brfName ? `<div class="meta-item"><div class="label">BRF</div><div class="value">${l.brfName}</div></div>` : ''}
+              ${l.buildYear ? `<div class="meta-item"><div class="label">Built</div><div class="value">${l.buildYear}</div></div>` : ''}
+              ${l.totalApartments ? `<div class="meta-item"><div class="label">Apartments in building</div><div class="value">${l.totalApartments}</div></div>` : ''}
+              ${l.stambyteStatus ? `<div class="meta-item"><div class="label">Stambyte</div><div class="value" style="color:${l.stambyteStatus === 'done' ? '#69db7c' : l.stambyteStatus === 'needed' ? '#ff8888' : '#ffd43b'}">${l.stambyteStatus === 'done' ? 'Done' : l.stambyteStatus === 'planned' ? 'Planned' : l.stambyteStatus === 'needed' ? 'Needed' : 'Unknown'}</div></div>` : ''}
+              ${l.brfDebtPerSqm ? `<div class="meta-item"><div class="label">BRF debt/m²</div><div class="value">${l.brfDebtPerSqm.toLocaleString('sv-SE')} kr</div></div>` : ''}
+            </div>
+            ${l.renovationRules ? `<p style="font-size:0.82rem;color:#aaa;margin-top:8px;">Renovation rules: ${l.renovationRules}</p>` : ''}
+            ${l.stambyteStatus === 'needed' ? `<p style="font-size:0.82rem;color:#ff8888;margin-top:8px;">Stambyte not done — cosmetic renovation alone may not be sufficient. Factor in potential BRF stambyte costs and disruption.</p>` : ''}
+          </div>
+          ` : ''}
 
           ${l.renovationScore != null ? `
           <div class="section">
