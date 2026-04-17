@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Favorites — FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -152,6 +154,9 @@
       .floor-plan-link a { color: #7eb8f7; text-decoration: none; }
       .floor-plan-link a:hover { text-decoration: underline; }
 
+      .listing-map { width: 100%; height: 150px; border-radius: 8px; margin-bottom: 8px; z-index: 1; }
+      .days-badge { position: absolute; top: 10px; left: 10px; z-index: 3; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; background: rgba(0,0,0,0.7); color: #aaa; backdrop-filter: blur(6px); }
+
       .new-badge {
         position: absolute; top: 10px; right: 10px; z-index: 3;
         padding: 4px 10px; border-radius: 6px;
@@ -284,6 +289,8 @@
 
           const isNew = listing.publishedAt && (Date.now() - new Date(listing.publishedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
           const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
+          const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
+          const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
 
           const floorPlanHtml = listing.hasFloorPlan === true
             ? `<div class="floor-plan-link">Floor plan: <a href="${listing.link}" target="_blank">View on Hemnet</a></div>`
@@ -294,6 +301,7 @@
               ${carouselHtml}
               ${renoBadgeHtml}
               ${newBadgeHtml}
+              ${daysBadgeHtml}
             </div>
             <div class="listing-body">
               <div class="listing-header">
@@ -309,9 +317,11 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
+              ${listing.transitMinutes ? `<div class="listing-agency">${listing.transitMinutes} min to T-Centralen · ${listing.nearestStation}</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${renoSummaryHtml}
+              ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
               ${floorPlanHtml}
               <div class="listing-actions">
                 <button class="action-btn remove-btn">Remove</button>
@@ -337,6 +347,15 @@
           }
 
           feedEl.appendChild(div);
+
+          if (listing.coordinates?.lat) {
+            const mapEl = document.getElementById("map-" + listing.id);
+            if (mapEl) {
+              const map = L.map(mapEl, { scrollWheelZoom: false, dragging: false, zoomControl: false }).setView([listing.coordinates.lat, listing.coordinates.lng], 14);
+              L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(map);
+              L.marker([listing.coordinates.lat, listing.coordinates.lng]).addTo(map);
+            }
+          }
         });
       }
 

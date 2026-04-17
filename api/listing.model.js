@@ -23,6 +23,11 @@ const listingSchema = new mongoose.Schema({
   coordinates: { lat: Number, lng: Number },
   publishedAt: Date,
   scrapeDate: String,
+  // Status
+  status: { type: String, enum: ["active", "sold", "removed"], default: "active" },
+  soldDate: { type: Date, default: null },
+  soldPrice: { type: Number, default: null },
+  daysOnMarket: { type: Number, default: null },
   // Transit
   transitMinutes: { type: Number, default: null },
   nearestStation: { type: String, default: null },

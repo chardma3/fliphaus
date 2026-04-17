@@ -136,6 +136,10 @@
             <div class="stat-box"><div class="stat-value" id="stat-avg-price">—</div><div class="stat-label">Avg. asking price</div></div>
             <div class="stat-box"><div class="stat-value" id="stat-high-reno">—</div><div class="stat-label">High renovation potential</div></div>
             <div class="stat-box"><div class="stat-value" id="stat-avg-sqm">—</div><div class="stat-label">Avg. price/m²</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-sold">—</div><div class="stat-label">Sold recently</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-avg-days">—</div><div class="stat-label">Avg. days on market</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-new-week">—</div><div class="stat-label">New this week</div></div>
+            <div class="stat-box"><div class="stat-value" id="stat-new-month">—</div><div class="stat-label">New this month</div></div>
           </div>
         </div>
 
@@ -250,8 +254,27 @@
           }).filter(Boolean);
           const avgSqm = sqmPrices.length ? Math.round(sqmPrices.reduce((a, b) => a + b, 0) / sqmPrices.length) : 0;
           document.getElementById("stat-avg-sqm").textContent = avgSqm ? avgSqm.toLocaleString("sv-SE") + " kr" : "—";
+
+          // New listings frequency
+          const now = Date.now();
+          const week = 7 * 24 * 60 * 60 * 1000;
+          const month = 30 * 24 * 60 * 60 * 1000;
+          const newWeek = listings.filter(l => l.publishedAt && (now - new Date(l.publishedAt).getTime()) < week).length;
+          const newMonth = listings.filter(l => l.publishedAt && (now - new Date(l.publishedAt).getTime()) < month).length;
+          document.getElementById("stat-new-week").textContent = newWeek;
+          document.getElementById("stat-new-month").textContent = newMonth;
         } catch (e) {
           console.error("Failed to load stats", e);
+        }
+
+        // Sold data
+        try {
+          const soldRes = await fetch("/api/sold");
+          const soldData = await soldRes.json();
+          document.getElementById("stat-sold").textContent = soldData.total;
+          document.getElementById("stat-avg-days").textContent = soldData.avgDaysOnMarket ? soldData.avgDaysOnMarket + "d" : "—";
+        } catch (e) {
+          console.error("Failed to load sold stats", e);
         }
       }
 

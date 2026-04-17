@@ -233,9 +233,21 @@ module.exports = async () => {
     await Listing.findOneAndUpdate({ id: l.id }, update, { upsert: true, new: true });
   }
 
-  // Remove listings no longer on Hemnet (not seen in last scrape)
+  // Mark listings no longer on Hemnet as sold (instead of deleting)
   const currentIds = unique.map((l) => l.id);
-  await Listing.deleteMany({ id: { $nin: currentIds } });
+  const disappeared = await Listing.find({ id: { $nin: currentIds }, status: "active" });
+  for (const d of disappeared) {
+    const dom = d.publishedAt ? Math.floor((Date.now() - new Date(d.publishedAt).getTime()) / (1000*60*60*24)) : null;
+    await Listing.findByIdAndUpdate(d._id, {
+      status: "sold",
+      soldDate: new Date(),
+      daysOnMarket: dom,
+    });
+    console.log(`  📋 Marked as sold: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
+  }
 
-  return { total: unique.length, scrapeDate };
+  // Mark current listings as active
+  await Listing.updateMany({ id: { $in: currentIds } }, { status: "active" });
+
+  return { total: unique.length, sold: disappeared.length, scrapeDate };
 };

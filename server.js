@@ -179,6 +179,7 @@ app.get("/api/listings", async (req, res) => {
       : { askingPriceNum: 1 };
 
     const filter = {
+      status: { $ne: "sold" },
       askingPriceNum: { $lte: settings.maxPrice },
       locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
     };
@@ -229,6 +230,23 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
     res.json({ total: listings.length, listings: listings.map((l) => ({ ...l.toObject(), status: "saved" })) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch favorites" });
+  }
+});
+
+// Sold listings
+app.get("/api/sold", async (req, res) => {
+  try {
+    const listings = await Listing.find({ status: "sold" }, { __v: 0 }).sort({ soldDate: -1 });
+    const avgDays = listings.length ? Math.round(listings.reduce((s, l) => s + (l.daysOnMarket || 0), 0) / listings.length) : 0;
+    const avgPrice = listings.length ? Math.round(listings.reduce((s, l) => s + (l.askingPriceNum || 0), 0) / listings.length) : 0;
+    res.json({
+      total: listings.length,
+      avgDaysOnMarket: avgDays,
+      avgAskingPrice: avgPrice,
+      listings: listings.map((l) => l.toObject()),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch sold listings" });
   }
 });
 
