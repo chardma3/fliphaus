@@ -339,8 +339,25 @@
         return /lägenhet|bostadsrätt/i.test(str);
       }
 
-      // Avg renovated sqm price from our data (~44,500 kr/m² for score 1-3)
-      const RENOVATED_SQM_PRICE = 44500;
+      // Renovated sqm prices by area (from real data — avg of score 1-3 listings)
+      const RENOVATED_SQM = {
+        "Rissne": 42500, "Sundbyberg": 43000, "Duvbo": 42500, "Hallonbergen": 28000,
+        "Farsta": 45600, "Sköndal": 50400, "Fagersjö": 31000,
+        "Gubbängen": 46000, "Hökarängen": 60000, "Tallkrogen": 46000,
+        "Enskede": 52600, "Bagarmossen": 46000, "Skarpnäck": 50000,
+        "Bromma": 50000, "Kista": 38000, "Sollentuna": 42000,
+        "Järvastaden": 56000,
+      };
+      const DEFAULT_RENOVATED_SQM = 45000;
+
+      function getAreaSqmPrice(locationDesc) {
+        if (!locationDesc) return DEFAULT_RENOVATED_SQM;
+        const loc = locationDesc.toLowerCase();
+        for (const [area, price] of Object.entries(RENOVATED_SQM)) {
+          if (loc.includes(area.toLowerCase())) return price;
+        }
+        return DEFAULT_RENOVATED_SQM;
+      }
 
       function calcInvestment(listing) {
         const price = listing.askingPriceNum || 0;
@@ -348,13 +365,14 @@
         const feeNum = listing.fee ? parseInt(listing.fee.replace(/\D/g, ""), 10) || 0 : 0;
         const renoCost = listing.totalEstimatedCostSEK || 0;
         const deposit = Math.round(price * 0.15);
-        const months = 7; // avg 6-8 months
+        const months = 7;
         const carryingCost = feeNum * months;
         const totalInvestment = deposit + renoCost + carryingCost;
-        const estSalePrice = sizeNum > 0 ? Math.round(sizeNum * RENOVATED_SQM_PRICE) : 0;
+        const sqmPrice = getAreaSqmPrice(listing.locationDescription);
+        const estSalePrice = sizeNum > 0 ? Math.round(sizeNum * sqmPrice) : 0;
         const profit = estSalePrice > 0 ? estSalePrice - price - renoCost - carryingCost : 0;
         const roi = totalInvestment > 0 && profit > 0 ? Math.round((profit / totalInvestment) * 100) : 0;
-        return { price, deposit, renoCost, carryingCost, feeNum, months, totalInvestment, estSalePrice, profit, roi, sizeNum };
+        return { price, deposit, renoCost, carryingCost, feeNum, months, totalInvestment, estSalePrice, profit, roi, sizeNum, sqmPrice };
       }
 
       function formatSEKShort(n) {
@@ -491,7 +509,7 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
-              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitMinutes} min to T-Centralen</div>` : ""}
+              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Stambyte: ' + listing.stambyteStatus : ''}</div>` : ""}
@@ -507,7 +525,7 @@
                   <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
                   <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
                   <div class="calc-divider"></div>
-                  <div class="calc-row sale"><span class="calc-label">Est. sale price (renovated)</span><span class="calc-value">${formatSEKShort(c.estSalePrice)}</span></div>
+                  <div class="calc-row sale"><span class="calc-label">Est. sale (${(c.sqmPrice/1000).toFixed(1)}K/m² renovated avg)</span><span class="calc-value">${formatSEKShort(c.estSalePrice)}</span></div>
                   <div class="calc-row ${profitClass}"><span class="calc-label">Est. profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}</span><span class="calc-value">${c.profit > 0 ? '+' : ''}${formatSEKShort(c.profit)}</span></div>
                 </div>`;
               })() : ""}

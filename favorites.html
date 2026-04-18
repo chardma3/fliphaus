@@ -317,7 +317,7 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
-              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitMinutes} min to T-Centralen</div>` : ""}
+              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${renoSummaryHtml}
