@@ -69,13 +69,22 @@
       .listing.rejected { background: #2e1a1a; }
       .listing.rejected .carousel,
       .listing.rejected .carousel-no-img,
-      .listing.rejected .location,
       .listing.rejected .listing-meta,
       .listing.rejected .listing-agency,
       .listing.rejected .listing-showing,
       .listing.rejected .floor-plan-link,
-      .listing.rejected .listing-actions { display: none; }
+      .listing.rejected .listing-actions,
+      .listing.rejected .reno-summary,
+      .listing.rejected .reno-badge,
+      .listing.rejected .new-badge,
+      .listing.rejected .days-badge,
+      .listing.rejected .invest-calc,
+      .listing.rejected .listing-map { display: none; }
       .listing.rejected .listing-body { padding: 10px 16px; }
+      .listing.rejected .location { font-size: 0.78rem; color: #666; margin-bottom: 0; }
+      .listing.rejected .listing-header h3 { font-size: 0.88rem; color: #888; }
+      .rejected-summary { display: none; font-size: 0.78rem; color: #666; }
+      .listing.rejected .rejected-summary { display: block; }
       .listing.saved    { background: #1a2e1f; }
 
       /* Carousel */
@@ -166,7 +175,7 @@
       }
 
       .days-badge {
-        position: absolute; bottom: 10px; left: 10px; z-index: 3;
+        position: absolute; bottom: 10px; right: 10px; z-index: 3;
         padding: 4px 10px; border-radius: 6px;
         font-size: 0.75rem; font-weight: 600;
         background: rgba(0,0,0,0.7); color: #aaa;
@@ -472,6 +481,7 @@
                 </div>
               </div>
               <div class="location">${listing.locationDescription}</div>
+              <div class="rejected-summary">${listing.askingPrice} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
               <div class="listing-meta">
                 <span class="price-tag">${listing.askingPrice}</span>
                 ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
@@ -481,7 +491,7 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
-              ${listing.transitMinutes ? `<div class="listing-agency">${listing.transitMinutes} min to T-Centralen · ${listing.nearestStation} · ${listing.transitLine}</div>` : ""}
+              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Stambyte: ' + listing.stambyteStatus : ''}</div>` : ""}
