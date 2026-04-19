@@ -234,6 +234,15 @@
       .cb-btn.active-reject { background: rgba(90,26,26,0.9); }
       .cb-btn.active-save   { background: rgba(26,90,26,0.9); }
 
+      .profit-badge {
+        position: absolute; top: 10px; right: 10px; z-index: 3;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 600;
+        backdrop-filter: blur(6px);
+      }
+      .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
+      .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
+
       /* Login modal */
       .login-prompt {
         display: none; position: fixed; inset: 0;
@@ -289,6 +298,11 @@
       </div>
 
       <div id="reno-filters" class="filter-bar" style="display:none;"></div>
+      <div id="profit-filters" class="filter-bar">
+        <button class="filter-btn active" id="filter-all">All</button>
+        <button class="filter-btn" id="filter-profitable">Profitable only</button>
+        <button class="filter-btn" id="filter-unprofitable">Unprofitable</button>
+      </div>
       <div id="stats"></div>
       <div id="feed"></div>
     </div>
@@ -476,6 +490,8 @@
           const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
           const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
           const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
+          const calc = listing.askingPriceNum && listing.totalEstimatedCostSEK ? calcInvestment(listing) : null;
+          const profitBadgeHtml = calc ? `<div class="profit-badge ${calc.profit > 0 ? 'positive' : 'negative'}">${calc.profit > 0 ? '+' + formatSEKShort(calc.profit) + ' (' + calc.roi + '% ROI)' : formatSEKShort(calc.profit)}</div>` : "";
           const renoSummaryHtml = listing.renovationSummary
             ? `<div class="reno-summary ${renoCls}">
                 ${listing.renovationSummary}
@@ -488,6 +504,7 @@
               ${carouselHtml}
               ${renoBadgeHtml}
               ${newBadgeHtml}
+              ${profitBadgeHtml}
               ${daysBadgeHtml}
             </div>
             <div class="listing-body">
@@ -626,6 +643,31 @@
         buildFilterBar(data.listings);
         renderListings(data);
       }
+
+      // Profit filters
+      let profitFilter = "all";
+      function applyProfitFilter(filter) {
+        profitFilter = filter;
+        document.querySelectorAll("#profit-filters .filter-btn").forEach(b => b.classList.remove("active"));
+        document.getElementById("filter-" + filter).classList.add("active");
+        if (!allListingsData) return;
+        let filtered = allListingsData.listings;
+        if (filter === "profitable") {
+          filtered = filtered.filter(l => {
+            if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return false;
+            return calcInvestment(l).profit > 0;
+          });
+        } else if (filter === "unprofitable") {
+          filtered = filtered.filter(l => {
+            if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return true;
+            return calcInvestment(l).profit <= 0;
+          });
+        }
+        renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
+      }
+      document.getElementById("filter-all").addEventListener("click", () => applyProfitFilter("all"));
+      document.getElementById("filter-profitable").addEventListener("click", () => applyProfitFilter("profitable"));
+      document.getElementById("filter-unprofitable").addEventListener("click", () => applyProfitFilter("unprofitable"));
 
       async function init() {
         const res = await fetch("/api/me");
