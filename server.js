@@ -8,6 +8,8 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const path = require("path");
 
 const scrape = require("./api/scrape");
+const scrapeSold = require("./api/scrape-sold");
+const SoldListing = require("./models/sold.model");
 const Listing = require("./api/listing.model");
 const User = require("./models/user.model");
 const Preference = require("./models/preference.model");
@@ -531,11 +533,58 @@ app.get("/api/scrape", async (req, res) => {
   }
 });
 
+// Scrape sold (slutpriser)
+app.get("/api/scrape-sold", async (req, res) => {
+  try {
+    const result = await scrapeSold();
+    res.json({ message: "Sold scrape complete", ...result });
+  } catch (err) {
+    console.error("❌ Sold scrape error:", err);
+    res.status(500).json({ error: "Sold scraping failed" });
+  }
+});
+
+// Sold data API with stats
+app.get("/api/sold/stats", async (req, res) => {
+  try {
+    const all = await SoldListing.find().sort({ soldDate: -1 });
+    const areas = {};
+    all.forEach((l) => {
+      const area = l.area || "Unknown";
+      if (!areas[area]) areas[area] = { total: 0, prices: [], sqmPrices: [], daysOnMarket: [], priceChanges: [] };
+      areas[area].total++;
+      if (l.soldPrice) areas[area].prices.push(l.soldPrice);
+      if (l.soldPriceSqm) areas[area].sqmPrices.push(l.soldPriceSqm);
+      if (l.daysOnMarket) areas[area].daysOnMarket.push(l.daysOnMarket);
+      if (l.priceChange != null) areas[area].priceChanges.push(l.priceChange);
+    });
+
+    const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const areaStats = Object.entries(areas).map(([name, d]) => ({
+      area: name,
+      totalSold: d.total,
+      avgSoldPrice: avg(d.prices),
+      avgSoldSqm: avg(d.sqmPrices),
+      avgDaysOnMarket: avg(d.daysOnMarket),
+      avgPriceChange: d.priceChanges.length ? Math.round(d.priceChanges.reduce((a, b) => a + b, 0) / d.priceChanges.length * 10) / 10 : null,
+    }));
+
+    res.json({
+      total: all.length,
+      areaStats,
+      listings: all.map((l) => l.toObject()),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch sold stats" });
+  }
+});
+
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
 app.get("/invest", (req, res) => res.sendFile(path.join(__dirname, "investor.html")));
 app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "listing-detail.html")));
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
+app.get("/sold", (req, res) => res.sendFile(path.join(__dirname, "sold.html")));
 app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
 app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.html")));
 app.get("/market", (req, res) => res.sendFile(path.join(__dirname, "market.html")));

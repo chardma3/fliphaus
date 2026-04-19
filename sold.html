@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sold — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header { width: 100%; max-width: 700px; display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+      .header-right { display: flex; align-items: center; gap: 10px; }
+      .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+
+      .nav-bar { width: 100%; max-width: 700px; display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+      .nav-link { padding: 6px 14px; border-radius: 20px; font-family: "Poppins", sans-serif; font-size: 0.82rem; text-decoration: none; color: #888; border: 1px solid #333; background: #1e1e1e; transition: all 0.2s; }
+      .nav-link:hover { border-color: #555; color: #ccc; }
+      .nav-link.active { background: #1a2a3a; border-color: #7eb8f7; color: #7eb8f7; }
+
+      .content { width: 100%; max-width: 700px; }
+      .section { background: #1e1e1e; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+      .section h3 { font-size: 1.1rem; color: #fff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a; }
+      .section p { font-size: 0.88rem; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+
+      .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+      @media (max-width: 500px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+      .stat-box { background: #252525; border-radius: 8px; padding: 14px; text-align: center; }
+      .stat-box .stat-value { font-size: 1.3rem; font-weight: 600; color: #69db7c; }
+      .stat-box .stat-label { font-size: 0.7rem; color: #888; margin-top: 4px; }
+
+      .area-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      .area-table th, .area-table td { text-align: left; padding: 10px 8px; font-size: 0.82rem; border-bottom: 1px solid #2a2a2a; }
+      .area-table th { color: #888; font-weight: 400; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; }
+      .area-table td { color: #ccc; }
+      .area-table .green { color: #69db7c; font-weight: 600; }
+      .area-table .red { color: #ff8888; }
+      .area-table .blue { color: #7eb8f7; }
+
+      .sold-card { background: #252525; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 14px; align-items: center; }
+      .sold-card img { width: 80px; height: 60px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+      .sold-card .no-img { width: 80px; height: 60px; border-radius: 6px; background: #333; flex-shrink: 0; }
+      .sold-info { flex: 1; min-width: 0; }
+      .sold-info h4 { font-size: 0.88rem; color: #fff; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sold-info .sold-meta { font-size: 0.78rem; color: #888; }
+      .sold-info .sold-meta span { color: #ccc; }
+      .sold-prices { text-align: right; flex-shrink: 0; }
+      .sold-prices .final { font-size: 0.95rem; font-weight: 600; color: #69db7c; }
+      .sold-prices .asking { font-size: 0.75rem; color: #666; text-decoration: line-through; }
+      .sold-prices .change { font-size: 0.75rem; font-weight: 600; }
+      .sold-prices .change.up { color: #69db7c; }
+      .sold-prices .change.down { color: #ff8888; }
+
+      .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+      .filter-btn { padding: 5px 12px; border: 1px solid #333; border-radius: 20px; background: #1e1e1e; color: #888; font-family: "Poppins", sans-serif; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
+      .filter-btn:hover { border-color: #555; color: #ccc; }
+      .filter-btn.active { background: #1a2a3a; border-color: #7eb8f7; color: #7eb8f7; }
+
+      .empty { text-align: center; padding: 40px; color: #555; font-size: 0.88rem; }
+      .data-note { font-size: 0.75rem; color: #555; margin-top: 8px; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div><h1>FlipHaus</h1><h2>Sold properties — market data</h2></div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+      <div class="nav-bar">
+        <a href="/" class="nav-link">All listings</a>
+        <a href="/favorites" class="nav-link">Favorites</a>
+        <a href="/areas" class="nav-link">Areas</a>
+        <a href="/methodology" class="nav-link">How it works</a>
+        <a href="/account" class="nav-link">Account</a>
+        <a href="/market" class="nav-link">Market</a>
+        <a href="/builders" class="nav-link">Builders</a>
+        <a href="/sold" class="nav-link active">Sold</a>
+      </div>
+      <div class="content">
+        <div class="section">
+          <h3>Overview</h3>
+          <div class="stat-grid" id="overview-stats">
+            <div class="stat-box"><div class="stat-value" id="s-total">—</div><div class="stat-label">Properties sold</div></div>
+            <div class="stat-box"><div class="stat-value" id="s-avg-price">—</div><div class="stat-label">Avg. sold price</div></div>
+            <div class="stat-box"><div class="stat-value" id="s-avg-sqm">—</div><div class="stat-label">Avg. sold kr/m²</div></div>
+            <div class="stat-box"><div class="stat-value" id="s-avg-change">—</div><div class="stat-label">Avg. vs asking</div></div>
+          </div>
+          <p class="data-note">Data from Hemnet slutpriser. Updated with each scrape. This dataset grows over time — the longer FlipHaus runs, the more accurate the benchmarks.</p>
+        </div>
+        <div class="section">
+          <h3>By area</h3>
+          <table class="area-table" id="area-table">
+            <thead><tr><th>Area</th><th>Sold</th><th>Avg. sold kr/m²</th><th>Avg. sold price</th><th>Avg. vs asking</th></tr></thead>
+            <tbody id="area-body"><tr><td colspan="5" style="color:#555;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h3>Recent sales</h3>
+          <div class="filter-bar" id="area-filters"></div>
+          <div id="sold-feed"><div class="empty">Loading...</div></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      let allSoldData = null;
+      let activeAreaFilter = null;
+
+      function formatK(n) {
+        if (!n) return "—";
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+        return Math.round(n / 1000) + "K";
+      }
+
+      function renderSoldList(listings) {
+        const feed = document.getElementById("sold-feed");
+        if (!listings.length) { feed.innerHTML = '<div class="empty">No sold data yet. Run a slutpriser scrape to populate.</div>'; return; }
+
+        feed.innerHTML = listings.map(l => {
+          const img = l.images?.[0];
+          const change = l.priceChange;
+          const changeClass = change > 0 ? "up" : change < 0 ? "down" : "";
+          const changeText = change != null ? (change > 0 ? "+" : "") + change + "%" : "";
+          const soldDate = l.soldDate ? new Date(l.soldDate).toLocaleDateString("sv-SE") : "";
+          return `
+            <div class="sold-card">
+              ${img ? `<img src="${img}" />` : '<div class="no-img"></div>'}
+              <div class="sold-info">
+                <h4>${l.streetAddress}</h4>
+                <div class="sold-meta">${l.locationDescription || l.area} · ${l.rooms || ""} · ${l.size || ""}</div>
+                <div class="sold-meta">Sold <span>${soldDate}</span>${l.soldPriceSqm ? " · " + l.soldPriceSqm.toLocaleString("sv-SE") + " kr/m²" : ""}</div>
+              </div>
+              <div class="sold-prices">
+                <div class="final">${l.soldPrice ? formatK(l.soldPrice) + " kr" : "—"}</div>
+                ${l.askingPriceNum ? `<div class="asking">${formatK(l.askingPriceNum)} kr</div>` : ""}
+                ${changeText ? `<div class="change ${changeClass}">${changeText}</div>` : ""}
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function buildAreaFilters(listings) {
+        const areas = [...new Set(listings.map(l => l.area).filter(Boolean))].sort();
+        const bar = document.getElementById("area-filters");
+        bar.innerHTML = "";
+        const allBtn = document.createElement("button");
+        allBtn.className = "filter-btn active";
+        allBtn.textContent = "All areas";
+        allBtn.addEventListener("click", () => filterByArea(null));
+        bar.appendChild(allBtn);
+        areas.forEach(area => {
+          const btn = document.createElement("button");
+          btn.className = "filter-btn";
+          btn.textContent = area;
+          btn.addEventListener("click", () => filterByArea(area));
+          bar.appendChild(btn);
+        });
+      }
+
+      function filterByArea(area) {
+        activeAreaFilter = area;
+        document.querySelectorAll("#area-filters .filter-btn").forEach((b, i) => {
+          b.classList.toggle("active", area === null ? i === 0 : b.textContent === area);
+        });
+        const filtered = area ? allSoldData.filter(l => l.area === area) : allSoldData;
+        renderSoldList(filtered);
+      }
+
+      async function init() {
+        // Auth
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        const headerRight = document.getElementById("header-right");
+        if (data.user) {
+          headerRight.innerHTML = `<img src="${data.user.avatar}" alt="" /><span>${data.user.name.split(" ")[0]}</span><a href="/auth/logout" class="signout-link">Sign out</a>`;
+        } else {
+          headerRight.innerHTML = '<a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>';
+        }
+
+        // Load data
+        try {
+          const soldRes = await fetch("/api/sold/stats");
+          const soldData = await soldRes.json();
+          allSoldData = soldData.listings || [];
+
+          // Overview
+          document.getElementById("s-total").textContent = soldData.total;
+          const allPrices = allSoldData.map(l => l.soldPrice).filter(Boolean);
+          const allSqm = allSoldData.map(l => l.soldPriceSqm).filter(Boolean);
+          const allChanges = allSoldData.map(l => l.priceChange).filter(v => v != null);
+          document.getElementById("s-avg-price").textContent = allPrices.length ? formatK(Math.round(allPrices.reduce((a,b) => a+b, 0) / allPrices.length)) + " kr" : "—";
+          document.getElementById("s-avg-sqm").textContent = allSqm.length ? Math.round(allSqm.reduce((a,b) => a+b, 0) / allSqm.length).toLocaleString("sv-SE") + " kr" : "—";
+          const avgChange = allChanges.length ? Math.round(allChanges.reduce((a,b) => a+b, 0) / allChanges.length * 10) / 10 : null;
+          document.getElementById("s-avg-change").textContent = avgChange != null ? (avgChange > 0 ? "+" : "") + avgChange + "%" : "—";
+          document.getElementById("s-avg-change").style.color = avgChange > 0 ? "#69db7c" : avgChange < 0 ? "#ff8888" : "#aaa";
+
+          // Area table
+          const tbody = document.getElementById("area-body");
+          if (soldData.areaStats?.length) {
+            tbody.innerHTML = soldData.areaStats.map(a => `
+              <tr>
+                <td>${a.area}</td>
+                <td>${a.totalSold}</td>
+                <td class="blue">${a.avgSoldSqm ? a.avgSoldSqm.toLocaleString("sv-SE") + " kr" : "—"}</td>
+                <td>${a.avgSoldPrice ? formatK(a.avgSoldPrice) + " kr" : "—"}</td>
+                <td class="${(a.avgPriceChange || 0) > 0 ? 'green' : 'red'}">${a.avgPriceChange != null ? (a.avgPriceChange > 0 ? "+" : "") + a.avgPriceChange + "%" : "—"}</td>
+              </tr>
+            `).join("");
+          } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:#555;">No data yet</td></tr>';
+          }
+
+          // Listings
+          buildAreaFilters(allSoldData);
+          renderSoldList(allSoldData);
+        } catch (e) {
+          console.error("Failed to load sold data", e);
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>
