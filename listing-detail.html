@@ -176,7 +176,7 @@
 
           <div class="section">
             <h2 class="listing-title">${l.streetAddress}</h2>
-            <div class="listing-location">${l.locationDescription}</div>
+            <div class="listing-location">${(l.locationDescription||"").replace(/s kommun/gi,"").replace(/kommun/gi,"").replace(/,\s*$/,"").trim()}</div>
             <div class="meta-grid">
               <div class="meta-item"><div class="label">Asking price</div><div class="value green">${l.askingPrice}</div></div>
               <div class="meta-item"><div class="label">Size</div><div class="value">${l.size || '—'}</div></div>
@@ -196,11 +196,11 @@
               ${l.brfName ? `<div class="meta-item"><div class="label">BRF</div><div class="value">${l.brfName}</div></div>` : ''}
               ${l.buildYear ? `<div class="meta-item"><div class="label">Built</div><div class="value">${l.buildYear}</div></div>` : ''}
               ${l.totalApartments ? `<div class="meta-item"><div class="label">Apartments in building</div><div class="value">${l.totalApartments}</div></div>` : ''}
-              ${l.stambyteStatus ? `<div class="meta-item"><div class="label">Stambyte</div><div class="value" style="color:${l.stambyteStatus === 'done' ? '#69db7c' : l.stambyteStatus === 'needed' ? '#ff8888' : '#ffd43b'}">${l.stambyteStatus === 'done' ? 'Done' : l.stambyteStatus === 'planned' ? 'Planned' : l.stambyteStatus === 'needed' ? 'Needed' : 'Unknown'}</div></div>` : ''}
+              ${l.stambyteStatus ? `<div class="meta-item"><div class="label">Pipe replacement</div><div class="value" style="color:${l.stambyteStatus === 'done' ? '#69db7c' : l.stambyteStatus === 'needed' ? '#ff8888' : '#ffd43b'}">${l.stambyteStatus === 'done' ? 'Done' : l.stambyteStatus === 'planned' ? 'Planned' : l.stambyteStatus === 'needed' ? 'Needed' : 'Unknown'}</div></div>` : ''}
               ${l.brfDebtPerSqm ? `<div class="meta-item"><div class="label">BRF debt/m²</div><div class="value">${l.brfDebtPerSqm.toLocaleString('sv-SE')} kr</div></div>` : ''}
             </div>
             ${l.renovationRules ? `<p style="font-size:0.82rem;color:#aaa;margin-top:8px;">Renovation rules: ${l.renovationRules}</p>` : ''}
-            ${l.stambyteStatus === 'needed' ? `<p style="font-size:0.82rem;color:#ff8888;margin-top:8px;">Stambyte not done — cosmetic renovation alone may not be sufficient. Factor in potential BRF stambyte costs and disruption.</p>` : ''}
+            ${l.stambyteStatus === 'needed' ? `<p style="font-size:0.82rem;color:#ff8888;margin-top:8px;">Pipe replacement not done — cosmetic renovation alone may not be sufficient. Factor in potential BRF stambyte costs and disruption.</p>` : ''}
           </div>
           ` : ''}
 

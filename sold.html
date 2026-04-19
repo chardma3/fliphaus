@@ -76,10 +76,10 @@
         <a href="/favorites" class="nav-link">Favorites</a>
         <a href="/areas" class="nav-link">Areas</a>
         <a href="/methodology" class="nav-link">How it works</a>
-        <a href="/account" class="nav-link">Account</a>
         <a href="/market" class="nav-link">Market</a>
         <a href="/builders" class="nav-link">Builders</a>
         <a href="/sold" class="nav-link active">Sold</a>
+        <a href="/lexicon" class="nav-link">Lexicon</a>
       </div>
       <div class="content">
         <div class="section">
@@ -90,7 +90,7 @@
             <div class="stat-box"><div class="stat-value" id="s-avg-sqm">—</div><div class="stat-label">Avg. sold kr/m²</div></div>
             <div class="stat-box"><div class="stat-value" id="s-avg-change">—</div><div class="stat-label">Avg. vs asking</div></div>
           </div>
-          <p class="data-note">Data from Hemnet slutpriser. Updated with each scrape. This dataset grows over time — the longer FlipHaus runs, the more accurate the benchmarks.</p>
+          <p class="data-note">Data from Hemnet sold prices. Updated with each scrape. This dataset grows over time — the longer FlipHaus runs, the more accurate the benchmarks.</p>
         </div>
         <div class="section">
           <h3>By area</h3>
@@ -118,7 +118,7 @@
 
       function renderSoldList(listings) {
         const feed = document.getElementById("sold-feed");
-        if (!listings.length) { feed.innerHTML = '<div class="empty">No sold data yet. Run a slutpriser scrape to populate.</div>'; return; }
+        if (!listings.length) { feed.innerHTML = '<div class="empty">No sold data yet. Run a sold prices scrape to populate.</div>'; return; }
 
         feed.innerHTML = listings.map(l => {
           const img = l.images?.[0];
@@ -177,7 +177,7 @@
         const data = await res.json();
         const headerRight = document.getElementById("header-right");
         if (data.user) {
-          headerRight.innerHTML = `<img src="${data.user.avatar}" alt="" /><span>${data.user.name.split(" ")[0]}</span><a href="/auth/logout" class="signout-link">Sign out</a>`;
+          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;"><img src="${data.user.avatar}" alt="" /><span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
         } else {
           headerRight.innerHTML = '<a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>';
         }

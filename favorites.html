@@ -181,10 +181,10 @@
         <a href="/favorites" class="nav-link active">Favorites</a>
         <a href="/areas" class="nav-link">Areas</a>
         <a href="/methodology" class="nav-link">How it works</a>
-        <a href="/account" class="nav-link">Account</a>
         <a href="/market" class="nav-link">Market</a>
         <a href="/builders" class="nav-link">Builders</a>
         <a href="/sold" class="nav-link">Sold</a>
+        <a href="/lexicon" class="nav-link">Lexicon</a>
       </div>
 
       <div id="stats"></div>
@@ -229,6 +229,11 @@
       function isApartmentType(str) {
         if (!str) return false;
         return /lägenhet|bostadsrätt/i.test(str);
+      }
+
+      function translateLocation(str) {
+        if (!str) return str;
+        return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
       }
 
       async function removeFromFavorites(listingId, cardEl) {
@@ -308,7 +313,7 @@
               <div class="listing-header">
                 <h3>${listing.streetAddress}</h3>
               </div>
-              <div class="location">${listing.locationDescription}</div>
+              <div class="location">${translateLocation(listing.locationDescription)}</div>
               <div class="listing-meta">
                 <span class="price-tag">${listing.askingPrice}</span>
                 ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
@@ -368,8 +373,10 @@
         const headerRight = document.getElementById("header-right");
         if (currentUser) {
           headerRight.innerHTML = `
-            <img src="${currentUser.avatar}" alt="" />
-            <span>${currentUser.name.split(" ")[0]}</span>
+            <a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+              <img src="${currentUser.avatar}" alt="" />
+              <span>${currentUser.name.split(" ")[0]}</span>
+            </a>
             <a href="/auth/logout" class="signout-link">Sign out</a>
           `;
           document.getElementById("stats").textContent = "Loading...";

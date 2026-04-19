@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lexicon — FlipHaus</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: "Poppins", sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; }
+      #app { display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+
+      header { width: 100%; max-width: 700px; display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+      header h1 { font-size: 1.8rem; color: #fff; }
+      header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
+      .header-right { display: flex; align-items: center; gap: 10px; }
+      .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
+      .header-right span { font-size: 0.85rem; color: #aaa; }
+      .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
+
+      .nav-bar { width: 100%; max-width: 700px; display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+      .nav-link { padding: 6px 14px; border-radius: 20px; font-family: "Poppins", sans-serif; font-size: 0.82rem; text-decoration: none; color: #888; border: 1px solid #333; background: #1e1e1e; transition: all 0.2s; }
+      .nav-link:hover { border-color: #555; color: #ccc; }
+      .nav-link.active { background: #2a2a1a; border-color: #ffd43b; color: #ffd43b; }
+
+      .content { width: 100%; max-width: 700px; }
+      .section { background: #1e1e1e; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+      .section h3 { font-size: 1.1rem; color: #fff; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a2a2a; }
+      .section p { font-size: 0.88rem; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+
+      .term-card { background: #252525; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 3px solid #ffd43b; }
+      .term-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+      .term-swedish { font-size: 1rem; color: #ffd43b; font-weight: 600; }
+      .term-english { font-size: 0.85rem; color: #7eb8f7; }
+      .term-card p { font-size: 0.82rem; color: #aaa; line-height: 1.5; margin: 0; }
+      .term-card .example { font-size: 0.78rem; color: #666; margin-top: 6px; font-style: italic; }
+
+      .category-label { font-size: 0.75rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div><h1>FlipHaus</h1><h2>Swedish real estate lexicon</h2></div>
+        <div class="header-right" id="header-right"></div>
+      </header>
+      <div class="nav-bar">
+        <a href="/" class="nav-link">All listings</a>
+        <a href="/favorites" class="nav-link">Favorites</a>
+        <a href="/areas" class="nav-link">Areas</a>
+        <a href="/methodology" class="nav-link">How it works</a>
+        <a href="/market" class="nav-link">Market</a>
+        <a href="/builders" class="nav-link">Builders</a>
+        <a href="/sold" class="nav-link">Sold</a>
+        <a href="/lexicon" class="nav-link active">Lexicon</a>
+      </div>
+      <div class="content">
+        <div class="section">
+          <h3>About this lexicon</h3>
+          <p>Swedish real estate has its own vocabulary. Many terms have no direct English equivalent because they describe systems unique to Sweden. This lexicon covers the key terms you'll encounter when evaluating properties on FlipHaus.</p>
+        </div>
+
+        <div class="section">
+          <div class="category-label">Ownership & structure</div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">BRF (Bostadsrättsförening)</span>
+              <span class="term-english">Housing cooperative</span>
+            </div>
+            <p>A cooperative association that owns an apartment building. When you buy a "bostadsrätt," you're buying the right to live in the apartment — not the apartment itself. The BRF owns the building and is responsible for maintenance, insurance, and shared costs. Each apartment owner has a share in the cooperative and votes on major decisions.</p>
+            <div class="example">Why it matters: The BRF's financial health directly affects your investment. A BRF with high debt may raise fees. A well-managed BRF adds value.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Bostadsrätt</span>
+              <span class="term-english">Cooperative apartment (ownership right)</span>
+            </div>
+            <p>The right to occupy an apartment within a BRF. Unlike freehold ownership ("äganderätt"), you own a share in the cooperative, not the physical property. This is the most common form of apartment ownership in Sweden — roughly 40% of all housing in Stockholm.</p>
+            <div class="example">Why it matters: All FlipHaus listings are bostadsrätter. The BRF's rules affect what renovations are permitted.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Avgift</span>
+              <span class="term-english">Monthly fee</span>
+            </div>
+            <p>The monthly fee paid to the BRF covering shared building costs: heating, water, building insurance, maintenance fund, mortgage interest on the BRF's loans, and sometimes broadband/TV. Typically 3,000–7,000 kr/month for a 2-3 room apartment.</p>
+            <div class="example">Why it matters: High avgift increases carrying cost during renovation. It also makes the apartment less attractive to buyers, lowering the sale price.</div>
+          </div>
+
+          <div class="category-label">Building & renovation</div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Stambyte</span>
+              <span class="term-english">Pipe replacement (plumbing overhaul)</span>
+            </div>
+            <p>A major building project where all water and drainage pipes in the building are replaced. In miljonprogrammet buildings, pipes have a ~50 year lifespan, meaning many are now overdue. A stambyte takes 6-12 months per building and typically costs 100,000-200,000 kr per apartment (paid through increased avgift or special fees).</p>
+            <div class="example">Why it matters: If stambyte hasn't been done, a cosmetic bathroom renovation is pointless — the walls will be torn open when pipes are replaced. Always check stambyte status before investing. If it's "done," that's a green light for renovation.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Bila i golvet</span>
+              <span class="term-english">Chiselling into the floor (concrete slab)</span>
+            </div>
+            <p>Many BRFs prohibit "bilning" — chiselling into the concrete floor slab. This matters because moving bathroom drains or installing underfloor heating requires cutting into the concrete. If the BRF bans bilning, you're limited to surface-mounted solutions.</p>
+            <div class="example">Why it matters: A ban on bilning limits renovation options. You can't move the toilet, shower drain, or add floor heating. The bathroom layout stays as-is.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Miljonprogrammet</span>
+              <span class="term-english">The Million Programme</span>
+            </div>
+            <p>Sweden's massive government housing programme (1965-1974) that built over one million homes in a decade. The buildings are typically concrete panel construction with standardised floor plans. Interiors (kitchens, bathrooms, flooring) were designed for a 30-year lifespan — now 50-60 years old and due for renovation.</p>
+            <div class="example">Why it matters: This is FlipHaus's core opportunity. Miljonprogrammet apartments with original interiors are significantly cheaper per m² than renovated equivalents, creating a predictable renovation premium.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Stamledningar</span>
+              <span class="term-english">Mains pipes / risers</span>
+            </div>
+            <p>The vertical pipes that run through the building carrying water and drainage between floors. These are the BRF's responsibility (not the individual apartment owner's). Their condition determines whether a stambyte is needed.</p>
+          </div>
+
+          <div class="category-label">Pricing & transactions</div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Slutpris</span>
+              <span class="term-english">Final sale price</span>
+            </div>
+            <p>The actual price an apartment sold for, as opposed to the asking price ("utgångspris"). In Stockholm, apartments often sell above asking price — sometimes 5-15% over. Hemnet publishes slutpriser after each sale, which FlipHaus scrapes to build its proprietary sold price database.</p>
+            <div class="example">Why it matters: Asking prices can be misleading. The sold price database gives FlipHaus accurate benchmarks for estimating post-renovation sale values.</div>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Utgångspris</span>
+              <span class="term-english">Asking price / starting price</span>
+            </div>
+            <p>The initial listed price. In Sweden, this is often set strategically low to attract bidders. The final sale price (slutpris) is typically higher. Some agents set it near market value; others price low to create a bidding war.</p>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Kvadratmeterpris (kr/m²)</span>
+              <span class="term-english">Price per square metre</span>
+            </div>
+            <p>The standard metric for comparing apartment values in Sweden. Calculated as price divided by living area (bostadsyta). Varies hugely by area — from 25,000 kr/m² in outer suburbs to 100,000+ kr/m² in Östermalm.</p>
+          </div>
+
+          <div class="category-label">Location & transit</div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Kommun</span>
+              <span class="term-english">Municipality</span>
+            </div>
+            <p>Swedish administrative district. Stockholm County has 26 municipalities. The most relevant for FlipHaus: Stockholms kommun (central Stockholm, Farsta, Enskede), Sundbybergs kommun (Rissne, Hallonbergen), and Sollentuna kommun.</p>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">T-bana (Tunnelbana)</span>
+              <span class="term-english">Metro / subway</span>
+            </div>
+            <p>Stockholm's metro system with three lines (Green, Red, Blue) and 100 stations. Properties near T-bana stations command higher prices and sell faster. T-Centralen is the central hub where all three lines meet.</p>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Pendeltåg</span>
+              <span class="term-english">Commuter rail</span>
+            </div>
+            <p>Regional commuter trains connecting outer suburbs and neighbouring municipalities to Stockholm Central. Faster than T-bana for longer distances but stations are further apart.</p>
+          </div>
+
+          <div class="category-label">Building features</div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Plastiga</span>
+              <span class="term-english">Cheap plastic (quality indicator)</span>
+            </div>
+            <p>Informal Swedish term describing cheap, plastic-looking fixtures or fittings — particularly white range hoods and basic kitchen fittings. A key renovation indicator: a "plastiga" range hood screams unrenovated kitchen.</p>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Tvättstuga</span>
+              <span class="term-english">Shared laundry room</span>
+            </div>
+            <p>A communal laundry room in the building basement, common in BRF buildings. Residents book time slots. Some renovated apartments add their own in-unit washing machine, which can be a selling point.</p>
+          </div>
+
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-swedish">Förråd</span>
+              <span class="term-english">Storage unit</span>
+            </div>
+            <p>A small storage space in the building basement or attic, usually included with the apartment. Important for buyers — apartments without a förråd are less attractive.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      async function init() {
+        const res = await fetch("/api/me");
+        const data = await res.json();
+        const headerRight = document.getElementById("header-right");
+        if (data.user) {
+          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;"><img src="${data.user.avatar}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;" /><span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
+        } else {
+          headerRight.innerHTML = '<a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>';
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

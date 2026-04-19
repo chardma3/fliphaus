@@ -585,6 +585,7 @@ app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "l
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
 app.get("/sold", (req, res) => res.sendFile(path.join(__dirname, "sold.html")));
+app.get("/lexicon", (req, res) => res.sendFile(path.join(__dirname, "lexicon.html")));
 app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
 app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.html")));
 app.get("/market", (req, res) => res.sendFile(path.join(__dirname, "market.html")));

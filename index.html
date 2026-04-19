@@ -287,10 +287,10 @@
         <a href="/favorites" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Favorites</a>
         <a href="/areas" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Areas</a>
         <a href="/methodology" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">How it works</a>
-        <a href="/account" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Account</a>
         <a href="/market" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Market</a>
         <a href="/builders" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Builders</a>
         <a href="/sold" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Sold</a>
+        <a href="/lexicon" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Lexicon</a>
       </div>
 
       <div class="instructions">
@@ -352,6 +352,11 @@
       function isApartmentType(str) {
         if (!str) return false;
         return /lägenhet|bostadsrätt/i.test(str);
+      }
+
+      function translateLocation(str) {
+        if (!str) return str;
+        return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
       }
 
       // Renovated sqm prices by area (from real data — avg of score 1-3 listings)
@@ -516,7 +521,7 @@
                   <button class="cb-btn save-cb${isSaved ? " active-save" : ""}" title="Save">💚</button>
                 </div>
               </div>
-              <div class="location">${listing.locationDescription}</div>
+              <div class="location">${translateLocation(listing.locationDescription)}</div>
               <div class="rejected-summary">${listing.askingPrice} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
               <div class="listing-meta">
                 <span class="price-tag">${listing.askingPrice}</span>
@@ -530,7 +535,7 @@
               ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
-              ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Stambyte: ' + listing.stambyteStatus : ''}</div>` : ""}
+              ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
               ${renoSummaryHtml}
               ${listing.askingPriceNum && listing.totalEstimatedCostSEK ? (() => {
                 const c = calcInvestment(listing);
@@ -678,8 +683,10 @@
         const headerRight = document.getElementById("header-right");
         if (currentUser) {
           headerRight.innerHTML = `
-            <img src="${currentUser.avatar}" alt="" />
-            <span>${currentUser.name.split(" ")[0]}</span>
+            <a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+              <img src="${currentUser.avatar}" alt="" />
+              <span>${currentUser.name.split(" ")[0]}</span>
+            </a>
             <a href="/auth/logout" class="signout-link">Sign out</a>
           `;
         } else {
