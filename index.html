@@ -50,6 +50,23 @@
         display: flex; gap: 20px; white-space: nowrap; overflow-x: auto;
       }
 
+      .nav-menu {
+        width: 100%; max-width: 700px;
+        display: flex; flex-wrap: wrap; gap: 4px 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid #2a2a2a;
+        padding-bottom: 10px;
+      }
+      .nav-item {
+        font-family: "Poppins", sans-serif;
+        font-size: 0.82rem; color: #666;
+        text-decoration: none;
+        padding: 4px 0;
+        transition: color 0.2s;
+      }
+      .nav-item:hover { color: #ccc; }
+      .nav-item.active { color: #fff; font-weight: 500; }
+
       #stats {
         width: 100%; max-width: 700px;
         background: #1e1e1e; border-radius: 8px;
@@ -282,16 +299,16 @@
         <div class="header-right" id="header-right"></div>
       </header>
 
-      <div class="nav-bar" style="width:100%;max-width:700px;display:flex;gap:10px;margin-bottom:12px;">
-        <a href="/" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1a3a1a;border:1px solid #69db7c;color:#69db7c;font-family:Poppins,sans-serif;">All listings</a>
-        <a href="/favorites" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Favorites</a>
-        <a href="/areas" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Areas</a>
-        <a href="/methodology" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">How it works</a>
-        <a href="/market" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Market</a>
-        <a href="/builders" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Builders</a>
-        <a href="/sold" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Sold</a>
-        <a href="/lexicon" style="padding:6px 14px;border-radius:20px;font-size:0.82rem;text-decoration:none;background:#1e1e1e;border:1px solid #333;color:#888;font-family:Poppins,sans-serif;">Lexicon</a>
-      </div>
+      <nav class="nav-menu">
+        <a href="/" class="nav-item active">Listings</a>
+        <a href="/favorites" class="nav-item">Favorites</a>
+        <a href="/areas" class="nav-item">Areas</a>
+        <a href="/methodology" class="nav-item">How it works</a>
+        <a href="/market" class="nav-item">Market</a>
+        <a href="/builders" class="nav-item">Builders</a>
+        <a href="/sold" class="nav-item">Sold</a>
+        <a href="/glossary" class="nav-item">Glossary</a>
+      </nav>
 
       <div class="instructions">
         <span>❌ Hide properties you're not interested in</span>
