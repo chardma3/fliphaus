@@ -46,8 +46,14 @@ Respond with ONLY valid JSON, no markdown fences. Use this exact structure:
 }`;
 
 async function analyzeListingImages(images, listingInfo = {}) {
-  // Use up to 6 images to keep costs reasonable
-  const selectedImages = images.slice(0, 6);
+  // Pick up to 10 images spread across the full set to catch all rooms
+  let selectedImages;
+  if (images.length <= 10) {
+    selectedImages = images;
+  } else {
+    const step = images.length / 10;
+    selectedImages = Array.from({ length: 10 }, (_, i) => images[Math.floor(i * step)]);
+  }
 
   if (selectedImages.length === 0) {
     return null;
