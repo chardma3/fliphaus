@@ -165,6 +165,21 @@
       }
       .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
       .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
+
+      .reno-detail { display: none; margin-bottom: 8px; }
+      .reno-detail.open { display: block; }
+      .reno-detail-toggle { font-size: 0.78rem; color: #7eb8f7; background: none; border: none; font-family: "Poppins", sans-serif; cursor: pointer; padding: 4px 0; margin-bottom: 8px; }
+      .reno-detail-toggle:hover { color: #aad4ff; }
+      .reno-room { background: #252525; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid #333; }
+      .reno-room.needs-work { border-left-color: #ffd43b; }
+      .reno-room.good { border-left-color: #69db7c; }
+      .reno-room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+      .reno-room-header h5 { font-size: 0.82rem; color: #fff; text-transform: capitalize; }
+      .reno-room-header .room-cost { font-size: 0.78rem; color: #ff8888; font-weight: 600; }
+      .reno-room-header .room-cost.none { color: #69db7c; }
+      .reno-room .condition { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+      .reno-room .indicators { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
+      .reno-room .indicators li { margin-left: 14px; margin-bottom: 2px; }
     </style>
   </head>
   <body>
@@ -356,6 +371,21 @@
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${renoSummaryHtml}
+              ${listing.renovationRooms?.length ? `
+                <button class="reno-detail-toggle" data-target="reno-${listing.id}">Show room-by-room breakdown ▾</button>
+                <div class="reno-detail" id="reno-${listing.id}">
+                  ${listing.renovationRooms.map(r => `
+                    <div class="reno-room ${r.estimatedCostSEK ? 'needs-work' : 'good'}">
+                      <div class="reno-room-header">
+                        <h5>${r.type}</h5>
+                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? Math.round(r.estimatedCostSEK/1000) + 'K kr' : 'No work needed'}</span>
+                      </div>
+                      <div class="condition">${r.condition === 'original' || r.condition === 'dated' ? 'Needs full renovation' : r.condition === 'fair' ? 'Needs cosmetic update' : 'Good condition'}</div>
+                      ${r.indicators?.length ? `<div class="indicators"><strong style="color:#ccc;">Work needed:</strong><ul>${r.indicators.map(i => '<li>Replace/update: ' + i.replace(/^(Old|Dated|Worn|Original|Basic)\\s*/i, '') + '</li>').join('')}</ul></div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ""}
               ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
               ${floorPlanHtml}
               <div class="listing-actions">
@@ -366,6 +396,15 @@
           `;
 
           div.querySelector(".remove-btn").addEventListener("click", () => removeFromFavorites(listing.id, div));
+
+          const renoToggle = div.querySelector(".reno-detail-toggle");
+          if (renoToggle) {
+            renoToggle.addEventListener("click", function() {
+              const detail = document.getElementById(this.dataset.target);
+              const open = detail.classList.toggle("open");
+              this.textContent = open ? "Hide room-by-room breakdown ▴" : "Show room-by-room breakdown ▾";
+            });
+          }
 
           const carousel = div.querySelector(".carousel");
           if (carousel && imgs.length > 1) {

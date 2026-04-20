@@ -268,7 +268,7 @@
       .reno-room.good { border-left-color: #69db7c; }
       .reno-room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
       .reno-room-header h5 { font-size: 0.82rem; color: #fff; text-transform: capitalize; }
-      .reno-room-header .room-cost { font-size: 0.78rem; color: #ffd43b; font-weight: 600; }
+      .reno-room-header .room-cost { font-size: 0.78rem; color: #ff8888; font-weight: 600; }
       .reno-room-header .room-cost.none { color: #69db7c; }
       .reno-room .condition { font-size: 0.75rem; color: #888; margin-bottom: 4px; text-transform: capitalize; }
       .reno-room .indicators { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
@@ -587,10 +587,10 @@
                     <div class="reno-room ${r.estimatedCostSEK ? 'needs-work' : 'good'}">
                       <div class="reno-room-header">
                         <h5>${r.type}</h5>
-                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? Math.round(r.estimatedCostSEK/1000) + 'K kr' : 'OK'}</span>
+                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? Math.round(r.estimatedCostSEK/1000) + 'K kr' : 'No work needed'}</span>
                       </div>
-                      <div class="condition">Condition: ${r.condition}</div>
-                      ${r.indicators?.length ? `<ul class="indicators">${r.indicators.map(i => '<li>' + i + '</li>').join('')}</ul>` : ''}
+                      <div class="condition">${r.condition === 'original' || r.condition === 'dated' ? 'Needs full renovation' : r.condition === 'fair' ? 'Needs cosmetic update' : 'Good condition'}</div>
+                      ${r.indicators?.length ? `<div class="indicators"><strong style="color:#ccc;">Work needed:</strong><ul>${r.indicators.map(i => '<li>Replace/update: ' + i.replace(/^(Old|Dated|Worn|Original|Basic)\s*/i, '') + '</li>').join('')}</ul></div>` : ''}
                     </div>
                   `).join('')}
                 </div>
