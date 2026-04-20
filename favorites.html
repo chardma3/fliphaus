@@ -156,6 +156,15 @@
         background: rgba(59,130,246,0.9); color: #fff;
         backdrop-filter: blur(6px);
       }
+
+      .profit-badge {
+        position: absolute; top: 10px; right: 10px; z-index: 3;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 600;
+        backdrop-filter: blur(6px);
+      }
+      .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
+      .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
     </style>
   </head>
   <body>
@@ -228,6 +237,31 @@
         return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
       }
 
+      const RENOVATED_SQM = {"Rissne":42500,"Sundbyberg":43000,"Farsta":45600,"Sköndal":50400,"Fagersjö":31000,"Gubbängen":46000,"Hökarängen":60000,"Tallkrogen":46000,"Enskede":52600,"Bagarmossen":46000,"Kista":38000};
+
+      function calcInvestment(listing) {
+        const price = listing.askingPriceNum || 0;
+        const sizeNum = parseFloat((listing.size || "").replace(",", ".")) || 0;
+        const feeNum = listing.fee ? parseInt(listing.fee.replace(/\D/g, ""), 10) || 0 : 0;
+        const renoCost = listing.totalEstimatedCostSEK || 0;
+        const deposit = Math.round(price * 0.15);
+        const carryingCost = feeNum * 7;
+        const totalInvestment = deposit + renoCost + carryingCost;
+        const loc = (listing.locationDescription || "").toLowerCase();
+        let sqm = 45000;
+        for (const [area, p] of Object.entries(RENOVATED_SQM)) { if (loc.includes(area.toLowerCase())) { sqm = p; break; } }
+        const estSalePrice = sizeNum > 0 ? Math.round(sizeNum * sqm) : 0;
+        const profit = estSalePrice > 0 ? estSalePrice - price - renoCost - carryingCost : 0;
+        const roi = totalInvestment > 0 && profit > 0 ? Math.round((profit / totalInvestment) * 100) : 0;
+        return { profit, roi };
+      }
+
+      function formatSEKShort(n) {
+        if (!n) return "—";
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M kr";
+        return Math.round(n / 1000) + "K kr";
+      }
+
       async function removeFromFavorites(listingId, cardEl) {
         await fetch("/api/preference", {
           method: "POST",
@@ -289,6 +323,8 @@
           const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
           const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
           const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
+          const calc = listing.askingPriceNum && listing.totalEstimatedCostSEK ? calcInvestment(listing) : null;
+          const profitBadgeHtml = calc ? `<div class="profit-badge ${calc.profit > 0 ? 'positive' : 'negative'}">${calc.profit > 0 ? '+' + formatSEKShort(calc.profit) + ' (' + calc.roi + '% ROI)' : formatSEKShort(calc.profit)}</div>` : "";
 
           const floorPlanHtml = listing.hasFloorPlan === true
             ? `<div class="floor-plan-link">Floor plan: <a href="${listing.link}" target="_blank">View on Hemnet</a></div>`
@@ -299,6 +335,7 @@
               ${carouselHtml}
               ${renoBadgeHtml}
               ${newBadgeHtml}
+              ${profitBadgeHtml}
               ${daysBadgeHtml}
             </div>
             <div class="listing-body">

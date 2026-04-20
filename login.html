@@ -34,6 +34,8 @@
       .error-msg { color: #ff8888; font-size: 0.82rem; margin-bottom: 12px; display: none; }
       .builder-link { text-align: center; margin-top: 16px; font-size: 0.78rem; }
       .builder-link a { color: #7eb8f7; text-decoration: none; }
+      .pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #666; font-family: "Poppins", sans-serif; font-size: 0.75rem; cursor: pointer; padding: 4px 6px; }
+      .pw-toggle:hover { color: #aaa; }
     </style>
   </head>
   <body>
@@ -56,7 +58,10 @@
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input type="password" id="login-password" />
+            <div style="position:relative;">
+              <input type="password" id="login-password" style="padding-right:40px;" />
+              <button type="button" class="pw-toggle" onclick="togglePw('login-password', this)">Show</button>
+            </div>
           </div>
           <button class="btn btn-primary" id="login-btn">Sign in</button>
           <div class="divider">or</div>
@@ -76,7 +81,10 @@
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input type="password" id="signup-password" placeholder="Min 6 characters" />
+            <div style="position:relative;">
+              <input type="password" id="signup-password" placeholder="Min 6 characters" style="padding-right:40px;" />
+              <button type="button" class="pw-toggle" onclick="togglePw('signup-password', this)">Show</button>
+            </div>
           </div>
           <button class="btn btn-primary" id="signup-btn">Create account</button>
           <div class="divider">or</div>
@@ -88,6 +96,12 @@
       <div class="builder-link">Builder? <a href="/builder/login">Go to builder portal</a></div>
     </div>
     <script>
+      function togglePw(inputId, btn) {
+        const input = document.getElementById(inputId);
+        if (input.type === "password") { input.type = "text"; btn.textContent = "Hide"; }
+        else { input.type = "password"; btn.textContent = "Show"; }
+      }
+
       // Check if already logged in
       fetch("/api/me").then(r => r.json()).then(d => {
         if (d.user) window.location.href = d.user.role === "admin" ? "/" : "/invest";
