@@ -362,6 +362,7 @@
       <div id="feed"></div>
     </div>
 
+    <script src="/profitability.js"></script>
     <script>
       let currentUser = null;
       let allListingsData = null;
@@ -751,15 +752,15 @@
         if (!allListingsData) return;
         let filtered = allListingsData.listings;
         if (filter === "profitable") {
-          filtered = filtered.filter(l => {
+          filtered = sortListingsByProfit(filtered.filter(l => {
             if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return false;
             return calcInvestment(l).profit > 0;
-          });
+          }), "desc", calcInvestment);
         } else if (filter === "unprofitable") {
-          filtered = filtered.filter(l => {
+          filtered = sortListingsByProfit(filtered.filter(l => {
             if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return true;
             return calcInvestment(l).profit <= 0;
-          });
+          }), "desc", calcInvestment);
         }
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
