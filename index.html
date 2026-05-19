@@ -100,8 +100,18 @@
       .listing.rejected .invest-calc,
       .listing.rejected .brf-intel,
       .listing.rejected .listing-map { display: none; }
-      .listing.rejected .listing-body { padding: 10px 16px; }
-      .listing.rejected .location { font-size: 0.78rem; color: #666; margin-bottom: 0; }
+      .listing.rejected .listing-body {
+        position: relative;
+        min-height: 64px;
+        padding: 10px 96px 14px 16px;
+      }
+      .listing.rejected .listing-header { display: block; }
+      .listing.rejected .listing-header-actions {
+        position: absolute;
+        right: 16px;
+        bottom: 10px;
+      }
+      .listing.rejected .location { font-size: 0.78rem; color: #666; margin-bottom: 2px; }
       .listing.rejected .listing-header h3 { font-size: 0.88rem; color: #888; }
       .rejected-summary { display: none; font-size: 0.78rem; color: #666; }
       .listing.rejected .rejected-summary { display: block; }
