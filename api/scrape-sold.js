@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const SoldListing = require("../models/sold.model");
+const { analyzeListingImages } = require("./analyze");
 
 puppeteer.use(StealthPlugin());
 
@@ -29,6 +30,53 @@ function parsePriceChange(str) {
   if (typeof str === "number") return str;
   const match = str.match(/([+-]?\d+)/);
   return match ? parseInt(match[1], 10) : null;
+}
+
+function conditionLabelFromScore(score) {
+  if (score == null) return "unknown";
+  if (score <= 3) return "renovated";
+  if (score >= 7) return "unrenovated";
+  return "partly_renovated";
+}
+
+async function scrapeSoldDetail(page, slug) {
+  if (!slug) return null;
+  try {
+    await page.goto(`https://www.hemnet.se/salda/${slug}`, { waitUntil: "networkidle2", timeout: 30000 });
+    return await page.evaluate(() => {
+      const next = document.getElementById("__NEXT_DATA__");
+      if (!next) return null;
+      try {
+        const apollo = JSON.parse(next.textContent).props.pageProps.__APOLLO_STATE__;
+        const values = Object.values(apollo);
+        const listing = values.find((v) => v.__typename === "SoldProperty" || v.__typename === "Sale" || v.__typename === "Listing") || {};
+        const association = values.find((v) => v.__typename === "HousingCooperative" || v.__typename === "Association");
+        const imageUrls = values
+          .filter((v) => v.__typename === "Image" || v.filename)
+          .map((v) => v.url || v.fullscreenUrl || (v.filename ? `https://bilder.hemnet.se/images/itemgallery_cut/${v.filename}` : null))
+          .filter(Boolean);
+        const descText = (listing.description || "").toLowerCase();
+        const yearMatch = descText.match(/stambyte[^\d]*(19\d{2}|20\d{2})/i);
+        let stambyteStatus = null;
+        if (/stambyte.*(gjord|klar|genomförd|utförd|20\d{2}|19\d{2})/i.test(descText)) stambyteStatus = "done";
+        else if (/stambyte.*(planerad|kommande|snart)/i.test(descText)) stambyteStatus = "planned";
+
+        return {
+          images: [...new Set(imageUrls)],
+          brfName: association?.name || listing.housingCooperativeName || null,
+          buildYear: listing.constructionYear || listing.buildYear || null,
+          stambyteYear: yearMatch ? parseInt(yearMatch[1], 10) : null,
+          stambyteStatus,
+          description: listing.description || null,
+        };
+      } catch {
+        return null;
+      }
+    });
+  } catch (err) {
+    console.error(`  ✗ Sold detail failed for ${slug}: ${err.message}`);
+    return null;
+  }
 }
 
 async function scrapeSoldArea(page, areaName, locationId) {
@@ -99,6 +147,12 @@ module.exports = async () => {
     await new Promise((r) => setTimeout(r, 1000));
   }
 
+  for (const listing of allSold) {
+    const detail = await scrapeSoldDetail(page, listing.slug);
+    if (detail) Object.assign(listing, detail);
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
   await browser.close();
 
   let newCount = 0;
@@ -110,6 +164,23 @@ module.exports = async () => {
     const soldPriceSqm = l.squareMeterPrice ? parsePrice(l.squareMeterPrice) : (sizeNum > 0 ? Math.round(soldPrice / sizeNum) : 0);
     const priceChange = parsePriceChange(l.priceChange);
     const soldDate = l.soldAt ? new Date(parseFloat(l.soldAt) * 1000) : new Date();
+    const existing = await SoldListing.findOne({ hemnetId: l.hemnetId }).lean();
+    const images = l.images?.length ? l.images : (l.image ? [l.image] : []);
+    let analysis = null;
+    if (existing?.renovationScore != null) {
+      analysis = {
+        renovationScore: existing.renovationScore,
+        confidence: existing.renovationConfidence,
+        summary: existing.renovationSummary,
+        rooms: existing.renovationRooms,
+      };
+    } else if (images.length) {
+      analysis = await analyzeListingImages(images, {
+        size: l.size,
+        rooms: l.rooms,
+        askingPrice: l.askingPrice,
+      });
+    }
 
     const update = {
       streetAddress: l.streetAddress,
@@ -127,7 +198,16 @@ module.exports = async () => {
       housingForm: l.housingForm,
       fee: l.fee,
       feeNum,
-      images: l.image ? [l.image] : [],
+      buildYear: l.buildYear || null,
+      brfName: l.brfName || null,
+      stambyteYear: l.stambyteYear || null,
+      stambyteStatus: l.stambyteStatus || null,
+      renovationScore: analysis?.renovationScore ?? null,
+      renovationConfidence: analysis?.confidence ?? null,
+      renovationSummary: analysis?.summary ?? null,
+      renovationRooms: analysis?.rooms ?? null,
+      conditionLabel: existing?.conditionLabel || conditionLabelFromScore(analysis?.renovationScore),
+      images,
       link: l.slug ? `https://www.hemnet.se/salda/${l.slug}` : null,
       scrapedAt: new Date(),
     };

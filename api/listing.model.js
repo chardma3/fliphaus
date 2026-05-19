@@ -47,6 +47,7 @@ const listingSchema = new mongoose.Schema({
   renovationRooms: { type: mongoose.Schema.Types.Mixed, default: null },
   totalEstimatedCostSEK: { type: Number, default: null },
   investmentPotential: { type: String, enum: ["high", "medium", "low", null], default: null },
+  brfIntelligence: { type: mongoose.Schema.Types.Mixed, default: null },
   analyzedAt: { type: Date, default: null },
 });
 

@@ -98,6 +98,7 @@
       .listing.rejected .new-badge,
       .listing.rejected .days-badge,
       .listing.rejected .invest-calc,
+      .listing.rejected .brf-intel,
       .listing.rejected .listing-map { display: none; }
       .listing.rejected .listing-body { padding: 10px 16px; }
       .listing.rejected .location { font-size: 0.78rem; color: #666; margin-bottom: 0; }
@@ -205,7 +206,12 @@
         background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
         border-left: 3px solid #69db7c;
       }
-      .invest-calc h5 { font-size: 0.82rem; color: #fff; margin-bottom: 8px; }
+      .brf-intel {
+        background: #202634; border-radius: 8px; padding: 12px; margin-bottom: 8px;
+        border-left: 3px solid #7eb8f7;
+      }
+      .invest-calc h5, .brf-intel h5 { font-size: 0.82rem; color: #fff; margin-bottom: 8px; }
+      .intel-note { color: #aaa; font-size: 0.74rem; line-height: 1.35; margin-top: 6px; }
       .calc-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.78rem; }
       .calc-row .calc-label { color: #888; }
       .calc-row .calc-value { color: #ccc; }
@@ -552,6 +558,19 @@
                 ${listing.totalEstimatedCostSEK ? `<br/><span class="reno-cost">Est. renovation: ${formatSEK(listing.totalEstimatedCostSEK)}</span>` : ""}
               </div>`
             : "";
+          const brfIntel = listing.brfIntelligence;
+          const arb = brfIntel?.renovationArbitrage;
+          const brfIntelHtml = brfIntel ? `<div class="brf-intel">
+            <h5>BRF intelligence</h5>
+            <div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${brfIntel.brf.name || "Unknown"}${brfIntel.brf.buildYear ? " · " + brfIntel.brf.buildYear : ""}</span></div>
+            <div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${brfIntel.brf.stambyte.status || "unknown"}${brfIntel.brf.stambyte.year ? " " + brfIntel.brf.stambyte.year : ""}</span></div>
+            <div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${brfIntel.brf.debtPerSqm ? brfIntel.brf.debtPerSqm.toLocaleString("sv-SE") + " kr/m² · " : ""}${brfIntel.brf.avgiftRisk}</span></div>
+            <div class="calc-divider"></div>
+            <div class="calc-row sale"><span class="calc-label">Renovation uplift</span><span class="calc-value">${arb.estimatedUpliftPerSqm ? "+" + arb.estimatedUpliftPerSqm.toLocaleString("sv-SE") + " kr/m²" : "Not enough comps"}</span></div>
+            ${arb.estimatedUpliftTotal ? `<div class="calc-row profit"><span class="calc-label">Potential uplift for this flat</span><span class="calc-value">+${formatSEKShort(arb.estimatedUpliftTotal)}</span></div>` : ""}
+            <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : arb.scope === "area" ? "Area-level" : "Insufficient"} · ${arb.confidence} confidence</span></div>
+            <div class="intel-note">${arb.summary}</div>
+          </div>` : "";
 
           div.innerHTML = `
             <div style="position:relative">
@@ -585,6 +604,7 @@
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
               ${renoSummaryHtml}
+              ${brfIntelHtml}
               ${listing.renovationRooms?.length ? `
                 <button class="reno-detail-toggle" data-target="reno-${listing.id}">Show room-by-room breakdown ▾</button>
                 <div class="reno-detail" id="reno-${listing.id}">
