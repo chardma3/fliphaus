@@ -102,6 +102,8 @@
       classification = "unprofitable";
     }
 
+    const displayProfit = ["renovation-upside", "unprofitable"].includes(classification) ? renovationProfit : 0;
+
     return {
       price,
       deposit,
@@ -113,9 +115,9 @@
       estSalePrice: estimatedRenovatedSalePrice,
       estimatedRenovatedSalePrice,
       grossMarketGap,
-      profit: renovationProfit,
+      profit: displayProfit,
       renovationProfit,
-      roi,
+      roi: classification === "renovation-upside" ? roi : 0,
       sizeNum,
       sqmPrice,
       classification,

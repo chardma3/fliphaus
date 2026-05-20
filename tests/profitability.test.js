@@ -55,6 +55,8 @@ test("Skrakgränd 3 fixture returns low-upside style badge, not renovation ROI",
 
   assert.equal(isRenovationUpsideCandidate(listing), false);
   assert.notEqual(calc.classification, "renovation-upside");
+  assert.equal(calc.profit, 0);
+  assert.equal(calc.roi, 0);
   assert.equal(badge.roi, null);
   assert.equal(badge.profit, null);
   assert.match(`${badge.label} ${badge.detail}`, /market gap|move-in ready|low renovation upside/i);
@@ -101,6 +103,8 @@ test("low comparable confidence suppresses strong ROI", () => {
   const badge = formatProfitBadgeModel(listing);
 
   assert.equal(calc.classification, "insufficient-data");
+  assert.equal(calc.profit, 0);
+  assert.equal(calc.roi, 0);
   assert.equal(badge.type, "insufficient-data");
   assert.equal(badge.roi, null);
   assert.match(badge.detail, /insufficient comparable sales evidence/i);
