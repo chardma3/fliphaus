@@ -24,10 +24,16 @@ const listingSchema = new mongoose.Schema({
   publishedAt: Date,
   scrapeDate: String,
   // Status
-  status: { type: String, enum: ["active", "sold", "removed"], default: "active" },
+  status: { type: String, enum: ["active", "confirmed_sold", "disappeared", "removed", "unknown", "sold"], default: "active" },
   soldDate: { type: Date, default: null },
   soldPrice: { type: Number, default: null },
   daysOnMarket: { type: Number, default: null },
+  disappearedAt: { type: Date, default: null },
+  lastSeenAt: { type: Date, default: null },
+  soldStatusConfidence: { type: String, enum: ["confirmed", "unconfirmed", "unknown", null], default: null },
+  soldListingId: { type: mongoose.Schema.Types.ObjectId, ref: "SoldListing", default: null },
+  matchedSoldHemnetId: { type: String, default: null },
+  soldMatchScore: { type: Number, default: null },
   // Transit
   transitMinutes: { type: Number, default: null },
   nearestStation: { type: String, default: null },

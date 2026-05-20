@@ -18,6 +18,7 @@ const Assignment = require("./models/assignment.model");
 const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence } = require("./api/brf-intelligence");
+const { reconcileSoldListings } = require("./api/reconcile-sold");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -191,7 +192,7 @@ app.get("/api/listings", async (req, res) => {
       : { askingPriceNum: 1 };
 
     const filter = {
-      status: { $ne: "sold" },
+      status: { $nin: ["sold", "confirmed_sold"] },
       askingPriceNum: { $lte: settings.maxPrice },
       locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
     };
@@ -262,7 +263,7 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
 // Sold listings
 app.get("/api/sold", async (req, res) => {
   try {
-    const listings = await Listing.find({ status: "sold" }, { __v: 0 }).sort({ soldDate: -1 });
+    const listings = await Listing.find({ status: { $in: ["confirmed_sold", "sold"] } }, { __v: 0 }).sort({ soldDate: -1 });
     const avgDays = listings.length ? Math.round(listings.reduce((s, l) => s + (l.daysOnMarket || 0), 0) / listings.length) : 0;
     const avgPrice = listings.length ? Math.round(listings.reduce((s, l) => s + (l.askingPriceNum || 0), 0) / listings.length) : 0;
     res.json({
@@ -556,6 +557,17 @@ app.get("/api/scrape", async (req, res) => {
   } catch (err) {
     console.error("❌ Scrape error:", err);
     res.status(500).json({ error: "Scraping failed" });
+  }
+});
+
+// Reconcile disappeared listings against scraped sold listings
+app.post("/api/reconcile-sold", async (req, res) => {
+  try {
+    const result = await reconcileSoldListings({ Listing, SoldListing });
+    res.json({ message: "Sold reconciliation complete", ...result });
+  } catch (err) {
+    console.error("❌ Sold reconciliation error:", err);
+    res.status(500).json({ error: "Sold reconciliation failed" });
   }
 });
 

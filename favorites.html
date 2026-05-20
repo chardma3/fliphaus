@@ -165,6 +165,8 @@
       }
       .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
       .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
+      .profit-badge.neutral { background: rgba(70,70,70,0.9); color: #ddd; }
+      .profit-badge.cautious { background: rgba(80,65,20,0.9); color: #ffd43b; }
 
       .reno-detail { display: none; margin-bottom: 8px; }
       .reno-detail.open { display: block; }
@@ -207,6 +209,7 @@
       <div id="feed"></div>
     </div>
 
+    <script src="/profitability.js"></script>
     <script>
       let currentUser = null;
 
@@ -250,25 +253,6 @@
       function translateLocation(str) {
         if (!str) return str;
         return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
-      }
-
-      const RENOVATED_SQM = {"Rissne":42500,"Sundbyberg":43000,"Farsta":45600,"Sköndal":50400,"Fagersjö":31000,"Gubbängen":46000,"Hökarängen":60000,"Tallkrogen":46000,"Enskede":52600,"Bagarmossen":46000,"Kista":38000};
-
-      function calcInvestment(listing) {
-        const price = listing.askingPriceNum || 0;
-        const sizeNum = parseFloat((listing.size || "").replace(",", ".")) || 0;
-        const feeNum = listing.fee ? parseInt(listing.fee.replace(/\D/g, ""), 10) || 0 : 0;
-        const renoCost = listing.totalEstimatedCostSEK || 0;
-        const deposit = Math.round(price * 0.15);
-        const carryingCost = feeNum * 7;
-        const totalInvestment = deposit + renoCost + carryingCost;
-        const loc = (listing.locationDescription || "").toLowerCase();
-        let sqm = 45000;
-        for (const [area, p] of Object.entries(RENOVATED_SQM)) { if (loc.includes(area.toLowerCase())) { sqm = p; break; } }
-        const estSalePrice = sizeNum > 0 ? Math.round(sizeNum * sqm) : 0;
-        const profit = estSalePrice > 0 ? estSalePrice - price - renoCost - carryingCost : 0;
-        const roi = totalInvestment > 0 && profit > 0 ? Math.round((profit / totalInvestment) * 100) : 0;
-        return { profit, roi };
       }
 
       function formatSEKShort(n) {
@@ -338,8 +322,8 @@
           const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
           const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
           const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
-          const calc = listing.askingPriceNum && listing.totalEstimatedCostSEK ? calcInvestment(listing) : null;
-          const profitBadgeHtml = calc ? `<div class="profit-badge ${calc.profit > 0 ? 'positive' : 'negative'}">${calc.profit > 0 ? '+' + formatSEKShort(calc.profit) + ' (' + calc.roi + '% ROI)' : formatSEKShort(calc.profit)}</div>` : "";
+          const badgeModel = listing.askingPriceNum ? formatProfitBadgeModel(listing) : null;
+          const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
 
           const floorPlanHtml = listing.hasFloorPlan === true
             ? `<div class="floor-plan-link">Floor plan: <a href="${listing.link}" target="_blank">View on Hemnet</a></div>`

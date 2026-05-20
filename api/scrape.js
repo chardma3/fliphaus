@@ -215,6 +215,10 @@ module.exports = async () => {
       images: l.images || [],
       publishedAt: l.publishedAt ? new Date(parseFloat(l.publishedAt) * 1000) : undefined,
       scrapeDate,
+      status: "active",
+      lastSeenAt: new Date(),
+      soldStatusConfidence: null,
+      disappearedAt: null,
     };
     if (l.hasFloorPlan !== undefined) update.hasFloorPlan = l.hasFloorPlan;
     if (l.transitMinutes) { update.transitMinutes = l.transitMinutes; update.nearestStation = l.nearestStation; update.transitLine = l.transitLine; }
@@ -233,21 +237,26 @@ module.exports = async () => {
     await Listing.findOneAndUpdate({ id: l.id }, update, { upsert: true, new: true });
   }
 
-  // Mark listings no longer on Hemnet as sold (instead of deleting)
+  // Mark listings no longer in the active scrape as disappeared, not confirmed sold.
   const currentIds = unique.map((l) => l.id);
   const disappeared = await Listing.find({ id: { $nin: currentIds }, status: "active" });
   for (const d of disappeared) {
     const dom = d.publishedAt ? Math.floor((Date.now() - new Date(d.publishedAt).getTime()) / (1000*60*60*24)) : null;
     await Listing.findByIdAndUpdate(d._id, {
-      status: "sold",
-      soldDate: new Date(),
+      status: "disappeared",
+      disappearedAt: new Date(),
+      lastSeenAt: d.lastSeenAt || d.updatedAt || null,
       daysOnMarket: dom,
+      soldStatusConfidence: "unconfirmed",
     });
-    console.log(`  📋 Marked as sold: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
+    console.log(`  📋 Marked as disappeared: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
   }
 
   // Mark current listings as active
-  await Listing.updateMany({ id: { $in: currentIds } }, { status: "active" });
+  await Listing.updateMany(
+    { id: { $in: currentIds } },
+    { status: "active", lastSeenAt: new Date(), soldStatusConfidence: null, disappearedAt: null }
+  );
 
-  return { total: unique.length, sold: disappeared.length, scrapeDate };
+  return { total: unique.length, disappeared: disappeared.length, scrapeDate };
 };

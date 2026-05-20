@@ -1,6 +1,8 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const SoldListing = require("../models/sold.model");
+const Listing = require("./listing.model");
+const { reconcileSoldListings } = require("./reconcile-sold");
 const { analyzeListingImages } = require("./analyze");
 
 puppeteer.use(StealthPlugin());
@@ -220,6 +222,8 @@ module.exports = async () => {
     if (result.lastErrorObject?.upserted) newCount++;
   }
 
-  console.log(`✅ Sold scrape done: ${allSold.length} total, ${newCount} new`);
-  return { total: allSold.length, new: newCount };
+  const reconciliation = await reconcileSoldListings({ Listing, SoldListing });
+
+  console.log(`✅ Sold scrape done: ${allSold.length} total, ${newCount} new, ${reconciliation.confirmed} confirmed matches`);
+  return { total: allSold.length, new: newCount, reconciled: reconciliation };
 };
