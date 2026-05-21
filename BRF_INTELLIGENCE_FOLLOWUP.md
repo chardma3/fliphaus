@@ -60,8 +60,8 @@ Run this check after deploying the feature and periodically after sold-data refr
    - `renovationArbitrage`
    - `scope`
    - `confidence`
-   - `estimatedUpliftPerSqm`, when enough comps exist
-   - `estimatedUpliftTotal`, when enough comps and size exist
+   - `estimatedUpliftPerSqm`, when enough similar sold properties exist
+   - `estimatedUpliftTotal`, when enough similar sold properties and size exist
 
 4. Look specifically for higher-value cases:
 

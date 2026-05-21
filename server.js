@@ -19,6 +19,7 @@ const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
+const { buildScrapeHealth } = require("./api/scrape-health");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -82,6 +83,15 @@ app.use(express.static(path.join(__dirname)));
 
 const requireAuth = (req, res, next) =>
   req.user ? next() : res.status(401).json({ error: "Not authenticated" });
+
+function requireRefreshToken(req, res, next) {
+  if (!process.env.REFRESH_TOKEN) {
+    return res.status(503).json({ error: "Refresh token is not configured" });
+  }
+  const token = req.query.token || req.get("x-refresh-token");
+  if (token !== process.env.REFRESH_TOKEN) return res.status(401).json({ error: "Invalid refresh token" });
+  next();
+}
 
 function listingWithBrfIntelligence(listing, soldListings) {
   const lo = typeof listing.toObject === "function" ? listing.toObject() : listing;
@@ -216,7 +226,7 @@ app.get("/api/listings", async (req, res) => {
   }
 });
 
-// BRF intelligence for one listing: BRF health + renovated-vs-unrenovated sold comps
+// BRF intelligence for one listing: BRF health + renovated-vs-unrenovated similar sold properties
 app.get("/api/listings/:listingId/brf-intelligence", async (req, res) => {
   try {
     const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 });
@@ -550,7 +560,7 @@ app.post("/api/invest", requireAuth, async (req, res) => {
 });
 
 // Scrape trigger
-app.get("/api/scrape", async (req, res) => {
+app.get("/api/scrape", requireRefreshToken, async (req, res) => {
   try {
     const result = await scrape();
     res.json({ message: "Scrape complete", ...result });
@@ -561,7 +571,7 @@ app.get("/api/scrape", async (req, res) => {
 });
 
 // Reconcile disappeared listings against scraped sold listings
-app.post("/api/reconcile-sold", async (req, res) => {
+app.all("/api/reconcile-sold", requireRefreshToken, async (req, res) => {
   try {
     const result = await reconcileSoldListings({ Listing, SoldListing });
     res.json({ message: "Sold reconciliation complete", ...result });
@@ -572,13 +582,24 @@ app.post("/api/reconcile-sold", async (req, res) => {
 });
 
 // Scrape sold (slutpriser)
-app.get("/api/scrape-sold", async (req, res) => {
+app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
   try {
     const result = await scrapeSold();
     res.json({ message: "Sold scrape complete", ...result });
   } catch (err) {
     console.error("❌ Sold scrape error:", err);
     res.status(500).json({ error: "Sold scraping failed" });
+  }
+});
+
+// Scrape health: tells the UI/operator whether active listings and market sales are stale.
+app.get("/api/scrape-health", async (req, res) => {
+  try {
+    const activeListings = await Listing.find({}, { scrapeDate: 1, lastSeenAt: 1 }).lean();
+    const soldListings = await SoldListing.find({}, { scrapedAt: 1, soldDate: 1 }).lean();
+    res.json(buildScrapeHealth({ activeListings, soldListings }));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch scrape health" });
   }
 });
 
@@ -627,6 +648,7 @@ app.get("/glossary", (req, res) => res.sendFile(path.join(__dirname, "glossary.h
 app.get("/methodology", (req, res) => res.sendFile(path.join(__dirname, "methodology.html")));
 app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.html")));
 app.get("/market", (req, res) => res.sendFile(path.join(__dirname, "market.html")));
+app.get("/market-sales", (req, res) => res.sendFile(path.join(__dirname, "market-sales.html")));
 app.get("/builders", (req, res) => res.sendFile(path.join(__dirname, "builders.html")));
 app.get("/builder/login", (req, res) => res.sendFile(path.join(__dirname, "builder-login.html")));
 app.get("/builder", (req, res) => res.sendFile(path.join(__dirname, "builder-portal.html")));

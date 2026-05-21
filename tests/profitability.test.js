@@ -85,7 +85,7 @@ test("unrenovated high-score profitable listing can return renovation-upside", (
   assert.ok(badge.roi > 0);
 });
 
-test("low comparable confidence suppresses strong ROI", () => {
+test("low comparable confidence keeps a profitable renovation as preliminary instead of hiding it", () => {
   const listing = {
     streetAddress: "Low Evidence 1",
     askingPriceNum: 1900000,
@@ -102,10 +102,11 @@ test("low comparable confidence suppresses strong ROI", () => {
   const calc = calcInvestment(listing);
   const badge = formatProfitBadgeModel(listing);
 
-  assert.equal(calc.classification, "insufficient-data");
-  assert.equal(calc.profit, 0);
+  assert.equal(calc.classification, "preliminary-renovation-upside");
+  assert.ok(calc.profit > 0);
   assert.equal(calc.roi, 0);
-  assert.equal(badge.type, "insufficient-data");
+  assert.equal(badge.type, "preliminary-renovation-upside");
   assert.equal(badge.roi, null);
-  assert.match(badge.detail, /insufficient comparable sales evidence/i);
+  assert.match(badge.detail, /preliminary/i);
+  assert.match(badge.detail, /similar sold properties/i);
 });

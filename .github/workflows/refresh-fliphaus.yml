@@ -1,0 +1,31 @@
+name: Refresh FlipHaus data
+
+on:
+  schedule:
+    - cron: "20 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh active dashboard listings
+        run: |
+          curl -fsS -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
+
+      - name: Refresh similar sold properties
+        run: |
+          curl -fsS -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape-sold"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
+
+      - name: Confirm sold FlipHaus dashboard listings
+        run: |
+          curl -fsS -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/reconcile-sold"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}

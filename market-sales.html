@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sold — FlipHaus</title>
+    <title>Market sales — FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -69,7 +69,7 @@
   <body>
     <div id="app">
       <header>
-        <div><a href="/" style="text-decoration:none;color:inherit;"><h1>FlipHaus</h1></a><h2>Sold FlipHaus dashboard properties</h2></div>
+        <div><a href="/" style="text-decoration:none;color:inherit;"><h1>FlipHaus</h1></a><h2>Market sales — similar sold properties</h2></div>
         <div class="header-right" id="header-right"></div>
       </header>
       <div class="nav-menu">
@@ -79,8 +79,8 @@
         <a href="/methodology" class="nav-item">How it works</a>
         <a href="/market" class="nav-item">Market</a>
         <a href="/builders" class="nav-item">Builders</a>
-        <a href="/sold" class="nav-item active">Sold</a>
-        <a href="/market-sales" class="nav-item">Market sales</a>
+        <a href="/sold" class="nav-item">Sold</a>
+        <a href="/market-sales" class="nav-item active">Market sales</a>
         <a href="/glossary" class="nav-item">Glossary</a>
       </div>
       <div class="content">
@@ -89,14 +89,20 @@
           <div class="stat-grid" id="overview-stats">
             <div class="stat-box"><div class="stat-value" id="s-total">—</div><div class="stat-label">Properties sold</div></div>
             <div class="stat-box"><div class="stat-value" id="s-avg-price">—</div><div class="stat-label">Avg. sold price</div></div>
-            <div class="stat-box"><div class="stat-value" id="s-avg-days">—</div><div class="stat-label">Avg. days listed</div></div>
-            <div class="stat-box"><div class="stat-value" id="s-confirmed">—</div><div class="stat-label">Confirmed</div></div>
+            <div class="stat-box"><div class="stat-value" id="s-avg-sqm">—</div><div class="stat-label">Avg. sold kr/m²</div></div>
+            <div class="stat-box"><div class="stat-value" id="s-avg-change">—</div><div class="stat-label">Avg. vs asking</div></div>
           </div>
-          <p class="data-note">Only properties that first appeared on the FlipHaus dashboard and were later matched to a confirmed sale. General market sales have moved to Market sales.</p>
+          <p class="data-note">General Hemnet sold-price data used for similar sold-property evidence. This is market research data, not properties that FlipHaus itself featured.</p>
         </div>
-
         <div class="section">
-          <h3>FlipHaus dashboard properties sold</h3>
+          <h3>By area</h3>
+          <table class="area-table" id="area-table">
+            <thead><tr><th>Area</th><th>Sold</th><th>Avg. sold kr/m²</th><th>Avg. sold price</th><th>Avg. vs asking</th></tr></thead>
+            <tbody id="area-body"><tr><td colspan="5" style="color:#555;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h3>Recent similar sold properties</h3>
           <div class="filter-bar" id="area-filters"></div>
           <div id="sold-feed"><div class="empty">Loading...</div></div>
         </div>
@@ -114,7 +120,7 @@
 
       function renderSoldList(listings) {
         const feed = document.getElementById("sold-feed");
-        if (!listings.length) { feed.innerHTML = '<div class="empty">No FlipHaus dashboard properties have been confirmed sold yet. When a dashboard listing is matched to a sale, it will appear here.</div>'; return; }
+        if (!listings.length) { feed.innerHTML = '<div class="empty">No sold data yet. Data will appear after the next daily update.</div>'; return; }
 
         feed.innerHTML = listings.map(l => {
           const img = l.images?.[0];
@@ -180,16 +186,36 @@
 
         // Load data
         try {
-          const soldRes = await fetch("/api/sold");
+          const soldRes = await fetch("/api/sold/stats");
           const soldData = await soldRes.json();
           allSoldData = soldData.listings || [];
 
           // Overview
           document.getElementById("s-total").textContent = soldData.total;
           const allPrices = allSoldData.map(l => l.soldPrice).filter(Boolean);
+          const allSqm = allSoldData.map(l => l.soldPriceSqm).filter(Boolean);
+          const allChanges = allSoldData.map(l => l.priceChange).filter(v => v != null);
           document.getElementById("s-avg-price").textContent = allPrices.length ? formatK(Math.round(allPrices.reduce((a,b) => a+b, 0) / allPrices.length)) + " kr" : "—";
-          document.getElementById("s-avg-days").textContent = soldData.avgDaysOnMarket ? soldData.avgDaysOnMarket + "d" : "—";
-          document.getElementById("s-confirmed").textContent = soldData.total || 0;
+          document.getElementById("s-avg-sqm").textContent = allSqm.length ? Math.round(allSqm.reduce((a,b) => a+b, 0) / allSqm.length).toLocaleString("sv-SE") + " kr" : "—";
+          const avgChange = allChanges.length ? Math.round(allChanges.reduce((a,b) => a+b, 0) / allChanges.length * 10) / 10 : null;
+          document.getElementById("s-avg-change").textContent = avgChange != null ? (avgChange > 0 ? "+" : "") + avgChange + "%" : "—";
+          document.getElementById("s-avg-change").style.color = avgChange > 0 ? "#69db7c" : avgChange < 0 ? "#ff8888" : "#aaa";
+
+          // Area table
+          const tbody = document.getElementById("area-body");
+          if (soldData.areaStats?.length) {
+            tbody.innerHTML = soldData.areaStats.map(a => `
+              <tr>
+                <td>${a.area}</td>
+                <td>${a.totalSold}</td>
+                <td class="blue">${a.avgSoldSqm ? a.avgSoldSqm.toLocaleString("sv-SE") + " kr" : "—"}</td>
+                <td>${a.avgSoldPrice ? formatK(a.avgSoldPrice) + " kr" : "—"}</td>
+                <td class="${(a.avgPriceChange || 0) > 0 ? 'green' : 'red'}">${a.avgPriceChange != null ? (a.avgPriceChange > 0 ? "+" : "") + a.avgPriceChange + "%" : "—"}</td>
+              </tr>
+            `).join("");
+          } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:#555;">No data yet</td></tr>';
+          }
 
           // Listings
           buildAreaFilters(allSoldData);

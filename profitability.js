@@ -94,6 +94,8 @@
       classification = "insufficient-data";
     } else if (!candidate) {
       classification = grossMarketGap > 0 ? "market-gap" : "low-upside";
+    } else if (lowComparableConfidence && renovationProfit > 0) {
+      classification = "preliminary-renovation-upside";
     } else if (lowComparableConfidence) {
       classification = "insufficient-data";
     } else if (renovationProfit > 0) {
@@ -102,7 +104,7 @@
       classification = "unprofitable";
     }
 
-    const displayProfit = ["renovation-upside", "unprofitable"].includes(classification) ? renovationProfit : 0;
+    const displayProfit = ["renovation-upside", "preliminary-renovation-upside", "unprofitable"].includes(classification) ? renovationProfit : 0;
 
     return {
       price,
@@ -139,6 +141,17 @@
         calc,
       };
     }
+    if (calc.classification === "preliminary-renovation-upside") {
+      return {
+        type: "preliminary-renovation-upside",
+        cssClass: "cautious",
+        label: `~+${formatSEKShort(calc.renovationProfit)}`,
+        detail: "Preliminary estimate — needs similar sold properties",
+        profit: calc.renovationProfit,
+        roi: null,
+        calc,
+      };
+    }
     if (calc.classification === "market-gap") {
       return {
         type: "market-gap",
@@ -154,8 +167,8 @@
       return {
         type: "insufficient-data",
         cssClass: "neutral",
-        label: "Needs comps",
-        detail: "Insufficient comparable sales evidence",
+        label: "Needs similar sales",
+        detail: "Insufficient similar sold-property evidence",
         profit: null,
         roi: null,
         calc,
