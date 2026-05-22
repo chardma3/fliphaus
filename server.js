@@ -20,6 +20,7 @@ const Investment = require("./models/investment.model");
 const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
+const { presentListingForFeed } = require("./api/listing-presenter");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -219,7 +220,7 @@ app.get("/api/listings", async (req, res) => {
 
     res.json({
       total: listings.length,
-      listings: listings.map((l) => ({ ...listingWithBrfIntelligence(l, soldListings), status: prefMap[l.id] || null })),
+      listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldListings), prefMap[l.id] || null)),
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch listings" });
@@ -264,7 +265,7 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
     const ids = prefs.map((p) => p.listingId);
     const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 });
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
-    res.json({ total: listings.length, listings: listings.map((l) => ({ ...listingWithBrfIntelligence(l, soldListings), status: "saved" })) });
+    res.json({ total: listings.length, listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldListings), "saved")) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch favorites" });
   }

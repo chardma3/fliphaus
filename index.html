@@ -500,8 +500,8 @@
         statsEl.innerHTML = `<strong>${data.total}</strong> properties found`;
 
         data.listings.forEach((listing) => {
-          const isRejected = listing.status === "rejected";
-          const isSaved = listing.status === "saved";
+          const isRejected = listing.preferenceStatus === "rejected";
+          const isSaved = listing.preferenceStatus === "saved";
 
           const div = document.createElement("div");
           div.className = `listing${isRejected ? " rejected" : ""}${isSaved ? " saved" : ""}`;
