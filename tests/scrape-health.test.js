@@ -39,4 +39,5 @@ test("refresh workflow calls active scrape, sold scrape, and sold reconciliation
   assert.match(workflow, /api\/scrape-sold/);
   assert.match(workflow, /api\/reconcile-sold/);
   assert.match(workflow, /x-refresh-token/);
+  assert.match(workflow, /--fail-with-body/);
 });
