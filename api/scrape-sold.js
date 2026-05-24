@@ -5,6 +5,7 @@ const Listing = require("./listing.model");
 const { reconcileSoldListings } = require("./reconcile-sold");
 const { analyzeListingImages } = require("./analyze");
 const { assertHemnetPageUsable, resolveSoldScrapeTargets, isHemnetSafetyError } = require("./hemnet-refresh-safety");
+const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("./puppeteer-options");
 
 puppeteer.use(StealthPlugin());
 
@@ -142,13 +143,10 @@ module.exports = async (options = {}) => {
   const detailLimit = Number.isFinite(Number(options.detailLimit)) ? Math.max(0, Number(options.detailLimit)) : 20;
   const includeDetails = options.includeDetails !== false;
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--single-process"],
-  });
+  const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
   const page = await browser.newPage();
+  await authenticateProxyPage(page);
   await page.setViewport({ width: 1280, height: 800 });
 
   const allSold = [];

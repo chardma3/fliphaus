@@ -87,6 +87,31 @@ The sold scrape is intentionally split by area and capped at 20 detail pages per
 
 Longer-term architecture note: if Hemnet scraping continues to exceed HTTP/proxy time limits even after area splitting and lower `detailLimit` values, move the actual browser scraping into a background worker/queue. In that model the HTTP endpoint should enqueue a refresh job and return quickly, while the worker updates MongoDB and exposes job status separately.
 
+### Prototype proxy setup for Hemnet bot protection
+
+Fresh prototype/demo listings may require routing Puppeteer through a residential proxy because Hemnet can block Render/cloud datacenter IPs with Cloudflare security verification.
+
+The scraper supports these Render environment variables:
+
+- `HEMNET_PROXY_SERVER` — proxy host URL, for example `http://host:port` or `http://gate.provider.example:7000`
+- `HEMNET_PROXY_USERNAME` — proxy username, if the provider requires authentication
+- `HEMNET_PROXY_PASSWORD` — proxy password, if the provider requires authentication
+
+Do not commit proxy credentials. Add them only in Render service environment variables.
+
+Recommended setup:
+
+1. Choose a residential proxy or scraping-browser provider with Sweden/Europe residential exits.
+2. In Render, open the FlipHaus web service.
+3. Go to Environment.
+4. Add `HEMNET_PROXY_SERVER`, `HEMNET_PROXY_USERNAME`, and `HEMNET_PROXY_PASSWORD` using the provider values.
+5. Save changes and let Render redeploy.
+6. Manually run the GitHub Actions workflow `Refresh FlipHaus data`.
+7. Check the workflow logs. A successful active scrape should return a JSON body like `Scrape complete` with a non-zero `total`.
+8. Check `/api/scrape-health` and confirm the active `lastScrapeDate` moved to today.
+
+Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid. For the production broker-partnership model, this proxy is only a prototype/demo data workaround.
+
 ### Safety rules
 
 The scraper must fail loudly rather than silently corrupting data:
