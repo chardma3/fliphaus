@@ -567,7 +567,8 @@ app.get("/api/scrape", requireRefreshToken, async (req, res) => {
     res.json({ message: "Scrape complete", ...result });
   } catch (err) {
     console.error("❌ Scrape error:", err);
-    res.status(500).json({ error: "Scraping failed" });
+    const status = /Hemnet bot protection|missing __NEXT_DATA__|Refusing to persist zero active listings/.test(err.message) ? 502 : 500;
+    res.status(status).json({ error: "Scraping failed", detail: err.message });
   }
 });
 
@@ -585,11 +586,16 @@ app.all("/api/reconcile-sold", requireRefreshToken, async (req, res) => {
 // Scrape sold (slutpriser)
 app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
   try {
-    const result = await scrapeSold();
+    const result = await scrapeSold({
+      area: req.query.area,
+      detailLimit: req.query.detailLimit,
+      includeDetails: req.query.includeDetails !== "false",
+    });
     res.json({ message: "Sold scrape complete", ...result });
   } catch (err) {
     console.error("❌ Sold scrape error:", err);
-    res.status(500).json({ error: "Sold scraping failed" });
+    const status = /Hemnet bot protection|missing __NEXT_DATA__|Unknown sold scrape area/.test(err.message) ? 502 : 500;
+    res.status(status).json({ error: "Sold scraping failed", detail: err.message });
   }
 });
 

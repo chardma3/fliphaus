@@ -2,13 +2,9 @@ const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
 const { analyzeListingImages } = require("./analyze");
+const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 
 puppeteer.use(StealthPlugin());
-
-const LOCATION_IDS = {
-  Rissne: 473493,
-  Farsta: 925962,
-};
 
 const TRANSIT_INFO = {
   Rissne: { minutes: 15, station: "Rissne", line: "Blue line (T-bana)" },
@@ -54,6 +50,12 @@ function parseAskingPrice(str) {
 async function scrapeArea(page, areaName, locationId) {
   const url = buildUrl(locationId);
   await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+
+  const pageState = await page.evaluate(() => ({
+    hasNextData: Boolean(document.getElementById("__NEXT_DATA__")),
+    html: `${document.title || ""}\n${document.body?.innerText || ""}`,
+  }));
+  assertHemnetPageUsable({ ...pageState, url, areaName, dataset: "active listings" });
 
   const listings = await page.evaluate(() => {
     const next = document.getElementById("__NEXT_DATA__");
@@ -122,6 +124,10 @@ module.exports = async () => {
       allListings.push(...listings);
       console.log(`  → ${listings.length} listings`);
     } catch (err) {
+      if (isHemnetSafetyError(err)) {
+        await browser.close();
+        throw err;
+      }
       console.error(`  ✗ Failed ${area}:`, err.message);
     }
   }
@@ -135,6 +141,10 @@ module.exports = async () => {
     seen.add(l.id);
     return true;
   });
+  if (unique.length === 0) {
+    await browser.close();
+    assertNonEmptyRefreshResult({ total: unique.length, dataset: "active listings" });
+  }
 
   // Visit each detail page to get all images + floor plan status + AI analysis
   console.log(`Fetching detail pages & analysing ${unique.length} listings...`);

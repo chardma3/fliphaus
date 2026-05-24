@@ -62,10 +62,57 @@ Analyses listing photos to detect indicators of dated/renovatable properties:
 
 Launch in Sweden → expand to Australia, UK, Portugal, Netherlands.
 
+## Data refresh pipeline
+
+FlipHaus depends on fresh Hemnet data for property selection, renovation analysis, and sold-market evidence. The front-end health banner and `/api/scrape-health` endpoint should be checked whenever the dashboard looks wrong.
+
+### Scheduled refresh
+
+GitHub Actions runs `.github/workflows/refresh-fliphaus.yml` once per day:
+
+- Cron: `20 5 * * *`
+- UTC time: 05:20
+- Stockholm summer time: 07:20 CEST
+
+The workflow uses `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub secrets. Do not commit token values.
+
+### Refresh steps
+
+1. `/api/scrape` refreshes active dashboard listings.
+2. `/api/scrape-sold?area=Rissne&detailLimit=20` refreshes Rissne sold comparable properties.
+3. `/api/scrape-sold?area=Farsta&detailLimit=20` refreshes Farsta sold comparable properties.
+4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
+
+The sold scrape is intentionally split by area and capped at 20 detail pages per request. This keeps each HTTP request shorter and reduces the chance of Render/GitHub/Cloudflare timeouts. Add more area-specific workflow steps if more areas are added to `api/hemnet-refresh-safety.js`.
+
+### Safety rules
+
+The scraper must fail loudly rather than silently corrupting data:
+
+- If Hemnet serves a Cloudflare/security-verification/bot-protection page, the API returns an error with a clear detail message.
+- If a Hemnet page is missing `__NEXT_DATA__`, the API returns an error instead of parsing an empty result.
+- If the active-listing scrape produces zero listings, FlipHaus refuses to persist the result. This prevents a blocked scrape from marking existing active listings as `disappeared`.
+- Missing active listings are marked `disappeared`, not `sold`. They become `confirmed_sold` only after `/api/reconcile-sold` finds a strong sold-listing match.
+
+### Operational checks
+
+Use `/api/scrape-health` to inspect:
+
+- active listing count and latest active scrape date
+- sold comparable-property count and latest sold scrape date
+- stale flags for each dataset separately
+
+If data is stale and GitHub Actions failed:
+
+1. Open the failed GitHub Actions run and identify which endpoint failed.
+2. If the error mentions Hemnet bot protection or missing `__NEXT_DATA__`, the source site blocked or changed the scraper; do not trust zero-result data.
+3. If the error is `524` or a long timeout on `/api/scrape-sold`, keep the area-split workflow and lower `detailLimit` further.
+4. Re-run the workflow manually only after checking that the source site is reachable.
+
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env  # fill in MONGO_URI, Google OAuth creds, SESSION_SECRET
+cp .env.example .env  # fill in MONGO_URI, Google OAuth creds, SESSION_SECRET, REFRESH_TOKEN
 npm start
 ```

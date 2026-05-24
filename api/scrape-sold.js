@@ -4,13 +4,9 @@ const SoldListing = require("../models/sold.model");
 const Listing = require("./listing.model");
 const { reconcileSoldListings } = require("./reconcile-sold");
 const { analyzeListingImages } = require("./analyze");
+const { assertHemnetPageUsable, resolveSoldScrapeTargets, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 
 puppeteer.use(StealthPlugin());
-
-const LOCATION_IDS = {
-  Rissne: 473493,
-  Farsta: 925962,
-};
 
 function buildSoldUrl(locationId) {
   return (
@@ -45,6 +41,16 @@ async function scrapeSoldDetail(page, slug) {
   if (!slug) return null;
   try {
     await page.goto(`https://www.hemnet.se/salda/${slug}`, { waitUntil: "networkidle2", timeout: 30000 });
+    const pageState = await page.evaluate(() => ({
+      hasNextData: Boolean(document.getElementById("__NEXT_DATA__")),
+      html: `${document.title || ""}\n${document.body?.innerText || ""}`,
+    }));
+    assertHemnetPageUsable({
+      ...pageState,
+      url: `https://www.hemnet.se/salda/${slug}`,
+      areaName: slug,
+      dataset: "sold detail",
+    });
     return await page.evaluate(() => {
       const next = document.getElementById("__NEXT_DATA__");
       if (!next) return null;
@@ -84,6 +90,12 @@ async function scrapeSoldDetail(page, slug) {
 async function scrapeSoldArea(page, areaName, locationId) {
   const url = buildSoldUrl(locationId);
   await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+
+  const pageState = await page.evaluate(() => ({
+    hasNextData: Boolean(document.getElementById("__NEXT_DATA__")),
+    html: `${document.title || ""}\n${document.body?.innerText || ""}`,
+  }));
+  assertHemnetPageUsable({ ...pageState, url, areaName, dataset: "sold listings" });
 
   const listings = await page.evaluate(() => {
     const next = document.getElementById("__NEXT_DATA__");
@@ -125,7 +137,11 @@ async function scrapeSoldArea(page, areaName, locationId) {
   return listings.map((l) => ({ ...l, area: areaName }));
 }
 
-module.exports = async () => {
+module.exports = async (options = {}) => {
+  const targets = resolveSoldScrapeTargets({ area: options.area });
+  const detailLimit = Number.isFinite(Number(options.detailLimit)) ? Math.max(0, Number(options.detailLimit)) : 20;
+  const includeDetails = options.includeDetails !== false;
+
   const browser = await puppeteer.launch({
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -137,22 +153,31 @@ module.exports = async () => {
 
   const allSold = [];
 
-  for (const [area, id] of Object.entries(LOCATION_IDS)) {
+  for (const { area, locationId } of targets) {
     try {
       console.log(`Scraping sold in ${area}...`);
-      const listings = await scrapeSoldArea(page, area, id);
+      const listings = await scrapeSoldArea(page, area, locationId);
       allSold.push(...listings);
       console.log(`  → ${listings.length} sold listings`);
     } catch (err) {
+      if (isHemnetSafetyError(err)) {
+        await browser.close();
+        throw err;
+      }
       console.error(`  ✗ Failed ${area}:`, err.message);
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
 
-  for (const listing of allSold) {
-    const detail = await scrapeSoldDetail(page, listing.slug);
-    if (detail) Object.assign(listing, detail);
-    await new Promise((r) => setTimeout(r, 500));
+  if (includeDetails && detailLimit > 0) {
+    for (const listing of allSold.slice(0, detailLimit)) {
+      const detail = await scrapeSoldDetail(page, listing.slug);
+      if (detail) Object.assign(listing, detail);
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (allSold.length > detailLimit) {
+      console.log(`  ⏱ Detail scrape capped at ${detailLimit}/${allSold.length} sold listings for this request`);
+    }
   }
 
   await browser.close();
@@ -225,5 +250,12 @@ module.exports = async () => {
   const reconciliation = await reconcileSoldListings({ Listing, SoldListing });
 
   console.log(`✅ Sold scrape done: ${allSold.length} total, ${newCount} new, ${reconciliation.confirmed} confirmed matches`);
-  return { total: allSold.length, new: newCount, reconciled: reconciliation };
+  return {
+    total: allSold.length,
+    new: newCount,
+    areas: targets.map((target) => target.area),
+    detailLimit,
+    detailsScraped: includeDetails ? Math.min(allSold.length, detailLimit) : 0,
+    reconciled: reconciliation,
+  };
 };

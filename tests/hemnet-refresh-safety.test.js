@@ -1,0 +1,60 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const {
+  assertHemnetPageUsable,
+  assertNonEmptyRefreshResult,
+  resolveSoldScrapeTargets,
+} = require("../api/hemnet-refresh-safety");
+
+test("Hemnet bot protection pages fail clearly instead of looking like zero listings", () => {
+  assert.throws(
+    () => assertHemnetPageUsable({
+      html: "<html><title>Just a moment...</title><body>Security verification</body></html>",
+      hasNextData: false,
+      url: "https://www.hemnet.se/bostader?location_ids[]=473493",
+      areaName: "Rissne",
+      dataset: "active listings",
+    }),
+    /Hemnet bot protection detected.*Rissne.*active listings/i
+  );
+});
+
+test("Hemnet pages missing NEXT data fail clearly before database updates", () => {
+  assert.throws(
+    () => assertHemnetPageUsable({
+      html: "<html><body>No app data here</body></html>",
+      hasNextData: false,
+      url: "https://www.hemnet.se/salda/bostader?location_ids[]=925962",
+      areaName: "Farsta",
+      dataset: "sold listings",
+    }),
+    /Hemnet page missing __NEXT_DATA__.*Farsta.*sold listings/i
+  );
+});
+
+test("zero active-listing refresh is unsafe and must not mark existing listings disappeared", () => {
+  assert.throws(
+    () => assertNonEmptyRefreshResult({ total: 0, dataset: "active listings" }),
+    /Refusing to persist zero active listings/i
+  );
+});
+
+test("sold scrape can be split by area for shorter cron requests", () => {
+  const targets = resolveSoldScrapeTargets({ area: "Farsta" });
+  assert.deepEqual(targets, [{ area: "Farsta", locationId: 925962 }]);
+
+  assert.throws(
+    () => resolveSoldScrapeTargets({ area: "Unknown" }),
+    /Unknown sold scrape area/i
+  );
+});
+
+test("refresh workflow splits sold scraping into bounded area requests", () => {
+  const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
+  assert.match(workflow, /api\/scrape-sold\?area=Rissne/);
+  assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
+  assert.match(workflow, /detailLimit=20/);
+});

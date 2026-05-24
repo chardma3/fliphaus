@@ -1,10 +1,10 @@
 # FlipHaus Handoff
 
-Last updated: 2026-05-22 15:31 CEST
+Last updated: 2026-05-24 13:32 CEST
 Project path: `/Users/clairehardman/fliphaus`
 Git remote: `https://github.com/chardma3/fliphaus.git`
-Current HEAD: `bf13ec3` — `Fix FlipHaus profitability and sold data views`
-Working tree at handoff creation: clean
+Current HEAD: pending commit for Hemnet refresh safety
+Working tree at handoff creation: contains Hemnet refresh safety changes until committed
 
 ## Purpose of this file
 
@@ -27,7 +27,7 @@ During long work, Hermes should:
 
 ## Current objective
 
-Continue improving FlipHaus listing evaluation so the app does not show misleading renovation ROI for already-renovated or low-upside properties, and so sold/disappeared listing status is represented more accurately.
+Make the Hemnet refresh pipeline reliable and safe: fail clearly on bot-protection/parser failures, never let a zero active-listing scrape mark existing listings as disappeared, split long sold-data refreshes into shorter bounded requests, keep the daily cron, and document operations in the README.
 
 ## Current known plan
 
@@ -96,35 +96,25 @@ Checked on 2026-05-22 15:21 CEST:
 
 ## Next recommended step
 
-Latest chunk completed on 2026-05-22 15:31 CEST:
-- Verified `npm test` passed before changes: 19/19 tests.
-- Added `api/listing-presenter.js` and `tests/listing-presenter.test.js` to keep listing lifecycle status (`active`, `disappeared`, `confirmed_sold`, etc.) separate from Claire's saved/rejected preference status.
-- Updated `/api/listings` and `/api/favorites` to return `status` / `listingStatus` for lifecycle state and `preferenceStatus` for saved/rejected UI state.
-- Updated `index.html` to use `preferenceStatus` for saved/rejected card styling so lifecycle status is no longer overwritten.
-- Verified `node --test tests/listing-presenter.test.js`, full `npm test` (21/21 tests), `node --check server.js`, `node --check api/listing-presenter.js`, and `git diff --check` all pass.
-
-Current uncommitted changes after this chunk:
-- `api/listing-presenter.js`
-- `tests/listing-presenter.test.js`
-- `server.js`
-- `index.html`
-- `HANDOFF.md` remains untracked unless explicitly added.
+Latest chunk completed on 2026-05-24 13:32 CEST:
+- Added `api/hemnet-refresh-safety.js` and `tests/hemnet-refresh-safety.test.js`.
+- Active and sold scrapers now detect Hemnet bot-protection / missing `__NEXT_DATA__` pages and return clear errors instead of silently treating them as zero results.
+- Active scrape now refuses to persist a zero-listing result, so a blocked scrape cannot mark existing active listings as `disappeared`.
+- Sold scrape now supports area-bounded requests through `/api/scrape-sold?area=<area>&detailLimit=20`.
+- GitHub Actions daily refresh still runs at `20 5 * * *`, but now splits sold comparable-property scraping into separate Rissne and Farsta requests.
+- README now documents the refresh pipeline, UTC/Stockholm schedule, safety rules, stale-data checks, and timeout/bot-block troubleshooting.
+- Verified full `npm test` passes: 26/26 tests.
+- Verified syntax/checks: `node --check api/hemnet-refresh-safety.js`, `node --check api/scrape.js`, `node --check api/scrape-sold.js`, `node --check server.js`, and `git diff --check`.
 
 Recommended next step:
-- Review `git diff`, then either commit/push these small status-presentation fixes or run a local/production API smoke check before deployment.
+- Commit and push these changes, then watch the next GitHub Actions refresh run. If `/api/scrape-sold` still times out, lower `detailLimit` from 20 to 10 in `.github/workflows/refresh-fliphaus.yml`.
 
-Suggested commands:
+## Historical notes
 
-```bash
-cd /Users/clairehardman/fliphaus
-git diff
-npm test
-```
-
-Then inspect:
-- `profitability.js`
-- relevant functions/usages in `index.html` and `favorites.html`
-- existing tests under `tests/`
+Previous chunk completed on 2026-05-22 15:31 CEST:
+- Added `api/listing-presenter.js` and `tests/listing-presenter.test.js` to keep listing lifecycle status separate from Claire's saved/rejected preference status.
+- Updated `/api/listings`, `/api/favorites`, and `index.html` to expose `preferenceStatus` separately and preserve lifecycle status.
+- Verified relevant presenter tests and full `npm test` passed at that time.
 
 ## Reporting template
 
