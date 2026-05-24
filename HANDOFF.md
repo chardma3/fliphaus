@@ -102,7 +102,7 @@ Latest chunk completed on 2026-05-24 13:32 CEST:
 - Active scrape now refuses to persist a zero-listing result, so a blocked scrape cannot mark existing active listings as `disappeared`.
 - Sold scrape now supports area-bounded requests through `/api/scrape-sold?area=<area>&detailLimit=20`.
 - GitHub Actions daily refresh still runs at `20 5 * * *`, but now splits sold comparable-property scraping into separate Rissne and Farsta requests.
-- README now documents the refresh pipeline, UTC/Stockholm schedule, safety rules, stale-data checks, and timeout/bot-block troubleshooting.
+- README now documents the refresh pipeline, UTC/Stockholm schedule, safety rules, stale-data checks, timeout/bot-block troubleshooting, and the background-worker fallback if split HTTP requests are still too slow.
 - Verified full `npm test` passes: 26/26 tests.
 - Verified syntax/checks: `node --check api/hemnet-refresh-safety.js`, `node --check api/scrape.js`, `node --check api/scrape-sold.js`, `node --check server.js`, and `git diff --check`.
 
