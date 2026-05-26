@@ -56,6 +56,8 @@ test("refresh workflow keeps active scrape bounded and splits sold scraping into
   const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
   assert.match(workflow, /api\/scrape\?includeDetails=false/);
   assert.match(workflow, /--max-time 300/);
+  assert.match(workflow, /--retry 2/);
+  assert.match(workflow, /--retry-all-errors/);
   assert.match(workflow, /api\/scrape-sold\?area=Rissne/);
   assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
   assert.match(workflow, /detailLimit=5/);
