@@ -21,6 +21,7 @@ const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
+const { buildActiveScrapeOptions } = require("./api/scrape-options");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -563,7 +564,7 @@ app.post("/api/invest", requireAuth, async (req, res) => {
 // Scrape trigger
 app.get("/api/scrape", requireRefreshToken, async (req, res) => {
   try {
-    const result = await scrape();
+    const result = await scrape(buildActiveScrapeOptions(req.query));
     res.json({ message: "Scrape complete", ...result });
   } catch (err) {
     console.error("❌ Scrape error:", err);

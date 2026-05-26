@@ -4,6 +4,7 @@ const Listing = require("./listing.model");
 const { analyzeListingImages } = require("./analyze");
 const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("./puppeteer-options");
+const { buildActiveScrapeOptions } = require("./scrape-options");
 
 puppeteer.use(StealthPlugin());
 
@@ -106,7 +107,8 @@ async function scrapeArea(page, areaName, locationId) {
   });
 }
 
-module.exports = async () => {
+module.exports = async (options = {}) => {
+  const { includeDetails } = buildActiveScrapeOptions(options);
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
   const page = await browser.newPage();
@@ -144,71 +146,75 @@ module.exports = async () => {
     assertNonEmptyRefreshResult({ total: unique.length, dataset: "active listings" });
   }
 
-  // Visit each detail page to get all images + floor plan status + AI analysis
-  console.log(`Fetching detail pages & analysing ${unique.length} listings...`);
-  for (let i = 0; i < unique.length; i++) {
-    const l = unique[i];
-    try {
-      await page.goto(`https://www.hemnet.se/bostad/${l.slug}`, { waitUntil: "networkidle2", timeout: 20000 });
-      const detail = await page.evaluate(() => {
-        try {
-          const apollo = JSON.parse(document.getElementById("__NEXT_DATA__").textContent).props.pageProps.__APOLLO_STATE__;
-          const listing = Object.values(apollo).find((v) => v.__typename === "ActivePropertyListing");
-          if (!listing) return null;
-          const imgKey = Object.keys(listing).find((k) => k.startsWith("images") && k.includes("300"));
-          const allImages = (imgKey && listing[imgKey]?.images || []).map((img) => {
-            const urlKey = Object.keys(img).find((k) => k.startsWith("url"));
-            return urlKey ? img[urlKey] : null;
-          }).filter(Boolean);
-          const hasFloorPlan = (listing.floorPlanImages || []).length > 0;
-
-          // BRF and building info from Apollo data
-          const association = Object.values(apollo).find((v) => v.__typename === "HousingCooperative" || v.__typename === "Association");
-          const brfName = association?.name || listing.housingCooperativeName || null;
-          const buildYear = listing.constructionYear || listing.buildYear || null;
-
-          // Look for description text for stambyte/renovation clues
-          const descText = (listing.description || "").toLowerCase();
-          let stambyteStatus = null;
-          if (/stambyte.*(gjord|klar|genomförd|2\d{3})/.test(descText)) stambyteStatus = "done";
-          else if (/stambyte.*(planerad|kommande|snart)/.test(descText)) stambyteStatus = "planned";
-
-          return { allImages, hasFloorPlan, brfName, buildYear, stambyteStatus, description: listing.description || null };
-        } catch { return null; }
-      });
-      if (detail) {
-        if (detail.allImages.length > 0) l.images = detail.allImages;
-        l.hasFloorPlan = detail.hasFloorPlan;
-        if (detail.brfName) l.brfName = detail.brfName;
-        if (detail.buildYear) l.buildYear = detail.buildYear;
-        if (detail.stambyteStatus) l.stambyteStatus = detail.stambyteStatus;
-      }
-    } catch { /* keep search-page images */ }
-
-    // AI renovation analysis (runs in parallel with next page load conceptually)
-    if (l.images && l.images.length > 0) {
+  if (includeDetails) {
+    // Visit each detail page to get all images + floor plan status + AI analysis
+    console.log(`Fetching detail pages & analysing ${unique.length} listings...`);
+    for (let i = 0; i < unique.length; i++) {
+      const l = unique[i];
       try {
-        const analysis = await analyzeListingImages(l.images, {
-          size: l.size,
-          rooms: l.rooms,
-          askingPrice: l.askingPrice,
-        });
-        if (analysis) {
-          l.renovationScore = analysis.renovationScore;
-          l.renovationConfidence = analysis.confidence;
-          l.renovationSummary = analysis.summary;
-          l.renovationRooms = analysis.rooms;
-          l.totalEstimatedCostSEK = analysis.totalEstimatedCostSEK;
-          l.investmentPotential = analysis.investmentPotential;
-          l.analyzedAt = new Date();
-          console.log(`  ✓ ${l.streetAddress}: score ${analysis.renovationScore}/10 — ${analysis.investmentPotential}`);
-        }
-      } catch (err) {
-        console.error(`  ✗ Analysis error for ${l.streetAddress}:`, err.message);
-      }
-    }
+        await page.goto(`https://www.hemnet.se/bostad/${l.slug}`, { waitUntil: "networkidle2", timeout: 20000 });
+        const detail = await page.evaluate(() => {
+          try {
+            const apollo = JSON.parse(document.getElementById("__NEXT_DATA__").textContent).props.pageProps.__APOLLO_STATE__;
+            const listing = Object.values(apollo).find((v) => v.__typename === "ActivePropertyListing");
+            if (!listing) return null;
+            const imgKey = Object.keys(listing).find((k) => k.startsWith("images") && k.includes("300"));
+            const allImages = (imgKey && listing[imgKey]?.images || []).map((img) => {
+              const urlKey = Object.keys(img).find((k) => k.startsWith("url"));
+              return urlKey ? img[urlKey] : null;
+            }).filter(Boolean);
+            const hasFloorPlan = (listing.floorPlanImages || []).length > 0;
 
-    if ((i + 1) % 20 === 0) console.log(`  ${i + 1} / ${unique.length}`);
+            // BRF and building info from Apollo data
+            const association = Object.values(apollo).find((v) => v.__typename === "HousingCooperative" || v.__typename === "Association");
+            const brfName = association?.name || listing.housingCooperativeName || null;
+            const buildYear = listing.constructionYear || listing.buildYear || null;
+
+            // Look for description text for stambyte/renovation clues
+            const descText = (listing.description || "").toLowerCase();
+            let stambyteStatus = null;
+            if (/stambyte.*(gjord|klar|genomförd|2\d{3})/.test(descText)) stambyteStatus = "done";
+            else if (/stambyte.*(planerad|kommande|snart)/.test(descText)) stambyteStatus = "planned";
+
+            return { allImages, hasFloorPlan, brfName, buildYear, stambyteStatus, description: listing.description || null };
+          } catch { return null; }
+        });
+        if (detail) {
+          if (detail.allImages.length > 0) l.images = detail.allImages;
+          l.hasFloorPlan = detail.hasFloorPlan;
+          if (detail.brfName) l.brfName = detail.brfName;
+          if (detail.buildYear) l.buildYear = detail.buildYear;
+          if (detail.stambyteStatus) l.stambyteStatus = detail.stambyteStatus;
+        }
+      } catch { /* keep search-page images */ }
+
+      // AI renovation analysis (runs in parallel with next page load conceptually)
+      if (l.images && l.images.length > 0) {
+        try {
+          const analysis = await analyzeListingImages(l.images, {
+            size: l.size,
+            rooms: l.rooms,
+            askingPrice: l.askingPrice,
+          });
+          if (analysis) {
+            l.renovationScore = analysis.renovationScore;
+            l.renovationConfidence = analysis.confidence;
+            l.renovationSummary = analysis.summary;
+            l.renovationRooms = analysis.rooms;
+            l.totalEstimatedCostSEK = analysis.totalEstimatedCostSEK;
+            l.investmentPotential = analysis.investmentPotential;
+            l.analyzedAt = new Date();
+            console.log(`  ✓ ${l.streetAddress}: score ${analysis.renovationScore}/10 — ${analysis.investmentPotential}`);
+          }
+        } catch (err) {
+          console.error(`  ✗ Analysis error for ${l.streetAddress}:`, err.message);
+        }
+      }
+
+      if ((i + 1) % 20 === 0) console.log(`  ${i + 1} / ${unique.length}`);
+    }
+  } else {
+    console.log(`Skipping detail pages and AI analysis for ${unique.length} active listings.`);
   }
 
   await browser.close();

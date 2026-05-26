@@ -101,7 +101,7 @@ Do not commit proxy credentials. Add them only in Render service environment var
 
 Recommended setup:
 
-1. Choose a residential proxy or scraping-browser provider with Sweden/Europe residential exits.
+1. Choose a residential proxy or scraping-browser provider with Sweden/Stockholm residential exits.
 2. In Render, open the FlipHaus web service.
 3. Go to Environment.
 4. Add `HEMNET_PROXY_SERVER`, `HEMNET_PROXY_USERNAME`, and `HEMNET_PROXY_PASSWORD` using the provider values.
@@ -109,6 +109,53 @@ Recommended setup:
 6. Manually run the GitHub Actions workflow `Refresh FlipHaus data`.
 7. Check the workflow logs. A successful active scrape should return a JSON body like `Scrape complete` with a non-zero `total`.
 8. Check `/api/scrape-health` and confirm the active `lastScrapeDate` moved to today.
+
+Known working Smartproxy shape for the prototype:
+
+- `HEMNET_PROXY_SERVER`: `http://eu.smartproxy.net:3120`
+- `HEMNET_PROXY_USERNAME`: Smartproxy-generated username with Sweden/Stockholm targeting, for example a value containing `_area-SE_city-STOCKHOLM`
+- `HEMNET_PROXY_PASSWORD`: Smartproxy password
+
+Do not use `proxy.eu.smartproxy.net`; that host may not resolve. Do not put the username or password inside `HEMNET_PROXY_SERVER` when separate username/password environment variables are configured.
+
+Before running the full workflow, test the proxy inside Render Web Shell without exposing secrets:
+
+```bash
+curl -sS --max-time 25 -x "$HEMNET_PROXY_SERVER" -U "$HEMNET_PROXY_USERNAME:$HEMNET_PROXY_PASSWORD" "https://api.ipify.org?format=json"
+```
+
+Then test what Hemnet serves to Puppeteer:
+
+```bash
+node - <<'NODE'
+const puppeteer = require('puppeteer');
+const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require('./api/puppeteer-options');
+
+(async () => {
+  const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
+  try {
+    const page = await browser.newPage();
+    await authenticateProxyPage(page);
+    await page.goto('https://www.hemnet.se/bostader?location_ids%5B%5D=18031', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+    console.log('TITLE:', await page.title());
+    console.log('HAS NEXT_DATA:', await page.evaluate(() => !!document.querySelector('#__NEXT_DATA__')));
+    console.log('BODY PREVIEW:', await page.evaluate(() => document.body.innerText.slice(0, 2000)));
+  } finally {
+    await browser.close();
+  }
+})().catch((error) => {
+  console.error(error.message);
+  process.exit(1);
+});
+NODE
+```
+
+If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, run the workflow.
+
+The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page/AI image analysis so GitHub Actions can continue to the sold comparable-property steps.
 
 Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid. For the production broker-partnership model, this proxy is only a prototype/demo data workaround.
 

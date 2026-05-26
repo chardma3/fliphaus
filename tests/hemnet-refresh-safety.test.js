@@ -52,8 +52,10 @@ test("sold scrape can be split by area for shorter cron requests", () => {
   );
 });
 
-test("refresh workflow splits sold scraping into bounded area requests", () => {
+test("refresh workflow keeps active scrape bounded and splits sold scraping into area requests", () => {
   const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
+  assert.match(workflow, /api\/scrape\?includeDetails=false/);
+  assert.match(workflow, /--max-time 300/);
   assert.match(workflow, /api\/scrape-sold\?area=Rissne/);
   assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
   assert.match(workflow, /detailLimit=20/);
