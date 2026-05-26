@@ -58,5 +58,7 @@ test("refresh workflow keeps active scrape bounded and splits sold scraping into
   assert.match(workflow, /--max-time 300/);
   assert.match(workflow, /api\/scrape-sold\?area=Rissne/);
   assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
-  assert.match(workflow, /detailLimit=20/);
+  assert.match(workflow, /detailLimit=5/);
+  assert.match(workflow, /includeDetails=false/);
+  assert.match(workflow, /includeAnalysis=false/);
 });

@@ -21,7 +21,7 @@ const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
-const { buildActiveScrapeOptions } = require("./api/scrape-options");
+const { buildActiveScrapeOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -587,11 +587,7 @@ app.all("/api/reconcile-sold", requireRefreshToken, async (req, res) => {
 // Scrape sold (slutpriser)
 app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
   try {
-    const result = await scrapeSold({
-      area: req.query.area,
-      detailLimit: req.query.detailLimit,
-      includeDetails: req.query.includeDetails !== "false",
-    });
+    const result = await scrapeSold(buildSoldScrapeOptions(req.query));
     res.json({ message: "Sold scrape complete", ...result });
   } catch (err) {
     console.error("❌ Sold scrape error:", err);

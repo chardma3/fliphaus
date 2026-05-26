@@ -155,7 +155,7 @@ NODE
 
 If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, run the workflow.
 
-The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page/AI image analysis so GitHub Actions can continue to the sold comparable-property steps.
+The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page/AI image analysis so GitHub Actions can continue to the sold comparable-property steps. The scheduled sold refreshes also use `includeDetails=false&includeAnalysis=false` with small per-area requests; run richer sold refreshes manually if detail-page enrichment or AI condition scoring is needed.
 
 Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid. For the production broker-partnership model, this proxy is only a prototype/demo data workaround.
 

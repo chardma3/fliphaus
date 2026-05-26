@@ -142,6 +142,7 @@ module.exports = async (options = {}) => {
   const targets = resolveSoldScrapeTargets({ area: options.area });
   const detailLimit = Number.isFinite(Number(options.detailLimit)) ? Math.max(0, Number(options.detailLimit)) : 20;
   const includeDetails = options.includeDetails !== false;
+  const includeAnalysis = options.includeAnalysis !== false;
 
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
@@ -199,7 +200,7 @@ module.exports = async (options = {}) => {
         summary: existing.renovationSummary,
         rooms: existing.renovationRooms,
       };
-    } else if (images.length) {
+    } else if (includeAnalysis && images.length) {
       analysis = await analyzeListingImages(images, {
         size: l.size,
         rooms: l.rooms,
@@ -254,6 +255,7 @@ module.exports = async (options = {}) => {
     areas: targets.map((target) => target.area),
     detailLimit,
     detailsScraped: includeDetails ? Math.min(allSold.length, detailLimit) : 0,
+    analysisEnabled: includeAnalysis,
     reconciled: reconciliation,
   };
 };
