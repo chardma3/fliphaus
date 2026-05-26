@@ -30,13 +30,14 @@ test("homepage displays scrape health so stale listing data is visible", () => {
   assert.match(indexHtml, /Last updated/i);
 });
 
-test("refresh workflow calls active scrape, sold scrape, and sold reconciliation with a secret token", () => {
+test("refresh workflow calls active scrape, sold scrape, image analysis, and sold reconciliation with a secret token", () => {
   const fs = require("node:fs");
   const path = require("node:path");
   const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
 
   assert.match(workflow, /api\/scrape/);
   assert.match(workflow, /api\/scrape-sold/);
+  assert.match(workflow, /api\/analyze-images/);
   assert.match(workflow, /api\/reconcile-sold/);
   assert.match(workflow, /x-refresh-token/);
   assert.match(workflow, /--fail-with-body/);

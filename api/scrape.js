@@ -1,7 +1,6 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
-const { analyzeListingImages } = require("./analyze");
 const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("./puppeteer-options");
 const { buildActiveScrapeOptions } = require("./scrape-options");
@@ -147,8 +146,9 @@ module.exports = async (options = {}) => {
   }
 
   if (includeDetails) {
-    // Visit each detail page to get all images + floor plan status + AI analysis
-    console.log(`Fetching detail pages & analysing ${unique.length} listings...`);
+    // Visit each detail page to get all images + floor plan status.
+    // AI image analysis is intentionally handled by /api/analyze-images after scraping.
+    console.log(`Fetching detail pages for ${unique.length} listings...`);
     for (let i = 0; i < unique.length; i++) {
       const l = unique[i];
       try {
@@ -188,33 +188,10 @@ module.exports = async (options = {}) => {
         }
       } catch { /* keep search-page images */ }
 
-      // AI renovation analysis (runs in parallel with next page load conceptually)
-      if (l.images && l.images.length > 0) {
-        try {
-          const analysis = await analyzeListingImages(l.images, {
-            size: l.size,
-            rooms: l.rooms,
-            askingPrice: l.askingPrice,
-          });
-          if (analysis) {
-            l.renovationScore = analysis.renovationScore;
-            l.renovationConfidence = analysis.confidence;
-            l.renovationSummary = analysis.summary;
-            l.renovationRooms = analysis.rooms;
-            l.totalEstimatedCostSEK = analysis.totalEstimatedCostSEK;
-            l.investmentPotential = analysis.investmentPotential;
-            l.analyzedAt = new Date();
-            console.log(`  ✓ ${l.streetAddress}: score ${analysis.renovationScore}/10 — ${analysis.investmentPotential}`);
-          }
-        } catch (err) {
-          console.error(`  ✗ Analysis error for ${l.streetAddress}:`, err.message);
-        }
-      }
-
       if ((i + 1) % 20 === 0) console.log(`  ${i + 1} / ${unique.length}`);
     }
   } else {
-    console.log(`Skipping detail pages and AI analysis for ${unique.length} active listings.`);
+    console.log(`Skipping detail pages for ${unique.length} active listings. Image analysis runs separately.`);
   }
 
   await browser.close();

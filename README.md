@@ -155,9 +155,11 @@ NODE
 
 If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, run the workflow.
 
-The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page/AI image analysis so GitHub Actions can continue to the sold comparable-property steps. The scheduled sold refreshes also use `includeDetails=false&includeAnalysis=false` with small per-area requests; run richer sold refreshes manually if detail-page enrichment or AI condition scoring is needed. Each scheduled scrape request has a five-minute curl timeout and retries twice because residential proxy exits can occasionally receive Hemnet bot-protection pages.
+The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page work so GitHub Actions can continue to the sold comparable-property steps. The scheduled sold refreshes also use `includeDetails=false&includeAnalysis=false` with small per-area requests; run richer sold refreshes manually if detail-page enrichment is needed. Each scheduled scrape request has a five-minute curl timeout and retries twice because residential proxy exits can occasionally receive Hemnet bot-protection pages.
 
-Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid. For the production broker-partnership model, this proxy is only a prototype/demo data workaround.
+Image analysis is deliberately a separate post-scrape step: `/api/analyze-images?dataset=all&limit=10`. It analyses photos already saved in MongoDB, so it does not keep a Puppeteer browser open or actively scrape Hemnet while the AI model is working. The workflow marks this step `continue-on-error: true`, so a temporary model/API failure does not make the core scrape look failed or stale.
+
+Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid, and the separate image-analysis step uses the configured AI vision API. The scheduled workflow keeps that to a small batch of 10 items per run.
 
 ### Safety rules
 

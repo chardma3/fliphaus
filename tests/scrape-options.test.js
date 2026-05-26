@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildActiveScrapeOptions,
+  buildImageAnalysisOptions,
   buildSoldScrapeOptions,
   shouldFetchActiveDetails,
 } = require("../api/scrape-options");
@@ -42,5 +43,26 @@ test("sold scrape can skip detail pages and image analysis for scheduled refresh
     detailLimit: "5",
     includeDetails: false,
     includeAnalysis: false,
+  });
+});
+
+test("image analysis refresh defaults to a small post-scrape batch", () => {
+  assert.deepEqual(buildImageAnalysisOptions({}), {
+    dataset: "all",
+    limit: 10,
+    onlyMissing: true,
+  });
+});
+
+test("image analysis refresh validates dataset and caps batch size", () => {
+  assert.deepEqual(buildImageAnalysisOptions({ dataset: "sold", limit: "99", onlyMissing: "false" }), {
+    dataset: "sold",
+    limit: 25,
+    onlyMissing: false,
+  });
+  assert.deepEqual(buildImageAnalysisOptions({ dataset: "bad", limit: "0" }), {
+    dataset: "all",
+    limit: 1,
+    onlyMissing: true,
   });
 });

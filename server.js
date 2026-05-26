@@ -9,6 +9,7 @@ const path = require("path");
 
 const scrape = require("./api/scrape");
 const scrapeSold = require("./api/scrape-sold");
+const { analyzeListingImagesRefresh } = require("./api/analyze-refresh");
 const SoldListing = require("./models/sold.model");
 const Listing = require("./api/listing.model");
 const User = require("./models/user.model");
@@ -21,7 +22,7 @@ const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
-const { buildActiveScrapeOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
+const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -593,6 +594,17 @@ app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
     console.error("❌ Sold scrape error:", err);
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Unknown sold scrape area/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Sold scraping failed", detail: err.message });
+  }
+});
+
+// Analyse already-scraped listing photos separately from Hemnet scraping.
+app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
+  try {
+    const result = await analyzeListingImagesRefresh(buildImageAnalysisOptions(req.query));
+    res.json({ message: "Image analysis complete", ...result });
+  } catch (err) {
+    console.error("❌ Image analysis refresh error:", err);
+    res.status(500).json({ error: "Image analysis failed", detail: err.message });
   }
 });
 
