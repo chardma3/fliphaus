@@ -16,6 +16,33 @@ test("Puppeteer launch options include stable Render-safe Chromium flags by defa
   assert.ok(options.args.includes("--disable-dev-shm-usage"));
 });
 
+test("Puppeteer launch options set generous default launch/protocol timeouts", () => {
+  const options = buildPuppeteerLaunchOptions({});
+
+  assert.equal(options.timeout, 120000);
+  assert.equal(options.protocolTimeout, 180000);
+});
+
+test("Puppeteer launch timeouts are env-overridable", () => {
+  const options = buildPuppeteerLaunchOptions({
+    PUPPETEER_LAUNCH_TIMEOUT_MS: "90000",
+    PUPPETEER_PROTOCOL_TIMEOUT_MS: "200000",
+  });
+
+  assert.equal(options.timeout, 90000);
+  assert.equal(options.protocolTimeout, 200000);
+});
+
+test("Puppeteer launch timeouts fall back to defaults on invalid env values", () => {
+  const options = buildPuppeteerLaunchOptions({
+    PUPPETEER_LAUNCH_TIMEOUT_MS: "not-a-number",
+    PUPPETEER_PROTOCOL_TIMEOUT_MS: "-5",
+  });
+
+  assert.equal(options.timeout, 120000);
+  assert.equal(options.protocolTimeout, 180000);
+});
+
 test("Puppeteer launch options add proxy server when configured", () => {
   const options = buildPuppeteerLaunchOptions({
     HEMNET_PROXY_SERVER: "http://gate.smartproxy.example:7000",
