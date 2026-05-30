@@ -2,7 +2,7 @@ const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
 const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, isHemnetSafetyError } = require("./hemnet-refresh-safety");
-const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("./puppeteer-options");
+const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions } = require("./scrape-options");
 
 puppeteer.use(StealthPlugin());
@@ -108,6 +108,7 @@ async function scrapeArea(page, areaName, locationId) {
 
 module.exports = async (options = {}) => {
   const { includeDetails } = buildActiveScrapeOptions(options);
+  logProxyStatus();
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
   const page = await browser.newPage();

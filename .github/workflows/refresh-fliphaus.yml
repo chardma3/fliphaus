@@ -9,6 +9,21 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
+      - name: Warm up FlipHaus server
+        # Wake a sleeping Render instance before the heavy scrape so the first
+        # /api/scrape request doesn't hit a cold start (which previously hung
+        # for the full 300s --max-time and then failed). /api/scrape-health is
+        # public and lightweight (two DB reads, no Puppeteer). Retries cover the
+        # dyno spin-up window. Never fails the run — the scrape step has its own
+        # retries.
+        continue-on-error: true
+        run: |
+          curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
+            "$FLIPHAUS_REFRESH_URL/api/scrape-health" \
+            -o /dev/null -w "warmup HTTP %{http_code} in %{time_total}s\n"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+
       - name: Refresh active dashboard listings
         run: |
           curl --fail-with-body -sS --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape?includeDetails=false"

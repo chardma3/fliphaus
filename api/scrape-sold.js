@@ -5,7 +5,7 @@ const Listing = require("./listing.model");
 const { reconcileSoldListings } = require("./reconcile-sold");
 const { analyzeListingImages } = require("./analyze");
 const { assertHemnetPageUsable, resolveSoldScrapeTargets, isHemnetSafetyError } = require("./hemnet-refresh-safety");
-const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("./puppeteer-options");
+const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 
 puppeteer.use(StealthPlugin());
 
@@ -144,6 +144,7 @@ module.exports = async (options = {}) => {
   const includeDetails = options.includeDetails !== false;
   const includeAnalysis = options.includeAnalysis !== false;
 
+  logProxyStatus();
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
   const page = await browser.newPage();
