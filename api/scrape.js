@@ -1,7 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
-const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, isHemnetSafetyError } = require("./hemnet-refresh-safety");
+const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, planDisappearanceReconciliation, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions } = require("./scrape-options");
 
@@ -116,20 +116,38 @@ module.exports = async (options = {}) => {
   await page.setViewport({ width: 1280, height: 800 });
 
   const allListings = [];
+  const scrapedAreas = [];
+  const failedAreas = [];
+
+  // Up to 2 attempts per area. The residential proxy is slower than a direct
+  // connection, so a single page can transiently exceed the navigation timeout;
+  // one retry turns most of those into a success instead of dropping the area.
+  const MAX_AREA_ATTEMPTS = 2;
 
   for (const [area, id] of Object.entries(LOCATION_IDS)) {
-    try {
-      console.log(`Scraping ${area}...`);
-      const listings = await scrapeArea(page, area, id);
-      allListings.push(...listings);
-      console.log(`  → ${listings.length} listings`);
-    } catch (err) {
-      if (isHemnetSafetyError(err)) {
-        await browser.close();
-        throw err;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= MAX_AREA_ATTEMPTS; attempt++) {
+      try {
+        console.log(`Scraping ${area}${attempt > 1 ? ` (retry ${attempt - 1})` : ""}...`);
+        const listings = await scrapeArea(page, area, id);
+        allListings.push(...listings);
+        scrapedAreas.push(area);
+        console.log(`  → ${listings.length} listings`);
+        lastErr = null;
+        break;
+      } catch (err) {
+        // A safety error (bot protection / missing __NEXT_DATA__) means the page
+        // is untrustworthy — abort the whole scrape rather than persist a
+        // blocked result. Retrying wouldn't help and risks the same bad page.
+        if (isHemnetSafetyError(err)) {
+          await browser.close();
+          throw err;
+        }
+        lastErr = err;
+        console.error(`  ✗ Failed ${area} (attempt ${attempt}/${MAX_AREA_ATTEMPTS}):`, err.message);
       }
-      console.error(`  ✗ Failed ${area}:`, err.message);
     }
+    if (lastErr) failedAreas.push(area);
   }
 
   const scrapeDate = new Date().toLocaleDateString("sv-SE");
@@ -229,26 +247,44 @@ module.exports = async (options = {}) => {
     await Listing.findOneAndUpdate({ id: l.id }, update, { upsert: true, new: true });
   }
 
-  // Mark listings no longer in the active scrape as disappeared, not confirmed sold.
+  // Mark listings no longer in the active scrape as disappeared — but ONLY when
+  // the scrape was complete. A partial scrape (an area failed even after retry)
+  // never observed the missing area's listings, so inferring they "disappeared"
+  // from their absence would be a false positive. Defer reconciliation to the
+  // next complete run instead.
   const currentIds = unique.map((l) => l.id);
-  const disappeared = await Listing.find({ id: { $nin: currentIds }, status: "active" });
-  for (const d of disappeared) {
-    const dom = d.publishedAt ? Math.floor((Date.now() - new Date(d.publishedAt).getTime()) / (1000*60*60*24)) : null;
-    await Listing.findByIdAndUpdate(d._id, {
-      status: "disappeared",
-      disappearedAt: new Date(),
-      lastSeenAt: d.lastSeenAt || d.updatedAt || null,
-      daysOnMarket: dom,
-      soldStatusConfidence: "unconfirmed",
-    });
-    console.log(`  📋 Marked as disappeared: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
+  const plan = planDisappearanceReconciliation({ scrapedAreas, failedAreas });
+  let disappearedCount = 0;
+  if (plan.reconcile) {
+    const disappeared = await Listing.find({ id: { $nin: currentIds }, status: "active" });
+    for (const d of disappeared) {
+      const dom = d.publishedAt ? Math.floor((Date.now() - new Date(d.publishedAt).getTime()) / (1000*60*60*24)) : null;
+      await Listing.findByIdAndUpdate(d._id, {
+        status: "disappeared",
+        disappearedAt: new Date(),
+        lastSeenAt: d.lastSeenAt || d.updatedAt || null,
+        daysOnMarket: dom,
+        soldStatusConfidence: "unconfirmed",
+      });
+      console.log(`  📋 Marked as disappeared: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
+    }
+    disappearedCount = disappeared.length;
+  } else {
+    console.warn(`  ⚠️ ${plan.reason}`);
   }
 
-  // Mark current listings as active
+  // Refresh the listings we did see this run as active (safe on partial scrapes).
   await Listing.updateMany(
     { id: { $in: currentIds } },
     { status: "active", lastSeenAt: new Date(), soldStatusConfidence: null, disappearedAt: null }
   );
 
-  return { total: unique.length, disappeared: disappeared.length, scrapeDate };
+  return {
+    total: unique.length,
+    disappeared: disappearedCount,
+    scrapeDate,
+    partial: plan.partial,
+    scrapedAreas,
+    failedAreas,
+  };
 };
