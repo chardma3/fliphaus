@@ -17,6 +17,11 @@ test("Puppeteer launch options include stable Render-safe Chromium flags by defa
   assert.ok(options.args.includes("--disable-dev-shm-usage"));
 });
 
+test("Puppeteer launch options omit --single-process (destabilizes launch + proxy auth on a 2GB box)", () => {
+  const options = buildPuppeteerLaunchOptions({});
+  assert.ok(!options.args.includes("--single-process"));
+});
+
 test("Puppeteer launch options set generous default launch/protocol timeouts", () => {
   const options = buildPuppeteerLaunchOptions({});
 

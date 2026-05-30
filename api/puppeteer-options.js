@@ -3,7 +3,13 @@ const DEFAULT_CHROMIUM_ARGS = [
   "--disable-setuid-sandbox",
   "--disable-dev-shm-usage",
   "--disable-gpu",
-  "--single-process",
+  // NOTE: --single-process is intentionally omitted. It's only needed to fit
+  // Chromium into a ~512MB instance; on the current 2GB Render Standard box it
+  // is pure downside — it destabilizes browser launch (the "Timed out ...
+  // waiting for the WS endpoint URL" failures) and interferes with proxy
+  // authentication (page.authenticate's 407 handling), which can silently drop
+  // traffic onto the host's datacenter IP and trigger Hemnet's Cloudflare bot
+  // protection. Re-add it only if the instance is downsized below ~1GB.
 ];
 
 // Chrome can be slow to spawn on a cold / memory-constrained Render instance.
