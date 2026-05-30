@@ -34,6 +34,25 @@ function assertNonEmptyRefreshResult({ total, dataset = "active listings" } = {}
   }
 }
 
+// Decide whether it is safe to reconcile "disappeared" listings after an
+// active scrape. Disappearance is inferred by absence — a listing in the DB
+// that wasn't seen this run is assumed gone. That inference is only valid when
+// the scrape was COMPLETE. If any area failed (e.g. a transient proxy timeout),
+// the run never observed that area's listings, so marking them disappeared
+// would be a false positive (the 51/101 + 50-disappeared incident). On a
+// partial scrape we still upsert what we got, but skip disappearance
+// reconciliation and defer it to the next complete run.
+function planDisappearanceReconciliation({ scrapedAreas = [], failedAreas = [] } = {}) {
+  const partial = failedAreas.length > 0;
+  return {
+    partial,
+    reconcile: !partial,
+    reason: partial
+      ? `Partial scrape — areas failed: [${failedAreas.join(", ")}], succeeded: [${scrapedAreas.join(", ")}]. Skipping disappearance reconciliation to avoid falsely marking the missing areas' listings as gone.`
+      : `Complete scrape — areas: [${scrapedAreas.join(", ")}]. Reconciling disappearances normally.`,
+  };
+}
+
 function resolveSoldScrapeTargets({ area } = {}) {
   if (!area) {
     return Object.entries(LOCATION_IDS).map(([areaName, locationId]) => ({ area: areaName, locationId }));
@@ -55,6 +74,7 @@ module.exports = {
   LOCATION_IDS,
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
+  planDisappearanceReconciliation,
   resolveSoldScrapeTargets,
   isHemnetSafetyError,
 };

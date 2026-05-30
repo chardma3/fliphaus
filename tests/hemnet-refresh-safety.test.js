@@ -6,6 +6,7 @@ const path = require("node:path");
 const {
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
+  planDisappearanceReconciliation,
   resolveSoldScrapeTargets,
 } = require("../api/hemnet-refresh-safety");
 
@@ -40,6 +41,41 @@ test("zero active-listing refresh is unsafe and must not mark existing listings 
     () => assertNonEmptyRefreshResult({ total: 0, dataset: "active listings" }),
     /Refusing to persist zero active listings/i
   );
+});
+
+test("a complete scrape reconciles disappearances normally", () => {
+  const plan = planDisappearanceReconciliation({
+    scrapedAreas: ["Rissne", "Farsta"],
+    failedAreas: [],
+  });
+  assert.equal(plan.partial, false);
+  assert.equal(plan.reconcile, true);
+});
+
+test("a partial scrape must NOT reconcile disappearances (the 50-disappeared incident)", () => {
+  const plan = planDisappearanceReconciliation({
+    scrapedAreas: ["Farsta"],
+    failedAreas: ["Rissne"],
+  });
+  assert.equal(plan.partial, true);
+  assert.equal(plan.reconcile, false);
+  assert.match(plan.reason, /Rissne/);
+  assert.match(plan.reason, /Skipping disappearance reconciliation/i);
+});
+
+test("a scrape where every area failed is treated as partial (no reconciliation)", () => {
+  const plan = planDisappearanceReconciliation({
+    scrapedAreas: [],
+    failedAreas: ["Rissne", "Farsta"],
+  });
+  assert.equal(plan.partial, true);
+  assert.equal(plan.reconcile, false);
+});
+
+test("planDisappearanceReconciliation defaults to a safe (complete) plan with no args", () => {
+  const plan = planDisappearanceReconciliation();
+  assert.equal(plan.partial, false);
+  assert.equal(plan.reconcile, true);
 });
 
 test("sold scrape can be split by area for shorter cron requests", () => {
