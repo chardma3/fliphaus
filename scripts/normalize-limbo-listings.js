@@ -42,8 +42,11 @@ const VALID_STATUS = ["active", "disappeared", "confirmed_sold", "removed", "unk
     // Best-known "last present" timestamp: the scrape date (YYYY-MM-DD), or the
     // document's creation time if scrapeDate is missing.
     const lastSeen = d.scrapeDate ? new Date(`${d.scrapeDate}T00:00:00Z`) : d._id.getTimestamp();
+    // Clamp to >= 0: scrapeDate is date-only (midnight UTC) while publishedAt is
+    // a full timestamp, so a listing published later in the day on the scrape
+    // date yields a small negative; days-on-market can't be negative.
     const dom = d.publishedAt
-      ? Math.floor((lastSeen.getTime() - new Date(d.publishedAt).getTime()) / 86400000)
+      ? Math.max(0, Math.floor((lastSeen.getTime() - new Date(d.publishedAt).getTime()) / 86400000))
       : null;
 
     const update = {
