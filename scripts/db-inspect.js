@@ -72,6 +72,43 @@ function mb(bytes) {
   console.log(`  listings without an 'area' value:        ${missingArea}`);
   console.log(`  'disappeared' listings older than 90d:   ${disappearedOld}`);
 
+  // --- Detail on limbo listings (status outside the schema enum, incl. null/missing) ---
+  const VALID_STATUS = ["active", "disappeared", "confirmed_sold", "removed", "unknown", "sold"];
+  const limbo = await listings
+    .find({ status: { $nin: VALID_STATUS } })
+    .project({
+      id: 1, streetAddress: 1, status: 1, scrapeDate: 1, lastSeenAt: 1,
+      disappearedAt: 1, publishedAt: 1, area: 1, images: 1, analyzedAt: 1,
+    })
+    .toArray();
+
+  console.log(`\nLimbo listings (status not in schema enum) — ${limbo.length}:`);
+  if (limbo.length) {
+    const ts = limbo.map((d) => d._id.getTimestamp()).sort((a, b) => a - b);
+    const seens = limbo.map((d) => d.lastSeenAt).filter(Boolean).map((x) => new Date(x)).sort((a, b) => a - b);
+    const scrapeDates = [...new Set(limbo.map((d) => d.scrapeDate).filter(Boolean))].sort();
+    const statuses = [...new Set(limbo.map((d) => JSON.stringify(d.status)))];
+    const iso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "-");
+
+    console.log(`  distinct status values:  ${statuses.join(", ")}`);
+    console.log(`  created (_id) range:     ${iso(ts[0])} → ${iso(ts[ts.length - 1])}`);
+    console.log(`  scrapeDate values:       ${scrapeDates.length ? scrapeDates.join(", ") : "(none)"}`);
+    console.log(`  lastSeenAt range:        ${seens.length ? `${iso(seens[0])} → ${iso(seens[seens.length - 1])}` : "(none have lastSeenAt)"}`);
+    console.log(`  have images:             ${limbo.filter((d) => Array.isArray(d.images) && d.images.length).length}/${limbo.length}`);
+    console.log(`  have publishedAt:        ${limbo.filter((d) => d.publishedAt).length}/${limbo.length}`);
+    console.log(`  have lastSeenAt:         ${limbo.filter((d) => d.lastSeenAt).length}/${limbo.length}`);
+    console.log(`  have disappearedAt:      ${limbo.filter((d) => d.disappearedAt).length}/${limbo.length}`);
+    console.log(`  have been image-analyzed:${limbo.filter((d) => d.analyzedAt).length}/${limbo.length}`);
+    console.log("  sample (up to 10):");
+    for (const d of limbo.slice(0, 10)) {
+      console.log(
+        `    id=${d.id} | "${(d.streetAddress || "").slice(0, 28)}" | ` +
+          `scrapeDate=${d.scrapeDate || "-"} | lastSeen=${iso(d.lastSeenAt)} | ` +
+          `imgs=${Array.isArray(d.images) ? d.images.length : 0} | created=${iso(d._id.getTimestamp())}`
+      );
+    }
+  }
+
   await mongoose.disconnect();
 })().catch((err) => {
   console.error(err);
