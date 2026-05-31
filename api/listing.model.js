@@ -5,6 +5,11 @@ const listingSchema = new mongoose.Schema({
   slug: String,
   streetAddress: String,
   locationDescription: String,
+  // Hemnet search area this listing was scraped from (e.g. "Rissne", "Farsta").
+  // Set in api/scrape.js; previously dropped by Mongoose strict mode because the
+  // field was undeclared. Indexed for per-area queries and disappearance
+  // reconciliation scoping.
+  area: { type: String, default: null, index: true },
   housingForm: String,
   rooms: String,
   size: String,
