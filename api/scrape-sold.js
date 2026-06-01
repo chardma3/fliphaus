@@ -9,14 +9,20 @@ const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = r
 
 puppeteer.use(StealthPlugin());
 
-function buildSoldUrl(locationId) {
-  return (
+function buildSoldUrl(locationId, page = 1) {
+  const base =
     `https://www.hemnet.se/salda/bostader?` +
     `location_ids[]=${locationId}&` +
     `item_types[]=bostadsratt&` +
-    `sold_age=6m`
-  );
+    `sold_age=6m`;
+  return page > 1 ? `${base}&page=${page}` : base;
 }
+
+// Hemnet paginates sold results at ~50 per page. Without walking the pages we
+// only ever captured the ~50 most-recent sales per area, so most sold units
+// never landed in the DB and reconciliation had nothing to match. Cap the depth
+// so the workflow stays within its request budget; override via env if needed.
+const SOLD_MAX_PAGES = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PAGES) || 20);
 
 function parsePrice(str) {
   if (!str) return 0;
@@ -88,8 +94,8 @@ async function scrapeSoldDetail(page, slug) {
   }
 }
 
-async function scrapeSoldArea(page, areaName, locationId) {
-  const url = buildSoldUrl(locationId);
+async function scrapeSoldPage(page, areaName, locationId, pageNum) {
+  const url = buildSoldUrl(locationId, pageNum);
   await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
   const pageState = await page.evaluate(() => ({
@@ -98,7 +104,7 @@ async function scrapeSoldArea(page, areaName, locationId) {
   }));
   assertHemnetPageUsable({ ...pageState, url, areaName, dataset: "sold listings" });
 
-  const listings = await page.evaluate(() => {
+  return page.evaluate(() => {
     const next = document.getElementById("__NEXT_DATA__");
     if (!next) return [];
     try {
@@ -134,8 +140,30 @@ async function scrapeSoldArea(page, areaName, locationId) {
       return [];
     }
   });
+}
 
-  return listings.map((l) => ({ ...l, area: areaName }));
+async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PAGES) {
+  const collected = [];
+  const seen = new Set();
+
+  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    const pageListings = await scrapeSoldPage(page, areaName, locationId, pageNum);
+    if (!pageListings.length) break; // past the last page of results
+
+    let added = 0;
+    for (const l of pageListings) {
+      if (l.hemnetId && !seen.has(l.hemnetId)) {
+        seen.add(l.hemnetId);
+        collected.push(l);
+        added += 1;
+      }
+    }
+    console.log(`  ${areaName} sold page ${pageNum}: +${added} new (total ${collected.length})`);
+    // No new ids on a full page means we've looped back to known results — stop.
+    if (added === 0) break;
+  }
+
+  return collected.map((l) => ({ ...l, area: areaName }));
 }
 
 module.exports = async (options = {}) => {
