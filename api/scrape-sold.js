@@ -14,7 +14,7 @@ function buildSoldUrl(locationId, page = 1) {
     `https://www.hemnet.se/salda/bostader?` +
     `location_ids[]=${locationId}&` +
     `item_types[]=bostadsratt&` +
-    `sold_age=6m`;
+    `sold_age=12m`;
   return page > 1 ? `${base}&page=${page}` : base;
 }
 
