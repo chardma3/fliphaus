@@ -147,7 +147,21 @@ async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PA
   const seen = new Set();
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-    const pageListings = await scrapeSoldPage(page, areaName, locationId, pageNum);
+    // Retry transient page failures (slow/flaky residential proxy, occasional
+    // missing __NEXT_DATA__) before giving up — mirrors the active scrape's
+    // per-area retry. A page that still fails stops pagination but keeps
+    // everything collected so far; partial sold data is fine (unlike the active
+    // scrape, sold data never drives "disappeared" marking).
+    let pageListings = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        pageListings = await scrapeSoldPage(page, areaName, locationId, pageNum);
+        break;
+      } catch (err) {
+        console.error(`  ✗ ${areaName} sold page ${pageNum} (attempt ${attempt}/2): ${err.message}`);
+      }
+    }
+    if (pageListings === null) break; // page failed after retries
     if (!pageListings.length) break; // past the last page of results
 
     let added = 0;
