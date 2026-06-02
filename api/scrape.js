@@ -7,6 +7,8 @@ const { buildActiveScrapeOptions } = require("./scrape-options");
 
 puppeteer.use(StealthPlugin());
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const TRANSIT_INFO = {
   Rissne: { minutes: 15, station: "Rissne", line: "Blue line (T-bana)" },
   Sundbyberg: { minutes: 12, station: "Sundbybergs centrum", line: "Blue line (T-bana)" },
@@ -119,16 +121,23 @@ module.exports = async (options = {}) => {
   const scrapedAreas = [];
   const failedAreas = [];
 
-  // Up to 2 attempts per area. The residential proxy is slower than a direct
-  // connection, so a single page can transiently exceed the navigation timeout;
-  // one retry turns most of those into a success instead of dropping the area.
-  const MAX_AREA_ATTEMPTS = 2;
+  // The residential proxy pool is mixed: some exits are datacenter IPs that
+  // Hemnet blocks with Cloudflare bot-protection, and the provider can't
+  // guarantee a residential IP per request. Each new request rotates to a fresh
+  // exit, so a block is usually cleared by simply retrying (drawing a new,
+  // hopefully residential, IP). So retry generously on ANY error — including
+  // bot-protection — with a short pause between attempts to let the proxy hand
+  // out a new exit. If an area is STILL blocked after all attempts it's left in
+  // failedAreas, and the partial-scrape guard skips disappearance reconciliation
+  // so a persistent block can never mark listings disappeared. A total block
+  // (every area failed → zero listings) is caught by assertNonEmptyRefreshResult.
+  const MAX_AREA_ATTEMPTS = Math.max(1, Number(process.env.SCRAPE_MAX_AREA_ATTEMPTS) || 6);
 
   for (const [area, id] of Object.entries(LOCATION_IDS)) {
     let lastErr = null;
     for (let attempt = 1; attempt <= MAX_AREA_ATTEMPTS; attempt++) {
       try {
-        console.log(`Scraping ${area}${attempt > 1 ? ` (retry ${attempt - 1})` : ""}...`);
+        console.log(`Scraping ${area}${attempt > 1 ? ` (attempt ${attempt}/${MAX_AREA_ATTEMPTS})` : ""}...`);
         const listings = await scrapeArea(page, area, id);
         allListings.push(...listings);
         scrapedAreas.push(area);
@@ -136,15 +145,13 @@ module.exports = async (options = {}) => {
         lastErr = null;
         break;
       } catch (err) {
-        // A safety error (bot protection / missing __NEXT_DATA__) means the page
-        // is untrustworthy — abort the whole scrape rather than persist a
-        // blocked result. Retrying wouldn't help and risks the same bad page.
-        if (isHemnetSafetyError(err)) {
-          await browser.close();
-          throw err;
-        }
         lastErr = err;
-        console.error(`  ✗ Failed ${area} (attempt ${attempt}/${MAX_AREA_ATTEMPTS}):`, err.message);
+        const blocked = isHemnetSafetyError(err);
+        console.error(
+          `  ✗ ${area} attempt ${attempt}/${MAX_AREA_ATTEMPTS}` +
+            `${blocked ? " (blocked — likely a datacenter proxy exit; retrying for a fresh IP)" : ""}: ${err.message}`
+        );
+        if (attempt < MAX_AREA_ATTEMPTS) await sleep(1500); // give the proxy time to rotate the exit
       }
     }
     if (lastErr) failedAreas.push(area);
