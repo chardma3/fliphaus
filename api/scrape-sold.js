@@ -23,6 +23,11 @@ function buildSoldUrl(locationId, page = 1) {
 // never landed in the DB and reconciliation had nothing to match. Cap the depth
 // so the workflow stays within its request budget; override via env if needed.
 const SOLD_MAX_PAGES = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PAGES) || 20);
+// Attempts per page before giving up. The proxy pool is mixed — a datacenter
+// exit gets blocked — so retrying (each request rotates to a fresh exit) usually
+// lands a residential IP.
+const SOLD_MAX_PAGE_ATTEMPTS = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PAGE_ATTEMPTS) || 4);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function parsePrice(str) {
   if (!str) return 0;
@@ -147,18 +152,20 @@ async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PA
   const seen = new Set();
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-    // Retry transient page failures (slow/flaky residential proxy, occasional
-    // missing __NEXT_DATA__) before giving up — mirrors the active scrape's
-    // per-area retry. A page that still fails stops pagination but keeps
-    // everything collected so far; partial sold data is fine (unlike the active
-    // scrape, sold data never drives "disappeared" marking).
+    // Retry page failures before giving up. The proxy pool is mixed — a
+    // datacenter exit gets blocked (bot-protection) — and each request rotates
+    // to a fresh exit, so retrying with a short pause usually lands a
+    // residential IP. A page that still fails after all attempts stops
+    // pagination but keeps everything collected so far; partial sold data is
+    // fine (unlike the active scrape, sold data never drives "disappeared").
     let pageListings = null;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= SOLD_MAX_PAGE_ATTEMPTS; attempt++) {
       try {
         pageListings = await scrapeSoldPage(page, areaName, locationId, pageNum);
         break;
       } catch (err) {
-        console.error(`  ✗ ${areaName} sold page ${pageNum} (attempt ${attempt}/2): ${err.message}`);
+        console.error(`  ✗ ${areaName} sold page ${pageNum} (attempt ${attempt}/${SOLD_MAX_PAGE_ATTEMPTS}): ${err.message}`);
+        if (attempt < SOLD_MAX_PAGE_ATTEMPTS) await sleep(1500);
       }
     }
     if (pageListings === null) break; // page failed after retries
