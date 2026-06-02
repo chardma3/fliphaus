@@ -33,6 +33,15 @@ General renovation indicators:
 - Old electrical outlets/switches
 - Original 60s/70s/80s interior untouched
 
+Scoring scale (use the FULL 1-10 range — do NOT cluster in the middle):
+- 1-2: Fully/newly renovated throughout — modern kitchen AND bathroom, move-in ready, no work needed.
+- 3-4: Mostly modern; only minor cosmetic updates (paint, small fixes).
+- 5-6: Partially dated; ONE of the kitchen or bathroom clearly needs renovation.
+- 7-8: Clearly dated; BOTH kitchen and bathroom need renovation, dated finishes throughout.
+- 9-10: Essentially original/untouched — e.g. an original Swedish kitchen (continuous steel sink-and-bench unit) AND an original bathroom (lino/blue tiles, old fixtures), dated throughout, needing a full gut renovation. This is maximum upside. Assign 9-10 whenever an apartment is genuinely untouched — do not shy away from the top of the scale.
+
+Calibrate to the scale above based on the evidence; an untouched original apartment should score 9 or 10, not be capped at 7-8.
+
 Coverage requirement:
 - The app relies on seeing at least one kitchen image and one bathroom image when available.
 - Include roomCoverage.kitchenVisible and roomCoverage.bathroomVisible.
