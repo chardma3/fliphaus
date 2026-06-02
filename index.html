@@ -211,6 +211,10 @@
         background: rgba(0,0,0,0.7); color: #aaa;
         backdrop-filter: blur(6px);
       }
+      /* Stale-listing signal: a listing sitting on the market a long time is
+         a flag (priced wrong / stuck), so escalate the days badge's colour. */
+      .days-badge.slow  { background: rgba(120,70,10,0.92); color: #ffd43b; }
+      .days-badge.stale { background: rgba(120,20,20,0.92); color: #ff8787; }
 
       .invest-calc {
         background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
@@ -529,7 +533,15 @@
           const isNew = listing.publishedAt && (Date.now() - new Date(listing.publishedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
           const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
           const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
-          const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
+          // Stale-listing signal. Stockholm flats normally sell in weeks, so a
+          // listing on the market for months is a flag worth surfacing.
+          const SLOW_DAYS = 180, STALE_DAYS = 365;
+          let daysCls = "", daysNote = "on market";
+          if (daysOnMarket != null && daysOnMarket >= STALE_DAYS) { daysCls = " stale"; daysNote = "on market · stale"; }
+          else if (daysOnMarket != null && daysOnMarket >= SLOW_DAYS) { daysCls = " slow"; daysNote = "on market · slow"; }
+          const daysBadgeHtml = daysOnMarket != null
+            ? `<div class="days-badge${daysCls}" title="On the market ${daysOnMarket} days${daysCls ? " — unusually long; may be mispriced or stuck" : ""}">${daysOnMarket}d ${daysNote}</div>`
+            : "";
           const badgeModel = listing.askingPriceNum ? formatProfitBadgeModel(listing) : null;
           const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
           const renoSummaryHtml = listing.renovationSummary
