@@ -200,9 +200,16 @@ app.get("/api/listings", async (req, res) => {
     };
 
     const sortParam = req.query.sort;
-    const sortOrder = sortParam === "renovation"
-      ? { renovationScore: -1, askingPriceNum: 1 }
-      : { askingPriceNum: 1 };
+    let sortOrder;
+    if (sortParam === "renovation") {
+      sortOrder = { renovationScore: -1, askingPriceNum: 1 };
+    } else if (sortParam === "score-newest") {
+      // Best renovation opportunity first; newest within the same score.
+      // Unscored listings (renovationScore null) sort last in descending order.
+      sortOrder = { renovationScore: -1, publishedAt: -1 };
+    } else {
+      sortOrder = { askingPriceNum: 1 };
+    }
 
     const filter = {
       status: { $nin: ["sold", "confirmed_sold"] },
