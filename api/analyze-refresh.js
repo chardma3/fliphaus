@@ -14,6 +14,9 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
 }
 
 function applyActiveAnalysisUpdate(analysis) {
+  const coverage = analysis.roomCoverage || {};
+  const kitchenPictured = coverage.kitchenVisible === true;
+  const bathroomPictured = coverage.bathroomVisible === true;
   return {
     renovationScore: analysis.renovationScore,
     renovationConfidence: analysis.confidence,
@@ -21,6 +24,9 @@ function applyActiveAnalysisUpdate(analysis) {
     renovationRooms: analysis.rooms,
     totalEstimatedCostSEK: analysis.totalEstimatedCostSEK,
     investmentPotential: analysis.investmentPotential,
+    kitchenPictured,
+    bathroomPictured,
+    imageCoverageComplete: kitchenPictured && bathroomPictured,
     analyzedAt: new Date(),
   };
 }
@@ -42,15 +48,35 @@ function conditionLabelFromScore(score) {
   return "partly_renovated";
 }
 
-async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate }) {
+async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate, hydrateGalleries = false }) {
   const { analyzeListingImages } = require("./analyze");
   const listings = await Model.find(query).sort({ lastSeenAt: -1, scrapedAt: -1, updatedAt: -1 }).limit(limit);
   let analyzed = 0;
   let skipped = 0;
   let failed = 0;
 
+  // The active feed scrape stores only ~5 search-card thumbnails, which often
+  // omit the kitchen/bathroom and cap the renovation score. For the listings
+  // we're about to analyse, fetch their full detail-page galleries first (one
+  // browser for the whole batch) so the analyser can actually see those rooms.
+  let galleries = {};
+  if (hydrateGalleries) {
+    const { fetchGalleries } = require("./listing-gallery");
+    const slugs = listings.map((l) => l.slug).filter(Boolean);
+    try {
+      galleries = await fetchGalleries(slugs);
+      const hit = Object.keys(galleries).length;
+      console.log(`  🖼  Hydrated full galleries for ${hit}/${slugs.length} listing(s)`);
+    } catch (err) {
+      console.error(`  ✗ Gallery hydration failed (continuing with stored images): ${err.message}`);
+    }
+  }
+
   for (const listing of listings) {
-    const images = listing.images || [];
+    const gallery = galleries[listing.slug];
+    const stored = listing.images || [];
+    // Prefer the richer of {hydrated gallery, stored images}.
+    const images = gallery && gallery.length > stored.length ? gallery : stored;
     if (!images.length) {
       skipped++;
       continue;
@@ -63,9 +89,13 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate 
         continue;
       }
 
-      await Model.findByIdAndUpdate(listing._id, buildUpdate(analysis));
+      const update = buildUpdate(analysis);
+      // Persist the fuller gallery so the feed and future runs benefit and we
+      // don't re-fetch it next time.
+      if (gallery && gallery.length > stored.length) update.images = gallery;
+      await Model.findByIdAndUpdate(listing._id, update);
       analyzed++;
-      console.log(`  ✓ Analysed ${listing.streetAddress || listing.hemnetId || listing.id}`);
+      console.log(`  ✓ Analysed ${listing.streetAddress || listing.hemnetId || listing.id} (${images.length} imgs)`);
     } catch (err) {
       failed++;
       console.error(`  ✗ Image analysis failed for ${listing.streetAddress || listing.hemnetId || listing.id}: ${err.message}`);
@@ -92,6 +122,7 @@ async function analyzeActiveListings(options = {}) {
       askingPrice: listing.askingPrice,
     }),
     buildUpdate: applyActiveAnalysisUpdate,
+    hydrateGalleries: true,
   });
 }
 

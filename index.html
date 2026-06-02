@@ -250,6 +250,12 @@
       .reno-summary.medium { border-left-color: #ffd43b; }
       .reno-summary.low    { border-left-color: #555; }
       .reno-cost { font-weight: 600; color: #ccc; }
+      .coverage-warn {
+        font-size: 0.74rem; color: #ffd43b; margin-bottom: 8px;
+        padding: 5px 10px; background: rgba(120,70,10,0.25); border-radius: 6px;
+        border-left: 3px solid #ffd43b;
+      }
+      .listing.rejected .coverage-warn { display: none; }
 
       /* Filter buttons */
       .filter-bar {
@@ -550,6 +556,14 @@
                 ${listing.totalEstimatedCostSEK ? `<br/><span class="reno-cost">Est. renovation: ${formatSEK(listing.totalEstimatedCostSEK)}</span>` : ""}
               </div>`
             : "";
+          const missingRoom = listing.renovationScore != null && listing.imageCoverageComplete === false
+            ? (listing.kitchenPictured === false && listing.bathroomPictured === false ? "Kitchen & bathroom"
+              : listing.bathroomPictured === false ? "Bathroom"
+              : listing.kitchenPictured === false ? "Kitchen" : null)
+            : null;
+          const coverageWarnHtml = missingRoom
+            ? `<div class="coverage-warn" title="A key room wasn't in the listing photos, so the renovation score is provisional.">⚠ ${missingRoom} not pictured — score provisional</div>`
+            : "";
           const brfIntel = listing.brfIntelligence;
           const arb = brfIntel?.renovationArbitrage;
           const brfIntelHtml = brfIntel ? `<div class="brf-intel">
@@ -596,6 +610,7 @@
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
               ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
               ${renoSummaryHtml}
+              ${coverageWarnHtml}
               ${brfIntelHtml}
               ${listing.renovationRooms?.length ? `
                 <button class="reno-detail-toggle" data-target="reno-${listing.id}">Show room-by-room breakdown ▾</button>
