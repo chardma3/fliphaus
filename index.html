@@ -722,7 +722,13 @@
         if (!value) return "unknown";
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString("sv-SE");
+        // Show the time too when the source carries one (lastSeenAt is a full
+        // timestamp; lastScrapeDate is date-only). Rendered in the viewer's
+        // local time.
+        const hasTime = typeof value === "string" && /[T\s]\d{2}:\d{2}/.test(value);
+        return hasTime
+          ? date.toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+          : date.toLocaleDateString("sv-SE");
       }
 
       async function loadScrapeHealth() {
@@ -748,7 +754,7 @@
 
       async function loadListings() {
         document.getElementById("stats").textContent = "Loading listings…";
-        const res = await fetch("/api/listings");
+        const res = await fetch("/api/listings?sort=score-newest");
         const data = await res.json();
         allListingsData = data;
         buildFilterBar(data.listings);
