@@ -17,6 +17,7 @@
 const mongoose = require("mongoose");
 const Listing = require("../api/listing.model");
 const { analyzeListingImages } = require("../api/analyze");
+const { fetchGalleries } = require("../api/listing-gallery");
 
 (async () => {
   const count = Number(process.argv[2]) || 5;
@@ -32,20 +33,27 @@ const { analyzeListingImages } = require("../api/analyze");
     .limit(count)
     .lean();
 
-  console.log(`Re-analysing ${listings.length} listing(s) on the current rubric — NO DB writes.\n`);
+  console.log(`Re-analysing ${listings.length} listing(s) on the FULL detail gallery — NO DB writes.\n`);
+
+  // Hydrate the full detail-page gallery (same path the analysis now uses), so
+  // we see the score with real kitchen/bathroom coverage rather than the ~5
+  // stored thumbnails.
+  const galleries = await fetchGalleries(listings.map((l) => l.slug).filter(Boolean));
 
   for (const l of listings) {
     const before = l.renovationScore;
-    const imgCount = (l.images || []).length;
+    const stored = (l.images || []).length;
+    const gallery = galleries[l.slug] || [];
+    const images = gallery.length > stored ? gallery : (l.images || []);
     try {
-      const r = await analyzeListingImages(l.images, {
+      const r = await analyzeListingImages(images, {
         size: l.size, rooms: l.rooms, askingPrice: l.askingPrice,
       });
       const after = r?.renovationScore ?? "(none)";
       const cov = r?.roomCoverage || {};
       console.log(
         `${(l.streetAddress || l.id).padEnd(28)} score ${before} -> ${after}  ` +
-          `| imgs=${imgCount} kitchen=${cov.kitchenVisible ?? "?"} bathroom=${cov.bathroomVisible ?? "?"}`
+          `| stored=${stored} gallery=${gallery.length} kitchen=${cov.kitchenVisible ?? "?"} bathroom=${cov.bathroomVisible ?? "?"}`
       );
       if (r?.summary) console.log(`    ${r.summary}`);
     } catch (err) {

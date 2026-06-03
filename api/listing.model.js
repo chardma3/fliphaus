@@ -51,6 +51,12 @@ const listingSchema = new mongoose.Schema({
   stambyteYear: { type: Number, default: null },
   stambyteStatus: { type: String, enum: ["done", "planned", "needed", "unknown", null], default: null },
   renovationRules: { type: String, default: null },
+  // Image coverage (set during analysis): whether the kitchen/bathroom were
+  // actually visible in the analysed photos. imageCoverageComplete is true only
+  // when both were seen — otherwise the renovation score is provisional.
+  kitchenPictured: { type: Boolean, default: null },
+  bathroomPictured: { type: Boolean, default: null },
+  imageCoverageComplete: { type: Boolean, default: null },
   // AI renovation analysis
   renovationScore: { type: Number, default: null },
   renovationConfidence: { type: Number, default: null },
