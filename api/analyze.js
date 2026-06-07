@@ -2,6 +2,13 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const client = new Anthropic();
 
+// Two-tier models. A cheap model triages every listing (room classification +
+// a coarse kitchen/bathroom condition read); the expensive model only runs the
+// full renovation score on listings that aren't gated out as already-modern.
+// Both are env-overridable for tuning without a redeploy.
+const TRIAGE_MODEL = process.env.TRIAGE_MODEL || "claude-haiku-4-5";
+const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || "claude-sonnet-4-6";
+
 const SYSTEM_PROMPT = `You are a Swedish apartment renovation analyst for FlipHaus, an investment platform that finds undervalued properties with renovation potential in Stockholm.
 
 Analyse the listing photos and return a JSON assessment. The business goal is to identify apartments where renovation creates upside, especially kitchens and bathrooms.
@@ -69,15 +76,23 @@ Respond with ONLY valid JSON, no markdown fences. Use this exact structure:
   "investmentPotential": "<high|medium|low>"
 }`;
 
-const ROOM_CLASSIFIER_PROMPT = `Classify each apartment listing photo by visible room type.
+const TRIAGE_PROMPT = `You are a fast triage pass for a Swedish apartment renovation analyser. For each listing photo, identify the visible room type(s) and, for kitchens and bathrooms only, a coarse condition read.
+
 Return ONLY valid JSON in this format:
 {
   "images": [
-    { "index": 0, "roomTypes": ["kitchen"], "confidence": 0.0 }
+    { "index": 0, "roomTypes": ["kitchen"], "condition": "renovated", "confidence": 0.0 }
   ]
 }
-Use roomTypes from: kitchen, bathroom, living, bedroom, hallway, exterior, floorplan, other.
-If a photo contains an open-plan kitchen/living space, include both kitchen and living.`;
+
+roomTypes (one or more): kitchen, bathroom, living, bedroom, hallway, exterior, floorplan, other. For an open-plan kitchen/living space include both kitchen and living.
+
+condition (set ONLY for photos containing a kitchen or bathroom; use null otherwise):
+- "renovated" — clearly modern and recently updated: integrated appliances, modern cabinet fronts and worktops, contemporary tiling/fixtures. A farmhouse/apron-front sink in an otherwise modern kitchen is renovated, not original.
+- "dated" — tired but not original: older finishes, partial updates.
+- "original" — clearly untouched: continuous stainless-steel sink-and-bench unit, lino/blue tiles, old fixtures.
+
+confidence is your 0.0-1.0 certainty in the condition. Be conservative: only use "renovated" with high confidence when the room is unambiguously modern. When unsure, prefer "dated" with a lower confidence.`;
 
 function parseJson(text) {
   try {
@@ -99,7 +114,11 @@ function uniqueByUrl(items) {
   });
 }
 
-async function classifyRooms(images) {
+// Stage 1 — cheap triage on TRIAGE_MODEL. Classifies every photo by room type
+// and, for kitchen/bathroom photos, reads a coarse condition. The result both
+// drives the gate (below) and feeds image selection for the expensive scoring
+// call, so the expensive model never re-does classification.
+async function triageRooms(images) {
   const classified = [];
   const batchSize = 12;
 
@@ -108,7 +127,7 @@ async function classifyRooms(images) {
     const content = [
       {
         type: "text",
-        text: `Classify these ${batch.length} listing photos. The first photo has index ${start}; return original indexes.`,
+        text: `Triage these ${batch.length} listing photos. The first photo has index ${start}; return original indexes.`,
       },
       ...batch.flatMap((url, offset) => ([
         { type: "text", text: `Image index ${start + offset}` },
@@ -117,9 +136,9 @@ async function classifyRooms(images) {
     ];
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: TRIAGE_MODEL,
       max_tokens: 900,
-      system: ROOM_CLASSIFIER_PROMPT,
+      system: TRIAGE_PROMPT,
       messages: [{ role: "user", content }],
     });
 
@@ -134,43 +153,84 @@ async function classifyRooms(images) {
   return classified;
 }
 
-async function selectImagesForAnalysis(images) {
+// A room is "modern" only when every classified photo of it reads as renovated
+// with high confidence. Any dated/original/low-confidence photo — or no photo
+// at all — leaves it not-modern, so the gate stays conservative.
+function roomIsModern(classified, room) {
+  const pics = classified.filter((c) => c.roomTypes?.includes(room) && c.condition);
+  if (!pics.length) return false;
+  return pics.every((c) => c.condition === "renovated" && (c.confidence ?? 0) >= 0.7);
+}
+
+// Gate out (skip the expensive score) only when triage is confident BOTH the
+// kitchen and bathroom are already modern — i.e. low renovation upside, which
+// is exactly the listing FlipHaus doesn't care about. Biased toward false
+// positives: when in doubt, the listing falls through to the full score.
+function triageGated(classified) {
+  return roomIsModern(classified, "kitchen") && roomIsModern(classified, "bathroom");
+}
+
+// Cheap stand-in result for a gated listing, shaped like a real analysis so the
+// downstream field mapping (renovationScore, roomCoverage, rooms…) is unchanged.
+function buildGatedAnalysis(images) {
+  const room = (type) => ({
+    type,
+    condition: "renovated",
+    indicators: ["appears already modernised (cheap triage pass — not deep-scored)"],
+    estimatedCostSEK: null,
+  });
+  return {
+    renovationScore: 2,
+    confidence: 0.6,
+    roomCoverage: {
+      kitchenVisible: true,
+      bathroomVisible: true,
+      analysedImageCount: 0,
+      totalImageCount: images.length,
+      selectionMethod: "triage-gated",
+    },
+    rooms: [room("kitchen"), room("bathroom")],
+    summary:
+      "Triage gate: kitchen and bathroom both appear already renovated, so renovation upside is low. Skipped full scoring to save cost — re-run a full analysis if this looks wrong.",
+    totalEstimatedCostSEK: 0,
+    investmentPotential: "low",
+    triageGated: true,
+  };
+}
+
+// Pick the images for the expensive scoring call from the (already computed)
+// triage classification — no model call here. Falls back to an evenly-spread
+// selection when classification is missing.
+function selectImagesForAnalysis(images, classified = null) {
   const maxAnalysisImages = 12;
 
   if (images.length <= maxAnalysisImages) {
-    return { selectedImages: images, coverageSource: "all", classified: null };
+    return { selectedImages: images, coverageSource: "all", classified };
   }
 
-  try {
-    const classified = await classifyRooms(images);
-    const kitchen = classified
-      .filter((img) => img.roomTypes?.includes("kitchen"))
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-      .slice(0, 4)
-      .map((img) => ({ url: images[img.index], reason: "kitchen" }));
-
-    const bathroom = classified
-      .filter((img) => img.roomTypes?.includes("bathroom"))
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-      .slice(0, 4)
-      .map((img) => ({ url: images[img.index], reason: "bathroom" }));
+  if (classified && classified.length) {
+    const pick = (room) =>
+      classified
+        .filter((img) => img.roomTypes?.includes(room))
+        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+        .slice(0, 4)
+        .map((img) => ({ url: images[img.index], reason: room }));
 
     const evenlySpaced = Array.from({ length: maxAnalysisImages }, (_, i) => {
       const index = Math.floor((i * images.length) / maxAnalysisImages);
       return { url: images[index], reason: "overview" };
     });
 
-    const selected = uniqueByUrl([...kitchen, ...bathroom, ...evenlySpaced])
+    const selected = uniqueByUrl([...pick("kitchen"), ...pick("bathroom"), ...evenlySpaced])
       .slice(0, maxAnalysisImages)
       .map((item) => item.url);
 
     return { selectedImages: selected, coverageSource: "room-classifier", classified };
-  } catch (err) {
-    console.error(`  ✗ Room classification failed, falling back to spread selection: ${err.message}`);
-    const step = images.length / maxAnalysisImages;
-    const selectedImages = Array.from({ length: maxAnalysisImages }, (_, i) => images[Math.floor(i * step)]);
-    return { selectedImages, coverageSource: "fallback-spread", classified: null };
   }
+
+  const step = images.length / maxAnalysisImages;
+  const selectedImages = Array.from({ length: maxAnalysisImages }, (_, i) => images[Math.floor(i * step)]);
+  return { selectedImages, coverageSource: "fallback-spread", classified: null };
 }
 
 async function analyzeListingImages(images, listingInfo = {}) {
@@ -178,7 +238,22 @@ async function analyzeListingImages(images, listingInfo = {}) {
     return null;
   }
 
-  const { selectedImages, coverageSource, classified } = await selectImagesForAnalysis(images);
+  // Stage 1 — cheap triage. On failure, fall through and score without a gate
+  // (never drop a listing because the cheap pass errored).
+  let classified = null;
+  try {
+    classified = await triageRooms(images);
+  } catch (err) {
+    console.error(`  ✗ Triage failed, scoring without gate: ${err.message}`);
+  }
+
+  // Gate: skip the expensive score when both wet rooms are already modern.
+  if (classified && triageGated(classified)) {
+    return buildGatedAnalysis(images);
+  }
+
+  // Stage 2 — full renovation score on the expensive model.
+  const { selectedImages, coverageSource } = selectImagesForAnalysis(images, classified);
 
   if (selectedImages.length === 0) {
     return null;
@@ -206,7 +281,7 @@ async function analyzeListingImages(images, listingInfo = {}) {
 
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: ANALYSIS_MODEL,
       max_tokens: 1400,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content }],
