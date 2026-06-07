@@ -19,8 +19,14 @@ test("active image analysis query only picks active listings with images needing
         { renovationScore: { $exists: false } },
         { analyzedAt: null },
         { analyzedAt: { $exists: false } },
-        // still thumbnail-only -> needs its full gallery hydrated + persisted
-        { "images.8": { $exists: false } },
+        // still thumbnail-only AND hydration not yet attempted -> pick it up
+        // once; the attempt stamp then keeps it from looping forever.
+        {
+          $and: [
+            { "images.8": { $exists: false } },
+            { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }] },
+          ],
+        },
       ],
     }
   );
