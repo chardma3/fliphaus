@@ -66,6 +66,12 @@ const listingSchema = new mongoose.Schema({
   investmentPotential: { type: String, enum: ["high", "medium", "low", null], default: null },
   brfIntelligence: { type: mongoose.Schema.Types.Mixed, default: null },
   analyzedAt: { type: Date, default: null },
+  // Set whenever an analysis run attempts to hydrate this listing's full
+  // detail-page gallery — success OR failure. Once set, the thumbnail-only
+  // re-pick stops selecting the listing, so a permanently un-hydratable page
+  // (e.g. a delisted listing whose detail page 404s / lacks __NEXT_DATA__)
+  // can't be re-analysed forever. Null = never attempted.
+  galleryHydrationAttemptedAt: { type: Date, default: null },
 });
 
 module.exports = mongoose.model("Listing", listingSchema);

@@ -16,16 +16,21 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
       query.$or.push({ analyzedAt: null }, { analyzedAt: { $exists: false } });
     }
     if (requireFullGallery) {
-      // Re-pick already-scored listings that are still on the thumbnail-only
-      // gallery, so a later run hydrates + persists their full detail-page
-      // gallery. Without this, a listing scored before gallery hydration
-      // existed (or one whose hydration failed) keeps a score/coverage derived
-      // from ~5 thumbnails and is skipped forever by the onlyMissing filter.
-      // Self-clearing: once the fuller gallery is stored the count exceeds the
-      // threshold and the listing drops back out, so it can't churn endlessly
-      // (unlike gating on imageCoverageComplete, which would re-analyse a
-      // genuinely room-incomplete gallery on every run).
-      query.$or.push({ [`images.${THUMBNAIL_GALLERY_MAX}`]: { $exists: false } });
+      // Re-pick already-scored listings still on the thumbnail-only gallery, so
+      // a later run hydrates + persists their full detail-page gallery — but
+      // ONLY if we haven't already attempted hydration. Without the attempt
+      // guard, a listing whose detail page can't be hydrated (delisted / no
+      // __NEXT_DATA__) never grows past the threshold and is re-picked every
+      // batch forever, so a drain loop never terminates. galleryHydrationAttemptedAt
+      // is stamped on every attempt (success or failure), so each listing is
+      // re-analysed at most once by this clause. Successful hydration also lifts
+      // the image count past the threshold, dropping it out the other way.
+      query.$or.push({
+        $and: [
+          { [`images.${THUMBNAIL_GALLERY_MAX}`]: { $exists: false } },
+          { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }] },
+        ],
+      });
     }
   }
   return query;
@@ -111,6 +116,9 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
       // Persist the fuller gallery so the feed and future runs benefit and we
       // don't re-fetch it next time.
       if (gallery && gallery.length > stored.length) update.images = gallery;
+      // Record that hydration was attempted (success or failure) so the
+      // thumbnail-only re-pick won't loop forever on an un-hydratable listing.
+      if (hydrateGalleries) update.galleryHydrationAttemptedAt = new Date();
       await Model.findByIdAndUpdate(listing._id, update);
       analyzed++;
       console.log(`  ✓ Analysed ${listing.streetAddress || listing.hemnetId || listing.id} (${images.length} imgs)`);
