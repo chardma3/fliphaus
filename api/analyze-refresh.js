@@ -1,4 +1,10 @@
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false } = {}) {
+// The active feed scrape stores only ~5 search-card thumbnails; a hydrated
+// detail-page gallery is far larger (commonly 20-50 images). A stored count at
+// or below this threshold means the listing is still thumbnail-only and hasn't
+// had its full gallery hydrated + persisted yet.
+const THUMBNAIL_GALLERY_MAX = 8;
+
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, requireFullGallery = false } = {}) {
   const query = { "images.0": { $exists: true } };
   if (status) query.status = status;
   if (onlyMissing) {
@@ -8,6 +14,18 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
     ];
     if (requireAnalyzedAt) {
       query.$or.push({ analyzedAt: null }, { analyzedAt: { $exists: false } });
+    }
+    if (requireFullGallery) {
+      // Re-pick already-scored listings that are still on the thumbnail-only
+      // gallery, so a later run hydrates + persists their full detail-page
+      // gallery. Without this, a listing scored before gallery hydration
+      // existed (or one whose hydration failed) keeps a score/coverage derived
+      // from ~5 thumbnails and is skipped forever by the onlyMissing filter.
+      // Self-clearing: once the fuller gallery is stored the count exceeds the
+      // threshold and the listing drops back out, so it can't churn endlessly
+      // (unlike gating on imageCoverageComplete, which would re-analyse a
+      // genuinely room-incomplete gallery on every run).
+      query.$or.push({ [`images.${THUMBNAIL_GALLERY_MAX}`]: { $exists: false } });
     }
   }
   return query;
@@ -114,7 +132,7 @@ async function analyzeActiveListings(options = {}) {
   const Listing = require("./listing.model");
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, requireFullGallery: true }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
