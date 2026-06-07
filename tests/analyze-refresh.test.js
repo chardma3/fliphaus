@@ -9,16 +9,31 @@ const {
 } = require("../api/analyze-refresh");
 
 test("active image analysis query only picks active listings with images needing analysis", () => {
-  assert.deepEqual(buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true }), {
-    "images.0": { $exists: true },
-    status: "active",
-    $or: [
-      { renovationScore: null },
-      { renovationScore: { $exists: false } },
-      { analyzedAt: null },
-      { analyzedAt: { $exists: false } },
-    ],
-  });
+  assert.deepEqual(
+    buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, requireFullGallery: true }),
+    {
+      "images.0": { $exists: true },
+      status: "active",
+      $or: [
+        { renovationScore: null },
+        { renovationScore: { $exists: false } },
+        { analyzedAt: null },
+        { analyzedAt: { $exists: false } },
+        // still thumbnail-only -> needs its full gallery hydrated + persisted
+        { "images.8": { $exists: false } },
+      ],
+    }
+  );
+});
+
+test("requireFullGallery is opt-in: omitting it leaves the gallery clause off", () => {
+  const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true });
+  assert.deepEqual(query.$or, [
+    { renovationScore: null },
+    { renovationScore: { $exists: false } },
+    { analyzedAt: null },
+    { analyzedAt: { $exists: false } },
+  ]);
 });
 
 test("sold image analysis query does not require analyzedAt because sold listings do not store it", () => {
