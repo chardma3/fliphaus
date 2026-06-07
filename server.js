@@ -23,9 +23,11 @@ const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
+const { buildVersionInfo } = require("./api/version");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const STARTED_AT = new Date().toISOString();
 
 app.use(express.json());
 
@@ -613,6 +615,11 @@ app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
     console.error("❌ Image analysis refresh error:", err);
     res.status(500).json({ error: "Image analysis failed", detail: err.message });
   }
+});
+
+// Build/version marker — confirm which commit is live after a deploy. No auth: non-secret.
+app.get("/api/version", (req, res) => {
+  res.json(buildVersionInfo(process.env, { startedAt: STARTED_AT, uptimeSeconds: process.uptime() }));
 });
 
 // Scrape health: tells the UI/operator whether active listings and market sales are stale.
