@@ -57,6 +57,10 @@ const listingSchema = new mongoose.Schema({
   kitchenPictured: { type: Boolean, default: null },
   bathroomPictured: { type: Boolean, default: null },
   imageCoverageComplete: { type: Boolean, default: null },
+  // True when the cheap triage pass gated this listing out as already-modern
+  // (both wet rooms confidently renovated) and skipped the full score — the
+  // score is a low-potential stand-in, not a deep analysis. Null = never analysed.
+  triageGated: { type: Boolean, default: null },
   // AI renovation analysis
   renovationScore: { type: Number, default: null },
   renovationConfidence: { type: Number, default: null },

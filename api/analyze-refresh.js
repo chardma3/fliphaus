@@ -50,6 +50,9 @@ function applyActiveAnalysisUpdate(analysis) {
     kitchenPictured,
     bathroomPictured,
     imageCoverageComplete: kitchenPictured && bathroomPictured,
+    // Record whether this score came from the cheap triage gate rather than a
+    // full analysis, so gated listings are filterable/auditable in the feed.
+    triageGated: analysis.triageGated === true,
     analyzedAt: new Date(),
   };
 }
