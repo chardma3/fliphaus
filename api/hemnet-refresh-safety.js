@@ -53,6 +53,21 @@ function planDisappearanceReconciliation({ scrapedAreas = [], failedAreas = [] }
   };
 }
 
+// Safety net for the partial-scrape guard. Per-run reconciliation is skipped
+// whenever any area fails (common with a flaky proxy), so a genuinely-removed
+// listing can sit at status "active" indefinitely. This catches listings we
+// haven't seen in a long time regardless of partial scrapes: active, not seen
+// this run, and either long-unseen or never stamped. Self-correcting — a real
+// listing in a temporarily-failing area is re-marked active by the next
+// successful upsert.
+function buildStaleListingQuery({ currentIds = [], cutoff } = {}) {
+  return {
+    status: "active",
+    id: { $nin: currentIds },
+    $or: [{ lastSeenAt: { $lt: cutoff } }, { lastSeenAt: null }],
+  };
+}
+
 function resolveSoldScrapeTargets({ area } = {}) {
   if (!area) {
     return Object.entries(LOCATION_IDS).map(([areaName, locationId]) => ({ area: areaName, locationId }));
@@ -75,6 +90,7 @@ module.exports = {
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
   planDisappearanceReconciliation,
+  buildStaleListingQuery,
   resolveSoldScrapeTargets,
   isHemnetSafetyError,
 };

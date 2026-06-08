@@ -7,8 +7,18 @@ const {
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
   planDisappearanceReconciliation,
+  buildStaleListingQuery,
   resolveSoldScrapeTargets,
 } = require("../api/hemnet-refresh-safety");
+
+test("stale-listing query targets only long-unseen active listings not seen this run", () => {
+  const cutoff = new Date("2026-05-25T00:00:00.000Z");
+  assert.deepEqual(buildStaleListingQuery({ currentIds: ["a", "b"], cutoff }), {
+    status: "active",
+    id: { $nin: ["a", "b"] },
+    $or: [{ lastSeenAt: { $lt: cutoff } }, { lastSeenAt: null }],
+  });
+});
 
 test("Hemnet bot protection pages fail clearly instead of looking like zero listings", () => {
   assert.throws(
