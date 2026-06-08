@@ -24,6 +24,7 @@ const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
+const { buildActiveFeedFilter } = require("./api/listings-query");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -213,17 +214,12 @@ app.get("/api/listings", async (req, res) => {
       sortOrder = { askingPriceNum: 1 };
     }
 
-    const filter = {
-      // Only currently-available listings. Anything that left Hemnet — sold,
-      // confirmed_sold, or disappeared/removed/unknown — is no longer buyable
-      // and must not clutter the feed (the sold view handles those separately).
-      status: "active",
-      askingPriceNum: { $lte: settings.maxPrice },
-      locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
-    };
-    if (sortParam === "renovation") {
-      filter.renovationScore = { $ne: null };
-    }
+    // Active, in-budget listings, split into the dashboard "deals" (strong
+    // flips + pending) and the "moveinready" browse view. Only currently-
+    // available listings are returned; anything that left Hemnet is handled by
+    // the sold view. See api/listings-query.js.
+    const view = req.query.view === "moveinready" ? "moveinready" : "deals";
+    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder);
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
