@@ -170,6 +170,21 @@ The scraper must fail loudly rather than silently corrupting data:
 - If the active-listing scrape produces zero listings, FlipHaus refuses to persist the result. This prevents a blocked scrape from marking existing active listings as `disappeared`.
 - Missing active listings are marked `disappeared`, not `sold`. They become `confirmed_sold` only after `/api/reconcile-sold` finds a strong sold-listing match.
 
+### Scrape resilience (retry + rotation)
+
+The residential proxy pool is mixed: some exits are datacenter IPs that Hemnet blocks with Cloudflare bot-protection, and the provider can't guarantee a residential IP per request. The scraper therefore retries each area up to `SCRAPE_MAX_AREA_ATTEMPTS` times (default 6), and because every request draws a fresh proxy exit, a block is usually cleared by simply retrying until a residential IP is drawn. So a transient datacenter-exit block is self-healing — it is **not** a persistent failure. An area only lands in `failedAreas` if it is still blocked after all attempts.
+
+### Listing lifecycle and why disappeared listings are kept, not deleted
+
+```
+active ──(absent from a complete scrape)──▶ disappeared ──(matches a slutpris)──▶ confirmed_sold
+```
+
+- The active feed (`/api/listings`) returns **only `status: "active"`**. A listing that left Hemnet (`disappeared`/`removed`/`sold`/`confirmed_sold`) is hidden from the buyable feed — but **retained in the database, not deleted**.
+- Retention is deliberate: `disappeared` listings are the input to `/api/reconcile-sold`, which matches them to scraped final-sale prices and promotes them to `confirmed_sold`. The `/api/sold` page is built from `confirmed_sold`/`sold` listings. So a removed listing we scored becomes the record of *what it actually sold for* — the evidence that validates our renovation-upside calls. Deleting on disappearance would break that learning loop and the sold view. (A hard purge, if ever wanted, belongs in a later retention job after a listing has been `confirmed_sold` and aged out — never at the moment it disappears.)
+- **Disappearance detection is twofold.** Per-run reconciliation (mark anything absent this run as `disappeared`) runs only after a *complete* scrape — if any area failed, it is skipped to avoid falsely marking the unseen area's listings as gone. Because a complete scrape isn't guaranteed, a **staleness safety net** also marks any `active` listing unseen for more than `DISAPPEARED_AFTER_DAYS` (default 14) as `disappeared`, regardless of partial scrapes. It is self-correcting: a real listing in a temporarily-failing area is re-marked `active` by the next successful scrape.
+- **Same street address is expected, not a duplicate.** A building can hold dozens of apartments at one address. Listings are de-duplicated by Hemnet listing `id` only (never by address), so every distinct apartment is kept. A re-listed apartment gets a new Hemnet `id`; the old `id` becomes `disappeared` and the new one is `active`.
+
 ### Operational checks
 
 Use `/api/scrape-health` to inspect:
