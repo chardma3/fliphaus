@@ -216,6 +216,17 @@
       .days-badge.slow  { background: rgba(120,70,10,0.92); color: #ffd43b; }
       .days-badge.stale { background: rgba(120,20,20,0.92); color: #ff8787; }
 
+      /* Triage-gated signal: the cheap first pass judged both wet rooms already
+         renovated and skipped full scoring, so the score is a low-potential
+         stand-in rather than a deep analysis. */
+      .gated-badge {
+        position: absolute; bottom: 10px; left: 10px; z-index: 3;
+        padding: 4px 10px; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 600;
+        background: rgba(45,45,70,0.88); color: #9aa7c7;
+        backdrop-filter: blur(6px);
+      }
+
       .invest-calc {
         background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
         border-left: 3px solid #69db7c;
@@ -445,6 +456,13 @@
         return Math.round(n / 1000) + "K kr";
       }
 
+      // A listing was gated by the cheap triage pass if the flag says so (set on
+      // listings analysed after the flag shipped) or, for older scores, if its
+      // summary carries the triage-gate stand-in text.
+      function isGated(l) {
+        return l.triageGated === true || (l.renovationSummary || "").startsWith("Triage gate:");
+      }
+
       function buildFilterBar(listings) {
         const bar = document.getElementById("reno-filters");
         const scores = new Set();
@@ -455,36 +473,35 @@
         bar.style.display = "flex";
         bar.innerHTML = "";
 
-        const allBtn = document.createElement("button");
-        allBtn.className = "filter-btn active";
-        allBtn.textContent = "All";
-        allBtn.addEventListener("click", () => applyFilter(null));
-        bar.appendChild(allBtn);
-
-        sorted.forEach(score => {
+        const addBtn = (label, filter, active = false, title = "") => {
           const btn = document.createElement("button");
-          btn.className = "filter-btn";
-          const cls = renoClass(score);
-          btn.textContent = `${score}/10`;
-          btn.addEventListener("click", () => applyFilter(score));
+          btn.className = `filter-btn${active ? " active" : ""}`;
+          btn.textContent = label;
+          btn.dataset.filter = String(filter);
+          if (title) btn.title = title;
+          btn.addEventListener("click", () => applyFilter(filter));
           bar.appendChild(btn);
-        });
+        };
+
+        addBtn("All", "all", true);
+        sorted.forEach(score => addBtn(`${score}/10`, score));
+
+        const gatedCount = listings.filter(isGated).length;
+        if (gatedCount > 0) {
+          addBtn(`⚡ Triage-only (${gatedCount})`, "gated", false,
+            "Listings the cheap triage pass gated out as already-renovated — full scoring skipped, low renovation upside.");
+        }
       }
 
-      function applyFilter(score) {
-        activeFilter = score;
-        const btns = document.querySelectorAll(".filter-btn");
-        btns.forEach((btn, i) => {
-          if (score === null) {
-            btn.classList.toggle("active", i === 0);
-          } else {
-            btn.classList.toggle("active", btn.textContent === `${score}/10`);
-          }
+      function applyFilter(filter) {
+        activeFilter = filter;
+        document.querySelectorAll(".filter-btn").forEach(btn => {
+          btn.classList.toggle("active", btn.dataset.filter === String(filter));
         });
 
-        const filtered = score === null
-          ? allListingsData.listings
-          : allListingsData.listings.filter(l => l.renovationScore === score);
+        let filtered = allListingsData.listings;
+        if (filter === "gated") filtered = filtered.filter(isGated);
+        else if (filter !== "all" && filter !== null) filtered = filtered.filter(l => l.renovationScore === filter);
 
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
@@ -550,6 +567,9 @@
             : "";
           const badgeModel = listing.askingPriceNum ? formatProfitBadgeModel(listing) : null;
           const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
+          const gatedBadgeHtml = isGated(listing)
+            ? `<div class="gated-badge" title="Gated by the cheap triage pass — kitchen & bathroom looked already renovated, so full scoring was skipped. Low renovation upside.">⚡ triage only</div>`
+            : "";
           const renoSummaryHtml = listing.renovationSummary
             ? `<div class="reno-summary ${renoCls}">
                 ${listing.renovationSummary}
@@ -585,6 +605,7 @@
               ${newBadgeHtml}
               ${profitBadgeHtml}
               ${daysBadgeHtml}
+              ${gatedBadgeHtml}
             </div>
             <div class="listing-body">
               <div class="listing-header">
