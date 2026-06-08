@@ -1,7 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
-const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, planDisappearanceReconciliation, isHemnetSafetyError } = require("./hemnet-refresh-safety");
+const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, planDisappearanceReconciliation, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions } = require("./scrape-options");
 
@@ -286,9 +286,24 @@ module.exports = async (options = {}) => {
     { status: "active", lastSeenAt: new Date(), soldStatusConfidence: null, disappearedAt: null }
   );
 
+  // Staleness safety net. The per-run reconciliation above is skipped on a
+  // partial scrape, so a removed listing in an unseen area can sit at "active"
+  // for months. Independently of that guard, mark any active listing we haven't
+  // seen in a long time as disappeared. Live listings are re-seen every run so
+  // never go stale; a false positive (a real listing in a long-failing area) is
+  // re-marked active by the next successful upsert.
+  const STALE_DAYS = Math.max(1, Number(process.env.DISAPPEARED_AFTER_DAYS) || 14);
+  const staleResult = await Listing.updateMany(
+    buildStaleListingQuery({ currentIds, cutoff: new Date(Date.now() - STALE_DAYS * 86400000) }),
+    { status: "disappeared", disappearedAt: new Date(), soldStatusConfidence: "unconfirmed" }
+  );
+  const staleDisappeared = staleResult.modifiedCount || 0;
+  if (staleDisappeared) console.log(`  🧹 Marked ${staleDisappeared} stale listing(s) unseen >${STALE_DAYS}d as disappeared`);
+
   return {
     total: unique.length,
     disappeared: disappearedCount,
+    staleDisappeared,
     scrapeDate,
     partial: plan.partial,
     scrapedAreas,

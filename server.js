@@ -214,7 +214,10 @@ app.get("/api/listings", async (req, res) => {
     }
 
     const filter = {
-      status: { $nin: ["sold", "confirmed_sold"] },
+      // Only currently-available listings. Anything that left Hemnet — sold,
+      // confirmed_sold, or disappeared/removed/unknown — is no longer buyable
+      // and must not clutter the feed (the sold view handles those separately).
+      status: "active",
       askingPriceNum: { $lte: settings.maxPrice },
       locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
     };
