@@ -69,6 +69,21 @@ test("analysis update maps model response to active listing fields", () => {
   assert.equal(update.totalEstimatedCostSEK, 350000);
   assert.equal(update.investmentPotential, "high");
   assert.ok(update.analyzedAt instanceof Date);
+  // A full (non-gated) analysis records triageGated: false, never null/undefined.
+  assert.equal(update.triageGated, false);
+});
+
+test("analysis update records triageGated when the triage gate fired", () => {
+  const update = applyActiveAnalysisUpdate({
+    renovationScore: 2,
+    investmentPotential: "low",
+    summary: "Triage gate: kitchen and bathroom both appear already renovated.",
+    triageGated: true,
+  });
+
+  assert.equal(update.triageGated, true);
+  assert.equal(update.renovationScore, 2);
+  assert.equal(update.investmentPotential, "low");
 });
 
 test("sold analysis update sets condition label from score", () => {
