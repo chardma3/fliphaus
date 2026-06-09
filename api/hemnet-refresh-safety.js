@@ -1,6 +1,17 @@
 const LOCATION_IDS = {
   Rissne: 473493,
   Farsta: 925962,
+  // 8-area expansion (2026-06). Metro-connected, renovation-stock areas; dropped
+  // Sollentuna (pendel-only) and Blackeberg/Hökarängen (already hot / covered by
+  // Farsta's node). IDs resolved from hemnet.se location search.
+  Kista: 925951,
+  Bagarmossen: 473340,
+  Skarpnäck: 941046,
+  Johanneshov: 473376,
+  Bromma: 898740,
+  Enskede: 925961,
+  Solna: 18028,
+  Årsta: 473440,
 };
 
 function includesAny(value, patterns) {

@@ -81,7 +81,8 @@ The workflow uses `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub sec
 1. `/api/scrape` refreshes active dashboard listings.
 2. `/api/scrape-sold?area=Rissne&detailLimit=20` refreshes Rissne sold comparable properties.
 3. `/api/scrape-sold?area=Farsta&detailLimit=20` refreshes Farsta sold comparable properties.
-4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
+4. A looped step refreshes sold comparables for the expansion areas (Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Enskede, Solna, Årsta), tolerating per-area blocks.
+5. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
 
 The sold scrape is intentionally split by area and capped at 20 detail pages per request. This keeps each HTTP request shorter and reduces the chance of Render/GitHub/Cloudflare timeouts. Add more area-specific workflow steps if more areas are added to `api/hemnet-refresh-safety.js`.
 

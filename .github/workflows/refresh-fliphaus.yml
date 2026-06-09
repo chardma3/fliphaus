@@ -45,6 +45,28 @@ jobs:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
+      - name: Refresh expansion-area sold comparable properties
+        # The 8 areas added to LOCATION_IDS in 2026-06. Looped (not 8 separate
+        # steps) to keep the workflow compact; --data-urlencode encodes the
+        # non-ASCII names (Skarpnäck, Årsta). A blocked area is logged and
+        # skipped so one failure doesn't drop the others.
+        continue-on-error: true
+        run: |
+          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Enskede Solna Årsta; do
+            echo "→ sold scrape: $area"
+            curl --fail-with-body -sS -G --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 \
+              -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+              --data-urlencode "area=$area" \
+              --data-urlencode "detailLimit=5" \
+              --data-urlencode "includeDetails=false" \
+              --data-urlencode "includeAnalysis=false" \
+              "$FLIPHAUS_REFRESH_URL/api/scrape-sold" \
+              || echo "  ✗ $area sold scrape failed (continuing)"
+          done
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
+
       - name: Analyse scraped listing images
         continue-on-error: true
         run: |
