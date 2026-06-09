@@ -407,7 +407,6 @@
       <div id="profit-filters" class="filter-bar">
         <button class="filter-btn active" id="filter-all">All</button>
         <button class="filter-btn" id="filter-profitable">Preliminary profitable</button>
-        <button class="filter-btn" id="filter-unprofitable">Unprofitable</button>
       </div>
       <div id="stats"></div>
       <div id="feed"></div>
@@ -816,6 +815,17 @@
         document.getElementById("stats").textContent = "Loading listings…";
         const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
         const data = await res.json();
+        // Deals is for profitable flips — drop the ones our investment math
+        // confidently shows lose money. Only the "unprofitable" classification
+        // qualifies (a real candidate with good sold-comp evidence and profit
+        // <= 0); listings without enough comps (new areas, pending) classify as
+        // insufficient-data/preliminary and are kept, so deals aren't hidden
+        // before their benchmarks exist. They re-enter automatically if the
+        // price drops enough to turn profitable.
+        if (currentView === "deals") {
+          data.listings = data.listings.filter(l => calcInvestment(l).classification !== "unprofitable");
+          data.total = data.listings.length;
+        }
         allListingsData = data;
         // Profitability only makes sense for renovation deals — Move-in ready
         // listings aren't flips, so hide the profit filter there.
@@ -851,17 +861,11 @@
             if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return false;
             return calcInvestment(l).profit > 0;
           }), "desc", calcInvestment);
-        } else if (filter === "unprofitable") {
-          filtered = sortListingsByProfit(filtered.filter(l => {
-            if (!l.askingPriceNum || !l.totalEstimatedCostSEK) return true;
-            return calcInvestment(l).profit <= 0;
-          }), "desc", calcInvestment);
         }
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
       document.getElementById("filter-all").addEventListener("click", () => applyProfitFilter("all"));
       document.getElementById("filter-profitable").addEventListener("click", () => applyProfitFilter("profitable"));
-      document.getElementById("filter-unprofitable").addEventListener("click", () => applyProfitFilter("unprofitable"));
 
       async function init() {
         const res = await fetch("/api/me");
