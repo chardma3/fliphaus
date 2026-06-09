@@ -4,14 +4,12 @@
 const DEAL_MIN_SCORE = 7;
 const EXCLUDED_LOCATIONS = /husby|rinkeby|vällingby|akalla/i;
 
-// The active dashboard splits into two views:
-//   deals       — strong renovation flips (score >= DEAL_MIN_SCORE), PLUS
-//                 not-yet-scored listings (null) so a newly scraped listing
-//                 isn't hidden while it waits for the next analysis run.
+// The active dashboard splits into two views, both scored-only:
+//   deals       — strong renovation flips (score >= DEAL_MIN_SCORE).
 //   moveinready — everything else that's been scored (1..DEAL_MIN_SCORE-1):
-//                 already-renovated 1-3 plus partial-reno 4-6. For browsing what
-//                 is available and at what price, off the main deal view.
-// Unscored listings appear only in "deals" (as pending), never in moveinready.
+//                 already-renovated 1-3 plus partial-reno 4-6, for browsing.
+// Unscored/pending listings appear in NEITHER view — they show up once analysed,
+// so a backlog of freshly-scraped listings can't flood the dashboard.
 function buildActiveFeedFilter({ view = "deals", maxPrice, dealMinScore = DEAL_MIN_SCORE } = {}) {
   const filter = {
     status: "active",
@@ -19,14 +17,9 @@ function buildActiveFeedFilter({ view = "deals", maxPrice, dealMinScore = DEAL_M
   };
   if (maxPrice != null) filter.askingPriceNum = { $lte: maxPrice };
 
-  if (view === "moveinready") {
-    filter.renovationScore = { $gte: 1, $lte: dealMinScore - 1 };
-  } else {
-    filter.$or = [
-      { renovationScore: { $gte: dealMinScore } },
-      { renovationScore: null },
-    ];
-  }
+  filter.renovationScore = view === "moveinready"
+    ? { $gte: 1, $lte: dealMinScore - 1 }
+    : { $gte: dealMinScore };
   return filter;
 }
 
