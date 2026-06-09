@@ -501,12 +501,9 @@
 
         addBtn("All", "all", true);
         sorted.forEach(score => addBtn(`${score}/10`, score));
-
-        const gatedCount = listings.filter(isGated).length;
-        if (gatedCount > 0) {
-          addBtn(`⚡ Triage-only (${gatedCount})`, "gated", false,
-            "Listings the cheap triage pass gated out as already-renovated — full scoring skipped, low renovation upside.");
-        }
+        // No separate "triage-only" filter: gated listings are scored 2, so they
+        // already live under the 2/10 filter (and carry the ⚡ badge). A separate
+        // filter just duplicated them.
       }
 
       function applyFilter(filter) {
@@ -516,8 +513,7 @@
         });
 
         let filtered = allListingsData.listings;
-        if (filter === "gated") filtered = filtered.filter(isGated);
-        else if (filter !== "all" && filter !== null) filtered = filtered.filter(l => l.renovationScore === filter);
+        if (filter !== "all" && filter !== null) filtered = filtered.filter(l => l.renovationScore === filter);
 
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
@@ -821,6 +817,9 @@
         const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
         const data = await res.json();
         allListingsData = data;
+        // Profitability only makes sense for renovation deals — Move-in ready
+        // listings aren't flips, so hide the profit filter there.
+        document.getElementById("profit-filters").style.display = currentView === "deals" ? "flex" : "none";
         buildFilterBar(data.listings);
         renderListings(data);
       }
