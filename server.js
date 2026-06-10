@@ -100,11 +100,14 @@ function requireRefreshToken(req, res, next) {
 }
 
 function listingWithBrfIntelligence(listing, soldListings) {
+  // buildBrfIntelligence only reads fields off each sold listing, so there's no
+  // need to clone the (shared) sold array on every call — that was O(listings ×
+  // sold) deep-clones per request and made the move-in-ready feed time out.
+  // Callers pass .lean() results, so `listing` is already a plain object.
   const lo = typeof listing.toObject === "function" ? listing.toObject() : listing;
-  const sold = soldListings.map((l) => (typeof l.toObject === "function" ? l.toObject() : l));
   return {
     ...lo,
-    brfIntelligence: buildBrfIntelligence(lo, sold),
+    brfIntelligence: buildBrfIntelligence(lo, soldListings),
   };
 }
 
@@ -221,8 +224,8 @@ app.get("/api/listings", async (req, res) => {
     const view = req.query.view === "moveinready" ? "moveinready" : "deals";
     const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice });
 
-    const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder);
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
+    const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
 
     const preferences = req.user ? await Preference.find({ userId: req.user.id }) : [];
     const prefMap = {};
@@ -240,10 +243,10 @@ app.get("/api/listings", async (req, res) => {
 // BRF intelligence for one listing: BRF health + renovated-vs-unrenovated similar sold properties
 app.get("/api/listings/:listingId/brf-intelligence", async (req, res) => {
   try {
-    const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 });
+    const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 }).lean();
     if (!listing) return res.status(404).json({ error: "Listing not found" });
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
-    res.json({ brfIntelligence: buildBrfIntelligence(listing.toObject(), soldListings.map((l) => l.toObject())) });
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    res.json({ brfIntelligence: buildBrfIntelligence(listing, soldListings) });
   } catch (err) {
     res.status(500).json({ error: "Failed to build BRF intelligence" });
   }
@@ -273,8 +276,8 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
   try {
     const prefs = await Preference.find({ userId: req.user.id, status: "saved" });
     const ids = prefs.map((p) => p.listingId);
-    const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 });
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
+    const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 }).lean();
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
     res.json({ total: listings.length, listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldListings), "saved")) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch favorites" });
@@ -477,8 +480,8 @@ app.get("/api/invest/listings", async (req, res) => {
     const listingIds = [...new Set(accepted.map((a) => a.listingId))];
     if (!listingIds.length) return res.json({ listings: [] });
 
-    const listings = await Listing.find({ id: { $in: listingIds } }, { __v: 0 });
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
+    const listings = await Listing.find({ id: { $in: listingIds } }, { __v: 0 }).lean();
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
     const proposals = await Proposal.find({ listingId: { $in: listingIds } });
     const proposalMap = {};
     for (const p of proposals) {
@@ -523,7 +526,7 @@ app.get("/api/invest/listings", async (req, res) => {
 // Get single listing detail for investor view
 app.get("/api/invest/listing/:listingId", async (req, res) => {
   try {
-    const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 });
+    const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 }).lean();
     if (!listing) return res.status(404).json({ error: "Listing not found" });
 
     const assignment = await Assignment.findOne({ listingId: req.params.listingId, status: "accepted" });
@@ -531,7 +534,7 @@ app.get("/api/invest/listing/:listingId", async (req, res) => {
     const builder = assignment ? await Builder.findById(assignment.builderId, "name company") : null;
 
     const investments = await Investment.find({ listingId: req.params.listingId }).populate("userId", "name");
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 });
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
     const lo = listingWithBrfIntelligence(listing, soldListings);
     const deposit = Math.round((lo.askingPriceNum || 0) * 0.15);
     const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
