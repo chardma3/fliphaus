@@ -14,6 +14,10 @@ const LOCATION_IDS = {
   Årsta: 473440,
 };
 
+// The active areas, as plain names. Single source of truth for the user/feed
+// default area selection so it can't drift away from what we actually scrape.
+const AREA_NAMES = Object.keys(LOCATION_IDS);
+
 function includesAny(value, patterns) {
   return patterns.some((pattern) => pattern.test(value));
 }
@@ -98,6 +102,7 @@ function isHemnetSafetyError(error) {
 
 module.exports = {
   LOCATION_IDS,
+  AREA_NAMES,
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
   planDisappearanceReconciliation,
