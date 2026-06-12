@@ -116,12 +116,24 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
       }
 
       const update = buildUpdate(analysis);
-      // Persist the fuller gallery so the feed and future runs benefit and we
-      // don't re-fetch it next time.
-      if (gallery && gallery.length > stored.length) update.images = gallery;
-      // Record that hydration was attempted (success or failure) so the
-      // thumbnail-only re-pick won't loop forever on an un-hydratable listing.
-      if (hydrateGalleries) update.galleryHydrationAttemptedAt = new Date();
+      if (hydrateGalleries) {
+        // Persist only the curated set the analyser picked (wet-rooms-first,
+        // capped at MAX_DISPLAY_IMAGES) rather than the full hydrated gallery,
+        // so the feed shows a consistent ~6 relevant photos incl. kitchen +
+        // bathroom instead of anywhere from 5 (thumbnail-only) to 50 (fully
+        // hydrated) depending on pipeline luck. Fall back to the richer gallery
+        // only if curation produced nothing.
+        if (analysis.displayImages && analysis.displayImages.length) {
+          update.images = analysis.displayImages;
+        } else if (gallery && gallery.length > stored.length) {
+          update.images = gallery;
+        }
+        // Record that hydration was attempted (success or failure) so the
+        // thumbnail-only re-pick won't loop forever on an un-hydratable listing.
+        // (The curated set is intentionally small, so image count is no longer a
+        // hydration signal — this stamp is.)
+        update.galleryHydrationAttemptedAt = new Date();
+      }
       await Model.findByIdAndUpdate(listing._id, update);
       analyzed++;
       console.log(`  ✓ Analysed ${listing.streetAddress || listing.hemnetId || listing.id} (${images.length} imgs)`);
