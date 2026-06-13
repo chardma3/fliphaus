@@ -1,10 +1,14 @@
-// The active feed scrape stores only ~5 search-card thumbnails; a hydrated
-// detail-page gallery is far larger (commonly 20-50 images). A stored count at
-// or below this threshold means the listing is still thumbnail-only and hasn't
-// had its full gallery hydrated + persisted yet.
-const THUMBNAIL_GALLERY_MAX = 8;
+// Self-heal bounds. A listing whose gallery hydration failed (so its photos are
+// missing the kitchen/bathroom) is retried on later runs — but at most
+// MAX_HYDRATION_ATTEMPTS times, and no more than once per HYDRATION_RETRY_COOLDOWN.
+// The cooldown means a single drain loop still terminates (a just-attempted
+// listing is excluded until the cooldown passes), while a flaky hydration heals
+// on the next scheduled run and a genuinely un-hydratable / photo-poor listing
+// eventually stops. Both env-overridable.
+const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
+const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, requireFullGallery = false } = {}) {
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null } = {}) {
   const query = { "images.0": { $exists: true } };
   if (status) query.status = status;
   if (onlyMissing) {
@@ -15,20 +19,20 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
     if (requireAnalyzedAt) {
       query.$or.push({ analyzedAt: null }, { analyzedAt: { $exists: false } });
     }
-    if (requireFullGallery) {
-      // Re-pick already-scored listings still on the thumbnail-only gallery, so
-      // a later run hydrates + persists their full detail-page gallery — but
-      // ONLY if we haven't already attempted hydration. Without the attempt
-      // guard, a listing whose detail page can't be hydrated (delisted / no
-      // __NEXT_DATA__) never grows past the threshold and is re-picked every
-      // batch forever, so a drain loop never terminates. galleryHydrationAttemptedAt
-      // is stamped on every attempt (success or failure), so each listing is
-      // re-analysed at most once by this clause. Successful hydration also lifts
-      // the image count past the threshold, dropping it out the other way.
+    if (hydrationRetry) {
+      // Self-heal: re-pick already-scored listings whose photos are missing a
+      // wet room (kitchen or bathroom) — i.e. hydration failed and they're stuck
+      // on Hemnet's thumbnails, which omit the bathroom — so a later run
+      // re-fetches the full gallery and re-analyses them. Bounded so it can't
+      // loop: at most maxAttempts tries total, and not again until the cooldown
+      // has passed (cutoff). Coverage (not image count) is the signal, because a
+      // successfully-hydrated listing is deliberately stored as a small curated
+      // set, so image count no longer indicates "needs hydration".
       query.$or.push({
         $and: [
-          { [`images.${THUMBNAIL_GALLERY_MAX}`]: { $exists: false } },
-          { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }] },
+          { $or: [{ kitchenPictured: false }, { bathroomPictured: false }] },
+          { $or: [{ galleryHydrationAttempts: { $lt: hydrationRetry.maxAttempts } }, { galleryHydrationAttempts: { $exists: false } }] },
+          { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }, { galleryHydrationAttemptedAt: { $lte: hydrationRetry.cutoff } }] },
         ],
       });
     }
@@ -128,11 +132,12 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
         } else if (gallery && gallery.length > stored.length) {
           update.images = gallery;
         }
-        // Record that hydration was attempted (success or failure) so the
-        // thumbnail-only re-pick won't loop forever on an un-hydratable listing.
-        // (The curated set is intentionally small, so image count is no longer a
-        // hydration signal — this stamp is.)
+        // Record the attempt (success or failure) and bump the attempt count, so
+        // the self-heal re-pick spaces out retries and eventually stops on an
+        // un-hydratable listing. Coverage (kitchen/bathroom) — written by
+        // buildUpdate above — is what tells a healed listing from a stuck one.
         update.galleryHydrationAttemptedAt = new Date();
+        update.galleryHydrationAttempts = (listing.galleryHydrationAttempts || 0) + 1;
       }
       await Model.findByIdAndUpdate(listing._id, update);
       analyzed++;
@@ -153,9 +158,13 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
 
 async function analyzeActiveListings(options = {}) {
   const Listing = require("./listing.model");
+  const hydrationRetry = {
+    maxAttempts: MAX_HYDRATION_ATTEMPTS,
+    cutoff: new Date(Date.now() - HYDRATION_RETRY_COOLDOWN_MS),
+  };
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, requireFullGallery: true }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
