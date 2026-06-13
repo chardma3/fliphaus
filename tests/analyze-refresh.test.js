@@ -8,9 +8,10 @@ const {
   conditionLabelFromScore,
 } = require("../api/analyze-refresh");
 
-test("active image analysis query only picks active listings with images needing analysis", () => {
+test("active image analysis query self-heals incomplete-coverage listings, bounded by attempts and cooldown", () => {
+  const cutoff = new Date("2026-06-01T00:00:00.000Z");
   assert.deepEqual(
-    buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, requireFullGallery: true }),
+    buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, hydrationRetry: { maxAttempts: 4, cutoff } }),
     {
       "images.0": { $exists: true },
       status: "active",
@@ -19,12 +20,13 @@ test("active image analysis query only picks active listings with images needing
         { renovationScore: { $exists: false } },
         { analyzedAt: null },
         { analyzedAt: { $exists: false } },
-        // still thumbnail-only AND hydration not yet attempted -> pick it up
-        // once; the attempt stamp then keeps it from looping forever.
+        // Missing a wet room (hydration failed), fewer than maxAttempts tries so
+        // far, and not attempted since the cooldown cutoff -> retry it now.
         {
           $and: [
-            { "images.8": { $exists: false } },
-            { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }] },
+            { $or: [{ kitchenPictured: false }, { bathroomPictured: false }] },
+            { $or: [{ galleryHydrationAttempts: { $lt: 4 } }, { galleryHydrationAttempts: { $exists: false } }] },
+            { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }, { galleryHydrationAttemptedAt: { $lte: cutoff } }] },
           ],
         },
       ],
@@ -32,7 +34,7 @@ test("active image analysis query only picks active listings with images needing
   );
 });
 
-test("requireFullGallery is opt-in: omitting it leaves the gallery clause off", () => {
+test("hydrationRetry is opt-in: omitting it leaves the self-heal clause off", () => {
   const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true });
   assert.deepEqual(query.$or, [
     { renovationScore: null },

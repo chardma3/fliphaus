@@ -4,10 +4,11 @@
  * triage gate -> Sonnet score), hydrating + persisting each listing's full
  * detail-page gallery. Loops in batches until a batch analyses nothing new.
  *
- * Uses the onlyMissing re-pick (requireFullGallery), so it targets listings
- * still on the ~5 search-card thumbnail gallery and is safe to stop/resume:
- * each analysed listing gets analyzedAt + its full gallery persisted and drops
- * out of the query. No HTTP, so no REFRESH_TOKEN / Cloudflare timeout involved.
+ * Uses the onlyMissing re-pick, so it targets unscored listings plus the
+ * self-heal retry (listings missing a kitchen/bathroom photo). Safe to
+ * stop/resume: each analysed listing gets analyzedAt + a curated gallery
+ * persisted and drops out of the query. No HTTP, so no REFRESH_TOKEN /
+ * Cloudflare timeout involved.
  *
  * Needs MONGO_URI + ANTHROPIC_API_KEY + HEMNET_PROXY_* (all set on Render).
  *

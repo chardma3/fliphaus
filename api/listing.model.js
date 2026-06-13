@@ -71,11 +71,14 @@ const listingSchema = new mongoose.Schema({
   brfIntelligence: { type: mongoose.Schema.Types.Mixed, default: null },
   analyzedAt: { type: Date, default: null },
   // Set whenever an analysis run attempts to hydrate this listing's full
-  // detail-page gallery — success OR failure. Once set, the thumbnail-only
-  // re-pick stops selecting the listing, so a permanently un-hydratable page
-  // (e.g. a delisted listing whose detail page 404s / lacks __NEXT_DATA__)
-  // can't be re-analysed forever. Null = never attempted.
+  // detail-page gallery — success OR failure. Used with galleryHydrationAttempts
+  // to space out and bound the self-heal retries (see buildAnalysisQuery), so a
+  // flaky hydration heals on a later run while a permanently un-hydratable page
+  // (delisted / 404 / genuinely photo-poor) eventually stops. Null = never tried.
   galleryHydrationAttemptedAt: { type: Date, default: null },
+  // How many times we've attempted to hydrate the full gallery. Caps the
+  // self-heal retry loop so we don't re-analyse an un-hydratable listing forever.
+  galleryHydrationAttempts: { type: Number, default: 0 },
 });
 
 module.exports = mongoose.model("Listing", listingSchema);
