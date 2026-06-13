@@ -25,6 +25,10 @@
     Järvastaden: 56000,
   };
   const DEFAULT_RENOVATED_SQM = 45000;
+  // Minimum cash deposit as a share of price. This is the Swedish mortgage cap
+  // (kontantinsats / bolånetak), a national regulation — not per-listing data —
+  // lowered from 15% to 10%.
+  const DEPOSIT_PCT = 0.1;
   const MIN_RENOVATION_COST_FOR_UPSIDE = 75000;
   const MOVE_IN_READY_SIGNALS = [
     /move[-\s]?in ready/i,
@@ -91,7 +95,7 @@
     const sizeNum = parseNumber(listing?.sizeNum || listing?.size);
     const feeNum = parseNumber(listing?.feeNum || listing?.fee);
     const renoCost = parseNumber(listing?.totalEstimatedCostSEK);
-    const deposit = Math.round(price * 0.15);
+    const deposit = Math.round(price * DEPOSIT_PCT);
     const months = 7;
     const carryingCost = feeNum * months;
     const totalInvestment = deposit + renoCost + carryingCost;

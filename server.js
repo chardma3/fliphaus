@@ -501,7 +501,7 @@ app.get("/api/invest/listings", async (req, res) => {
     const result = listings.map((l) => {
       const lo = listingWithBrfIntelligence(l, soldListings);
       const proposal = proposalMap[l.id];
-      const deposit = Math.round((lo.askingPriceNum || 0) * 0.15);
+      const deposit = Math.round((lo.askingPriceNum || 0) * 0.1);
       const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
       const fee = lo.fee ? parseInt(lo.fee.replace(/\D/g, ""), 10) || 0 : 0;
       const timelineMonths = proposal ? Math.ceil((proposal.timelineWeeks + (proposal.bufferWeeks || 4)) / 4.33) : 6;
@@ -537,7 +537,7 @@ app.get("/api/invest/listing/:listingId", async (req, res) => {
     const investments = await Investment.find({ listingId: req.params.listingId }).populate("userId", "name");
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
     const lo = listingWithBrfIntelligence(listing, soldListings);
-    const deposit = Math.round((lo.askingPriceNum || 0) * 0.15);
+    const deposit = Math.round((lo.askingPriceNum || 0) * 0.1);
     const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
     const fee = lo.fee ? parseInt(lo.fee.replace(/\D/g, ""), 10) || 0 : 0;
     const timelineMonths = proposal ? Math.ceil((proposal.timelineWeeks + (proposal.bufferWeeks || 4)) / 4.33) : 6;
