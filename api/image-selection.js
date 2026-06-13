@@ -55,19 +55,21 @@ function selectImagesForAnalysis(images, classified = null) {
 const MAX_DISPLAY_IMAGES = 6;
 
 // Pick the photos to KEEP on the listing for display, from the triage
-// classification. Guarantees the kitchen and bathroom are present (the rooms
-// that drive a renovation flip) ahead of an even spread of overview shots.
-// Returns image URLs, wet-rooms-first. Falls back to an even spread when no
-// classification is available.
+// classification. Always leads with the kitchen and bathroom (the rooms that
+// drive a renovation flip) — even for a small gallery, where it reorders the
+// photos wet-rooms-first rather than leaving Hemnet's living-room-heavy order.
+// Returns image URLs, wet-rooms-first. Falls back to an even spread (large
+// gallery) or the original order (small gallery) when no classification exists.
 function selectDisplayImages(images, classified = null) {
   if (!images || !images.length) return [];
-  if (images.length <= MAX_DISPLAY_IMAGES) return images;
 
+  const small = images.length <= MAX_DISPLAY_IMAGES;
   const evenSpread = (n) =>
     Array.from({ length: n }, (_, i) => images[Math.floor((i * images.length) / n)]);
 
   if (!classified || !classified.length) {
-    return uniqueByUrl(evenSpread(MAX_DISPLAY_IMAGES)).slice(0, MAX_DISPLAY_IMAGES);
+    // No room info: keep a small gallery as-is, else thin a large one.
+    return small ? images : uniqueByUrl(evenSpread(MAX_DISPLAY_IMAGES)).slice(0, MAX_DISPLAY_IMAGES);
   }
 
   const pick = (room, n) =>
@@ -79,7 +81,10 @@ function selectDisplayImages(images, classified = null) {
       .filter(Boolean);
 
   const wetRooms = uniqueByUrl([...pick("kitchen", 2), ...pick("bathroom", 2)]);
-  return uniqueByUrl([...wetRooms, ...evenSpread(MAX_DISPLAY_IMAGES)]).slice(0, MAX_DISPLAY_IMAGES);
+  // Small gallery: keep every photo but lead with the wet rooms. Large gallery:
+  // wet rooms then an even spread of overview shots, capped.
+  const filler = small ? images : evenSpread(MAX_DISPLAY_IMAGES);
+  return uniqueByUrl([...wetRooms, ...filler]).slice(0, MAX_DISPLAY_IMAGES);
 }
 
 module.exports = { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, MAX_DISPLAY_IMAGES };

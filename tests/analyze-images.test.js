@@ -5,10 +5,23 @@ const { selectDisplayImages, MAX_DISPLAY_IMAGES } = require("../api/image-select
 
 const gallery = (n) => Array.from({ length: n }, (_, i) => `img${i}`);
 
-test("a small gallery is returned unchanged (nothing to trim)", () => {
+test("a small gallery with no classification is returned unchanged (nothing to trim)", () => {
   const imgs = gallery(MAX_DISPLAY_IMAGES);
   assert.deepEqual(selectDisplayImages(imgs, null), imgs);
   assert.deepEqual(selectDisplayImages(gallery(3), null), gallery(3));
+});
+
+test("a small gallery still leads with the wet rooms when classified", () => {
+  // 5 images, kitchen at index 3 and bathroom at index 4 — they should be
+  // pulled to the front, but no photo is dropped.
+  const classified = [
+    { index: 3, roomTypes: ["kitchen"], confidence: 0.9 },
+    { index: 4, roomTypes: ["bathroom"], confidence: 0.9 },
+  ];
+  const result = selectDisplayImages(gallery(5), classified);
+  assert.equal(result.length, 5, "keeps all 5 photos");
+  assert.deepEqual(result.slice(0, 2), ["img3", "img4"], "wet rooms lead");
+  assert.deepEqual(new Set(result), new Set(gallery(5)), "same photos, reordered");
 });
 
 test("an empty gallery yields an empty set", () => {
