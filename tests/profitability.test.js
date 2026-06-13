@@ -73,7 +73,7 @@ test("unrenovated high-score profitable listing can return renovation-upside", (
     investmentPotential: "high",
     totalEstimatedCostSEK: 250000,
     renovationSummary: "Original kitchen and bathroom need full renovation",
-    brfIntelligence: { renovationArbitrage: { confidence: "medium", estimatedUpliftTotal: 400000 } },
+    brfIntelligence: { renovationArbitrage: { confidence: "medium", avgRenovatedSqm: 55000, estimatedUpliftTotal: 400000 } },
   };
 
   const calc = calcInvestment(listing);
@@ -83,6 +83,10 @@ test("unrenovated high-score profitable listing can return renovation-upside", (
   assert.equal(badge.type, "renovation-upside");
   assert.ok(calc.renovationProfit > 0);
   assert.ok(badge.roi > 0);
+  // Confident estimate uses the sold-comparable average, not the area benchmark.
+  assert.equal(calc.estimateSource, "sold-comparables");
+  assert.equal(calc.sqmPrice, 55000);
+  assert.equal(calc.preliminary, false);
 });
 
 test("low comparable confidence keeps a profitable renovation as preliminary instead of hiding it", () => {
@@ -109,4 +113,58 @@ test("low comparable confidence keeps a profitable renovation as preliminary ins
   assert.equal(badge.roi, null);
   assert.match(badge.detail, /preliminary/i);
   assert.match(badge.detail, /similar sold properties/i);
+  // Falls back to the area benchmark and is flagged preliminary, but still
+  // produces a number — never the old "Needs similar sales" dead-end.
+  assert.equal(calc.estimateSource, "area-benchmark");
+  assert.equal(calc.preliminary, true);
+  assert.ok(calc.estimatedRenovatedSalePrice > 0);
+});
+
+test("a benchmark-based estimate that loses money stays preliminary (shown, not filtered)", () => {
+  const listing = {
+    streetAddress: "Thin Comps Loss 1",
+    askingPriceNum: 3200000,
+    size: "60 m²",
+    fee: "5 000 kr/mån",
+    locationDescription: "Farsta, Stockholms kommun",
+    renovationScore: 8,
+    investmentPotential: "high",
+    totalEstimatedCostSEK: 300000,
+    renovationSummary: "Original kitchen and bathroom need full renovation",
+    brfIntelligence: { renovationArbitrage: { confidence: "low", avgRenovatedSqm: null } },
+  };
+
+  const calc = calcInvestment(listing);
+  const badge = formatProfitBadgeModel(listing);
+
+  // 60 × 45,600 benchmark = 2.74M < 3.2M asking -> loses money, but preliminary.
+  assert.ok(calc.renovationProfit < 0);
+  assert.equal(calc.classification, "preliminary-unprofitable");
+  assert.equal(badge.type, "preliminary-unprofitable");
+  assert.match(badge.detail, /preliminary/i);
+  // Crucially NOT "unprofitable" — the Deals tab only filters confident losses.
+  assert.notEqual(calc.classification, "unprofitable");
+});
+
+test("a sold-comp-backed estimate that loses money is confidently unprofitable (filtered)", () => {
+  const listing = {
+    streetAddress: "Confident Loss 1",
+    askingPriceNum: 3200000,
+    size: "60 m²",
+    fee: "5 000 kr/mån",
+    locationDescription: "Farsta, Stockholms kommun",
+    renovationScore: 8,
+    investmentPotential: "high",
+    totalEstimatedCostSEK: 300000,
+    renovationSummary: "Original kitchen and bathroom need full renovation",
+    brfIntelligence: { renovationArbitrage: { confidence: "high", avgRenovatedSqm: 46000 } },
+  };
+
+  const calc = calcInvestment(listing);
+
+  // 60 × 46,000 sold avg = 2.76M < 3.2M asking -> loses money, and confident.
+  assert.ok(calc.renovationProfit < 0);
+  assert.equal(calc.estimateSource, "sold-comparables");
+  assert.equal(calc.preliminary, false);
+  assert.equal(calc.classification, "unprofitable");
 });

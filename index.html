@@ -674,7 +674,7 @@
                   <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
                   <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
                   <div class="calc-divider"></div>
-                  <div class="calc-row sale"><span class="calc-label">Renovated benchmark (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
+                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
                   <div class="calc-row sale"><span class="calc-label">Market gap before costs</span><span class="calc-value">${c.grossMarketGap > 0 ? '+' : ''}${formatSEKShort(c.grossMarketGap)}</span></div>
                   <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${c.classification === "renovation-upside" ? '+' + formatSEKShort(c.renovationProfit) : (badge?.label || '—')}</span></div>
                 </div>`;

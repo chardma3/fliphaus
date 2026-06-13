@@ -58,9 +58,23 @@
     return MOVE_IN_READY_SIGNALS.some((pattern) => pattern.test(text));
   }
 
-  function hasLowComparableConfidence(listing) {
+  // Resolve the renovated kr/m² used to estimate the post-renovation sale price.
+  // Prefer the real sold-comparable average when we have medium/high-confidence
+  // evidence for it; otherwise fall back to the hardcoded per-area benchmark.
+  // Always returns a usable price — we never refuse to produce an estimate, we
+  // just flag whether it's "confident" (sold-comp backed) or "preliminary"
+  // (benchmark only).
+  function resolveRenovatedSqmPrice(listing) {
     const arb = listing?.brfIntelligence?.renovationArbitrage;
-    return arb?.confidence === "low" && arb?.estimatedUpliftTotal == null;
+    const soldAvg = arb ? parseNumber(arb.avgRenovatedSqm) : 0;
+    if (soldAvg > 0 && ["medium", "high"].includes(arb.confidence)) {
+      return { sqmPrice: soldAvg, source: "sold-comparables", confident: true };
+    }
+    return {
+      sqmPrice: getAreaSqmPrice(listing?.locationDescription || listing?.area),
+      source: "area-benchmark",
+      confident: false,
+    };
   }
 
   function isRenovationUpsideCandidate(listing) {
@@ -81,30 +95,30 @@
     const months = 7;
     const carryingCost = feeNum * months;
     const totalInvestment = deposit + renoCost + carryingCost;
-    const sqmPrice = getAreaSqmPrice(listing?.locationDescription || listing?.area);
+    const { sqmPrice, source: estimateSource, confident: confidentEstimate } = resolveRenovatedSqmPrice(listing);
     const estimatedRenovatedSalePrice = sizeNum > 0 ? Math.round(sizeNum * sqmPrice) : 0;
     const grossMarketGap = estimatedRenovatedSalePrice > 0 ? estimatedRenovatedSalePrice - price : 0;
     const renovationProfit = estimatedRenovatedSalePrice > 0 ? grossMarketGap - renoCost - carryingCost : 0;
     const roi = totalInvestment > 0 && renovationProfit > 0 ? Math.round((renovationProfit / totalInvestment) * 100) : 0;
     const candidate = isRenovationUpsideCandidate(listing);
-    const lowComparableConfidence = hasLowComparableConfidence(listing);
+    // "Preliminary" = the estimate rests on the area benchmark, not sold
+    // comparables. We always show the number either way; preliminary just means
+    // lower confidence (and keeps the listing out of the confidently-unprofitable
+    // bucket the Deals tab filters on).
+    const preliminary = !confidentEstimate;
 
     let classification = "insufficient-data";
     if (!price || !sizeNum || !estimatedRenovatedSalePrice) {
       classification = "insufficient-data";
     } else if (!candidate) {
       classification = grossMarketGap > 0 ? "market-gap" : "low-upside";
-    } else if (lowComparableConfidence && renovationProfit > 0) {
-      classification = "preliminary-renovation-upside";
-    } else if (lowComparableConfidence) {
-      classification = "insufficient-data";
     } else if (renovationProfit > 0) {
-      classification = "renovation-upside";
+      classification = preliminary ? "preliminary-renovation-upside" : "renovation-upside";
     } else {
-      classification = "unprofitable";
+      classification = preliminary ? "preliminary-unprofitable" : "unprofitable";
     }
 
-    const displayProfit = ["renovation-upside", "preliminary-renovation-upside", "unprofitable"].includes(classification) ? renovationProfit : 0;
+    const displayProfit = ["renovation-upside", "preliminary-renovation-upside", "unprofitable", "preliminary-unprofitable"].includes(classification) ? renovationProfit : 0;
 
     return {
       price,
@@ -122,8 +136,9 @@
       roi: classification === "renovation-upside" ? roi : 0,
       sizeNum,
       sqmPrice,
+      estimateSource,
+      preliminary,
       classification,
-      lowComparableConfidence,
       isRenovationUpsideCandidate: candidate,
     };
   }
@@ -152,23 +167,23 @@
         calc,
       };
     }
+    if (calc.classification === "preliminary-unprofitable") {
+      return {
+        type: "preliminary-unprofitable",
+        cssClass: "cautious",
+        label: `~${formatSEKShort(calc.renovationProfit)}`,
+        detail: "Preliminary estimate (area benchmark) — needs similar sold properties",
+        profit: calc.renovationProfit,
+        roi: null,
+        calc,
+      };
+    }
     if (calc.classification === "market-gap") {
       return {
         type: "market-gap",
         cssClass: "cautious",
         label: "Possible market gap",
         detail: "Already renovated / low renovation upside",
-        profit: null,
-        roi: null,
-        calc,
-      };
-    }
-    if (calc.lowComparableConfidence) {
-      return {
-        type: "insufficient-data",
-        cssClass: "neutral",
-        label: "Needs similar sales",
-        detail: "Insufficient similar sold-property evidence",
         profit: null,
         roi: null,
         calc,
