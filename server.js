@@ -222,7 +222,7 @@ app.get("/api/listings", async (req, res) => {
     // flips + pending) and the "moveinready" browse view. Only currently-
     // available listings are returned; anything that left Hemnet is handled by
     // the sold view. See api/listings-query.js.
-    const view = req.query.view === "moveinready" ? "moveinready" : "deals";
+    const view = ["moveinready", "newbuild"].includes(req.query.view) ? req.query.view : "deals";
     const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();

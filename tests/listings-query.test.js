@@ -3,11 +3,12 @@ const assert = require("node:assert/strict");
 
 const { buildActiveFeedFilter, DEAL_MIN_SCORE } = require("../api/listings-query");
 
-test("deals view shows scored strong flips (>=7) only — unscored excluded", () => {
+test("deals view shows scored strong flips (>=7) only — unscored and new-builds excluded", () => {
   assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000 }), {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
     askingPriceNum: { $lte: 4000000 },
+    streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 7 },
   });
 });
@@ -15,6 +16,18 @@ test("deals view shows scored strong flips (>=7) only — unscored excluded", ()
 test("move-in-ready view shows scored-but-not-strong listings (1..6) and excludes unscored", () => {
   const f = buildActiveFeedFilter({ view: "moveinready", maxPrice: 4000000 });
   assert.deepEqual(f.renovationScore, { $gte: 1, $lte: 6 });
+  assert.deepEqual(f.streetAddress, { $not: /^[^0-9]+$/ });
+});
+
+test("new-build view shows only projekt listings (name-only address), no score filter", () => {
+  const f = buildActiveFeedFilter({ view: "newbuild", maxPrice: 4000000 });
+  assert.deepEqual(f, {
+    status: "active",
+    locationDescription: { $not: /husby|rinkeby|vällingby|akalla/i },
+    askingPriceNum: { $lte: 4000000 },
+    streetAddress: /^[^0-9]+$/,
+  });
+  assert.equal(f.renovationScore, undefined);
 });
 
 test("defaults to the deals view", () => {

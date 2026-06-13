@@ -403,6 +403,7 @@
       <div id="view-tabs" class="view-tabs">
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
+        <button class="view-tab" data-view="newbuild" title="New-build / projekt listings — market reference, not flips">🏗 New builds</button>
       </div>
 
       <div id="reno-filters" class="filter-bar" style="display:none;"></div>
@@ -418,7 +419,7 @@
     <script>
       let currentUser = null;
       let allListingsData = null;
-      let currentView = "deals"; // "deals" (7-10 + pending) or "moveinready" (1-6)
+      let currentView = "deals"; // "deals" (7-10), "moveinready" (1-6), or "newbuild" (projekt listings)
       let activeFilter = null;
 
       function showLoginPrompt() {
@@ -578,7 +579,8 @@
           const daysBadgeHtml = daysOnMarket != null
             ? `<div class="days-badge${daysCls}" title="On the market ${daysOnMarket} days${daysCls ? " — unusually long; may be mispriced or stuck" : ""}">${daysOnMarket}d ${daysNote}</div>`
             : "";
-          const badgeModel = listing.askingPriceNum ? formatProfitBadgeModel(listing) : null;
+          // No flip/profit badge on the New builds tab — they're new construction, not flips.
+          const badgeModel = (currentView !== "newbuild" && listing.askingPriceNum) ? formatProfitBadgeModel(listing) : null;
           const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
           const gatedBadgeHtml = isGated(listing)
             ? `<div class="gated-badge" title="Gated by the cheap triage pass — kitchen & bathroom looked already renovated, so full scoring was skipped. Low renovation upside.">⚡ triage only</div>`
