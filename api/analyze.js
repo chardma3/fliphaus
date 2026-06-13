@@ -1,4 +1,5 @@
 const Anthropic = require("@anthropic-ai/sdk");
+const { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, MAX_DISPLAY_IMAGES } = require("./image-selection");
 
 const client = new Anthropic();
 
@@ -104,16 +105,6 @@ function parseJson(text) {
   }
 }
 
-function uniqueByUrl(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const url = typeof item === "string" ? item : item.url;
-    if (!url || seen.has(url)) return false;
-    seen.add(url);
-    return true;
-  });
-}
-
 // Stage 1 — cheap triage on TRIAGE_MODEL. Classifies every photo by room type
 // and, for kitchen/bathroom photos, reads a coarse condition. The result both
 // drives the gate (below) and feeds image selection for the expensive scoring
@@ -198,41 +189,6 @@ function buildGatedAnalysis(images) {
   };
 }
 
-// Pick the images for the expensive scoring call from the (already computed)
-// triage classification — no model call here. Falls back to an evenly-spread
-// selection when classification is missing.
-function selectImagesForAnalysis(images, classified = null) {
-  const maxAnalysisImages = 12;
-
-  if (images.length <= maxAnalysisImages) {
-    return { selectedImages: images, coverageSource: "all", classified };
-  }
-
-  if (classified && classified.length) {
-    const pick = (room) =>
-      classified
-        .filter((img) => img.roomTypes?.includes(room))
-        .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-        .slice(0, 4)
-        .map((img) => ({ url: images[img.index], reason: room }));
-
-    const evenlySpaced = Array.from({ length: maxAnalysisImages }, (_, i) => {
-      const index = Math.floor((i * images.length) / maxAnalysisImages);
-      return { url: images[index], reason: "overview" };
-    });
-
-    const selected = uniqueByUrl([...pick("kitchen"), ...pick("bathroom"), ...evenlySpaced])
-      .slice(0, maxAnalysisImages)
-      .map((item) => item.url);
-
-    return { selectedImages: selected, coverageSource: "room-classifier", classified };
-  }
-
-  const step = images.length / maxAnalysisImages;
-  const selectedImages = Array.from({ length: maxAnalysisImages }, (_, i) => images[Math.floor(i * step)]);
-  return { selectedImages, coverageSource: "fallback-spread", classified: null };
-}
-
 async function analyzeListingImages(images, listingInfo = {}) {
   if (!images || images.length === 0) {
     return null;
@@ -247,9 +203,14 @@ async function analyzeListingImages(images, listingInfo = {}) {
     console.error(`  ✗ Triage failed, scoring without gate: ${err.message}`);
   }
 
+  // Curate the photos we'll keep for display (wet-rooms-first, capped). Computed
+  // once from the same triage pass and attached to every return path so the
+  // caller can persist a consistent set regardless of gate outcome.
+  const displayImages = selectDisplayImages(images, classified);
+
   // Gate: skip the expensive score when both wet rooms are already modern.
   if (classified && triageGated(classified)) {
-    return buildGatedAnalysis(images);
+    return { ...buildGatedAnalysis(images), displayImages };
   }
 
   // Stage 2 — full renovation score on the expensive model.
@@ -294,6 +255,7 @@ async function analyzeListingImages(images, listingInfo = {}) {
       totalImageCount: images.length,
       selectionMethod: coverageSource,
     };
+    analysis.displayImages = displayImages;
     return analysis;
   } catch (err) {
     console.error(`  ✗ Analysis failed: ${err.message}`);
@@ -301,4 +263,4 @@ async function analyzeListingImages(images, listingInfo = {}) {
   }
 }
 
-module.exports = { analyzeListingImages, selectImagesForAnalysis };
+module.exports = { analyzeListingImages, selectImagesForAnalysis, selectDisplayImages, triageRooms, MAX_DISPLAY_IMAGES };
