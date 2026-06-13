@@ -268,7 +268,12 @@
           ${(() => {
             const RENO_SQM_MAP = {"Rissne":42500,"Sundbyberg":43000,"Duvbo":42500,"Hallonbergen":28000,"Farsta":45600,"Sköndal":50400,"Fagersjö":31000,"Gubbängen":46000,"Hökarängen":60000,"Tallkrogen":46000,"Enskede":52600,"Bagarmossen":46000,"Skarpnäck":50000,"Bromma":50000,"Kista":38000,"Sollentuna":42000,"Järvastaden":56000};
             const locLower = (l.locationDescription||"").toLowerCase();
-            const RENO_SQM = Object.entries(RENO_SQM_MAP).find(([a]) => locLower.includes(a.toLowerCase()))?.[1] || 45000;
+            // Prefer the real sold-comparable average when we have medium/high
+            // confidence evidence; otherwise fall back to the per-area benchmark.
+            const arb = l.brfIntelligence?.renovationArbitrage;
+            const soldAvg = arb && arb.avgRenovatedSqm > 0 && ["medium","high"].includes(arb.confidence) ? arb.avgRenovatedSqm : null;
+            const RENO_SQM = soldAvg || Object.entries(RENO_SQM_MAP).find(([a]) => locLower.includes(a.toLowerCase()))?.[1] || 45000;
+            const RENO_SQM_LABEL = soldAvg ? "sold comparables" : "area benchmark";
             const sizeNum = parseFloat((l.size || "").replace(",", ".")) || 0;
             const feeNum = l.fee ? parseInt(l.fee.replace(/\D/g, ""), 10) || 0 : 0;
             const renoCost = p?.estimatedCostSEK || l.totalEstimatedCostSEK || 0;
@@ -289,7 +294,7 @@
             <div class="profit-row"><span class="label">Carrying cost (${months}mo × ${formatSEK(feeNum)}/mo)</span><span class="value">${formatSEK(carrying)}</span></div>
             <div class="profit-row total"><span class="label">Total investment needed</span><span class="value">${formatSEK(totalInvest)}</span></div>
             <div style="border-top:1px solid #333;margin:10px 0;"></div>
-            <div class="profit-row sale"><span class="label">Est. sale (${(RENO_SQM/1000).toFixed(1)}K/m² renovated avg for area)</span><span class="value">${formatSEK(estSale)}</span></div>
+            <div class="profit-row sale"><span class="label">Est. sale (${(RENO_SQM/1000).toFixed(1)}K/m² renovated avg, ${RENO_SQM_LABEL})</span><span class="value">${formatSEK(estSale)}</span></div>
             <div class="profit-row ${profit > 0 ? 'profit' : 'loss'}"><span class="label">Est. profit${roi > 0 ? ' (' + roi + '% ROI)' : ''}</span><span class="value">${profit > 0 ? '+' : ''}${formatSEK(profit)}</span></div>
           </div>`;
           })()}
