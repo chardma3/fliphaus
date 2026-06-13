@@ -823,7 +823,15 @@
         // before their benchmarks exist. They re-enter automatically if the
         // price drops enough to turn profitable.
         if (currentView === "deals") {
-          data.listings = data.listings.filter(l => calcInvestment(l).classification !== "unprofitable");
+          // Deals is for profitable flips, so lead with the strongest return:
+          // highest ROI first (the confident green deals), then by absolute
+          // renovation profit for the rest. The server sort=score-newest only
+          // ordered by renovation score, which buried high-ROI deals.
+          data.listings = data.listings
+            .filter(l => calcInvestment(l).classification !== "unprofitable")
+            .map(l => ({ l, c: calcInvestment(l) }))
+            .sort((a, b) => (b.c.roi - a.c.roi) || (b.c.renovationProfit - a.c.renovationProfit))
+            .map(x => x.l);
           data.total = data.listings.length;
         }
         allListingsData = data;
