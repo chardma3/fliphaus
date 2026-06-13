@@ -176,9 +176,11 @@
     </div>
 
     <script>
+      // Keep in sync with LOCATION_IDS in api/hemnet-refresh-safety.js (the
+      // active scraped areas). Client-side, so it can't import that module.
       const ALL_AREAS = [
-        "Bromma", "Blackeberg", "Rissne", "Kista", "Sollentuna",
-        "Skarpnäck", "Bagarmossen", "Farsta", "Enskede", "Hökarängen"
+        "Rissne", "Farsta", "Kista", "Bagarmossen", "Skarpnäck",
+        "Johanneshov", "Bromma", "Enskede", "Solna", "Årsta"
       ];
 
       let currentUser = null;

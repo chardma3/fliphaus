@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { AREA_NAMES } = require("../api/hemnet-refresh-safety");
 
 const userSchema = new mongoose.Schema({
   googleId: { type: String, sparse: true, unique: true },
@@ -12,7 +13,7 @@ const userSchema = new mongoose.Schema({
     maxPrice: { type: Number, default: 4000000 },
     areas: {
       type: [String],
-      default: ["Bromma","Blackeberg","Rissne","Kista","Sollentuna","Skarpnäck","Bagarmossen","Farsta","Enskede","Hökarängen"],
+      default: () => [...AREA_NAMES],
     },
   },
   createdAt: { type: Date, default: Date.now },

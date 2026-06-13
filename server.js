@@ -25,6 +25,7 @@ const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
 const { buildActiveFeedFilter } = require("./api/listings-query");
+const { AREA_NAMES } = require("./api/hemnet-refresh-safety");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -202,7 +203,7 @@ app.get("/api/listings", async (req, res) => {
   try {
     const settings = req.user?.settings ?? {
       maxPrice: 4000000,
-      areas: ["Bromma","Blackeberg","Rissne","Kista","Sollentuna","Skarpnäck","Bagarmossen","Farsta","Enskede","Hökarängen"],
+      areas: [...AREA_NAMES],
     };
 
     const sortParam = req.query.sort;
