@@ -244,7 +244,7 @@
                 </div>
               </div>
               <div class="funding-breakdown">
-                <div class="fund-row"><span class="fund-label">Deposit (15%)</span><span class="fund-value">${formatSEK(f.deposit)}</span></div>
+                <div class="fund-row"><span class="fund-label">Deposit (10%)</span><span class="fund-value">${formatSEK(f.deposit)}</span></div>
                 <div class="fund-row"><span class="fund-label">Renovation</span><span class="fund-value">${formatSEK(f.renoCost)}</span></div>
                 <div class="fund-row"><span class="fund-label">Carrying cost</span><span class="fund-value">${formatSEK(f.carryingCost)}</span></div>
                 <div class="fund-row"><span>Total needed</span><span>${formatSEK(f.totalNeeded)}</span></div>
@@ -277,7 +277,7 @@
             const sizeNum = parseFloat((l.size || "").replace(",", ".")) || 0;
             const feeNum = l.fee ? parseInt(l.fee.replace(/\D/g, ""), 10) || 0 : 0;
             const renoCost = p?.estimatedCostSEK || l.totalEstimatedCostSEK || 0;
-            const deposit = Math.round((l.askingPriceNum || 0) * 0.15);
+            const deposit = Math.round((l.askingPriceNum || 0) * 0.1);
             const months = p ? Math.ceil((p.timelineWeeks + (p.bufferWeeks || 4)) / 4.33) : 7;
             const carrying = feeNum * months;
             const totalInvest = deposit + renoCost + carrying;
@@ -289,7 +289,7 @@
           <div class="section">
             <h3>Profit analysis</h3>
             <div class="profit-row"><span class="label">Purchase price</span><span class="value">${formatSEK(l.askingPriceNum)}</span></div>
-            <div class="profit-row"><span class="label">Deposit (15%)</span><span class="value">${formatSEK(deposit)}</span></div>
+            <div class="profit-row"><span class="label">Deposit (10%)</span><span class="value">${formatSEK(deposit)}</span></div>
             <div class="profit-row"><span class="label">Renovation cost</span><span class="value">${formatSEK(renoCost)}</span></div>
             <div class="profit-row"><span class="label">Carrying cost (${months}mo × ${formatSEK(feeNum)}/mo)</span><span class="value">${formatSEK(carrying)}</span></div>
             <div class="profit-row total"><span class="label">Total investment needed</span><span class="value">${formatSEK(totalInvest)}</span></div>
