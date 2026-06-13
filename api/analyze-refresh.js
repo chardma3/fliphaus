@@ -1,3 +1,5 @@
+const { PROJECT_ADDRESS } = require("./project-listing");
+
 // Self-heal bounds. A listing whose gallery hydration failed (so its photos are
 // missing the kitchen/bathroom) is retried on later runs — but at most
 // MAX_HYDRATION_ATTEMPTS times, and no more than once per HYDRATION_RETRY_COOLDOWN.
@@ -9,7 +11,10 @@ const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
 const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
 function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null } = {}) {
-  const query = { "images.0": { $exists: true } };
+  // Never spend analysis on new-build/projekt listings — they're not flips and
+  // their detail pages can't be hydrated anyway. They surface in the New builds
+  // view as raw market data instead.
+  const query = { "images.0": { $exists: true }, streetAddress: { $not: PROJECT_ADDRESS } };
   if (status) query.status = status;
   if (onlyMissing) {
     query.$or = [

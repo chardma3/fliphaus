@@ -14,6 +14,7 @@ test("active image analysis query self-heals incomplete-coverage listings, bound
     buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, hydrationRetry: { maxAttempts: 4, cutoff } }),
     {
       "images.0": { $exists: true },
+      streetAddress: { $not: /^[^0-9]+$/ },
       status: "active",
       $or: [
         { renovationScore: null },
@@ -47,6 +48,7 @@ test("hydrationRetry is opt-in: omitting it leaves the self-heal clause off", ()
 test("sold image analysis query does not require analyzedAt because sold listings do not store it", () => {
   assert.deepEqual(buildAnalysisQuery({ onlyMissing: true }), {
     "images.0": { $exists: true },
+    streetAddress: { $not: /^[^0-9]+$/ },
     $or: [
       { renovationScore: null },
       { renovationScore: { $exists: false } },
