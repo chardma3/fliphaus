@@ -815,20 +815,21 @@
         document.getElementById("stats").textContent = "Loading listings…";
         const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
         const data = await res.json();
-        // Deals is for profitable flips — drop the ones our investment math
-        // confidently shows lose money. Only the "unprofitable" classification
-        // qualifies (a real candidate with good sold-comp evidence and profit
-        // <= 0); listings without enough comps (new areas, pending) classify as
-        // insufficient-data/preliminary and are kept, so deals aren't hidden
-        // before their benchmarks exist. They re-enter automatically if the
-        // price drops enough to turn profitable.
+        // Deals is for profitable flips, so drop anything our investment math
+        // shows losing money — BOTH the confident "unprofitable" and the
+        // benchmark-based "preliminary-unprofitable" (those were showing scary
+        // minus figures on the profitable page). Listings without enough comps
+        // to estimate at all (new areas, pending/unscored) classify as
+        // insufficient-data and are kept — they show no profit figure, not a
+        // negative — so deals aren't hidden before their benchmarks exist. Any
+        // listing re-enters automatically if a price drop turns it profitable.
         if (currentView === "deals") {
-          // Deals is for profitable flips, so lead with the strongest return:
-          // highest ROI first (the confident green deals), then by absolute
-          // renovation profit for the rest. The server sort=score-newest only
-          // ordered by renovation score, which buried high-ROI deals.
+          const LOSS = ["unprofitable", "preliminary-unprofitable"];
+          // Lead with the strongest return: highest ROI first (the confident
+          // green deals), then by absolute renovation profit. The server
+          // sort=score-newest only ordered by renovation score, burying high-ROI deals.
           data.listings = data.listings
-            .filter(l => calcInvestment(l).classification !== "unprofitable")
+            .filter(l => !LOSS.includes(calcInvestment(l).classification))
             .map(l => ({ l, c: calcInvestment(l) }))
             .sort((a, b) => (b.c.roi - a.c.roi) || (b.c.renovationProfit - a.c.renovationProfit))
             .map(x => x.l);
