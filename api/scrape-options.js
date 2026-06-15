@@ -33,9 +33,23 @@ function buildImageAnalysisOptions(query = {}) {
   };
 }
 
+// Image ownership: the analysis pipeline curates and persists a wet-rooms-first
+// gallery (kitchen + bathroom). The scrape can only reliably offer the ~5
+// search-card thumbnails — detail-page fetches (which carry the full gallery)
+// fail intermittently behind Hemnet's bot protection and fall back to those
+// thumbnails, which omit the bathroom. So the scrape must SEED images only on
+// insert and never overwrite an existing curated gallery; otherwise every run
+// resets curated photos back to thumbnails while kitchenPictured/bathroomPictured
+// stay true, and self-heal never re-hydrates. The analyser re-fetches the full
+// gallery from Hemnet itself, so it doesn't depend on the scrape refreshing them.
+function buildListingUpsert(fields, images) {
+  return { $set: fields, $setOnInsert: { images: images || [] } };
+}
+
 module.exports = {
   buildActiveScrapeOptions,
   buildImageAnalysisOptions,
+  buildListingUpsert,
   buildSoldScrapeOptions,
   shouldFetchActiveDetails,
 };
