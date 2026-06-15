@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildActiveScrapeOptions,
   buildImageAnalysisOptions,
+  buildListingUpsert,
   buildSoldScrapeOptions,
   shouldFetchActiveDetails,
 } = require("../api/scrape-options");
@@ -16,6 +17,21 @@ test("active scrape fetches listing details by default", () => {
 test("active scrape can skip listing detail pages for scheduled refreshes", () => {
   assert.equal(shouldFetchActiveDetails({ includeDetails: false }), false);
   assert.deepEqual(buildActiveScrapeOptions({ includeDetails: "false" }), { includeDetails: false });
+});
+
+test("scrape upsert seeds images on insert only, never overwriting a curated gallery", () => {
+  const fields = { status: "active", askingPriceNum: 2500000 };
+  const upsert = buildListingUpsert(fields, ["thumb0", "thumb1"]);
+  // Scalar fields go in $set (applied every run); images only via $setOnInsert
+  // so an existing doc's analyser-curated gallery survives the scrape.
+  assert.deepEqual(upsert.$set, fields);
+  assert.deepEqual(upsert.$setOnInsert, { images: ["thumb0", "thumb1"] });
+  assert.ok(!("images" in upsert.$set), "images must not be in $set");
+});
+
+test("scrape upsert tolerates missing images", () => {
+  const upsert = buildListingUpsert({ status: "active" }, undefined);
+  assert.deepEqual(upsert.$setOnInsert, { images: [] });
 });
 
 test("active scrape treats any query value except literal false as detail-enabled", () => {

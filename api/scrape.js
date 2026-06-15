@@ -3,7 +3,7 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
 const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, planDisappearanceReconciliation, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
-const { buildActiveScrapeOptions } = require("./scrape-options");
+const { buildActiveScrapeOptions, buildListingUpsert } = require("./scrape-options");
 
 puppeteer.use(StealthPlugin());
 
@@ -229,7 +229,6 @@ module.exports = async (options = {}) => {
       askingPriceNum: parseAskingPrice(l.askingPrice),
       coordinates: l.lat ? { lat: l.lat, lng: l.lng } : undefined,
       link: `https://www.hemnet.se/bostad/${l.slug}`,
-      images: l.images || [],
       publishedAt: l.publishedAt ? new Date(parseFloat(l.publishedAt) * 1000) : undefined,
       scrapeDate,
       status: "active",
@@ -251,7 +250,16 @@ module.exports = async (options = {}) => {
       update.investmentPotential = l.investmentPotential;
       update.analyzedAt = l.analyzedAt;
     }
-    await Listing.findOneAndUpdate({ id: l.id }, update, { upsert: true, new: true });
+    // Seed images on insert only; never overwrite a curated gallery the analyser
+    // built (see buildListingUpsert). Previously the scrape wrote its thumbnail
+    // set on every run, resetting curated photos back to bathroom-less thumbnails
+    // while leaving kitchenPictured/bathroomPictured true — so self-heal, which
+    // only re-picks flag-false listings, never re-hydrated them. `...l` above
+    // spread the scraped thumbnails onto update.images, so strip them back out:
+    // images is owned by $setOnInsert alone.
+    const scrapedImages = update.images;
+    delete update.images;
+    await Listing.findOneAndUpdate({ id: l.id }, buildListingUpsert(update, scrapedImages), { upsert: true, new: true });
   }
 
   // Mark listings no longer in the active scrape as disappeared — but ONLY when
