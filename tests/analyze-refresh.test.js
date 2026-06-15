@@ -45,6 +45,15 @@ test("hydrationRetry is opt-in: omitting it leaves the self-heal clause off", ()
   ]);
 });
 
+test("reanalyzeBefore adds a one-shot stale-cutoff clause to the re-pick", () => {
+  const before = new Date("2026-06-13T00:00:00.000Z");
+  const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, reanalyzeBefore: before });
+  assert.deepEqual(query.$or.at(-1), { analyzedAt: { $lt: before } });
+  // Omitting it leaves the clause off entirely.
+  const without = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true });
+  assert.ok(!without.$or.some((c) => c.analyzedAt && c.analyzedAt.$lt));
+});
+
 test("sold image analysis query does not require analyzedAt because sold listings do not store it", () => {
   assert.deepEqual(buildAnalysisQuery({ onlyMissing: true }), {
     "images.0": { $exists: true },
@@ -75,6 +84,32 @@ test("analysis update maps model response to active listing fields", () => {
   assert.ok(update.analyzedAt instanceof Date);
   // A full (non-gated) analysis records triageGated: false, never null/undefined.
   assert.equal(update.triageGated, false);
+});
+
+test("coverage flags come from the persisted display set, not the wider gallery", () => {
+  // The model saw both wet rooms in the full gallery (roomCoverage) but the
+  // curated set only kept the kitchen. The flags must follow the kept photos so
+  // self-heal re-hydrates for the missing bathroom.
+  const update = applyActiveAnalysisUpdate({
+    renovationScore: 7,
+    roomCoverage: { kitchenVisible: true, bathroomVisible: true },
+    displayCoverage: { kitchenPictured: true, bathroomPictured: false },
+  });
+  assert.equal(update.kitchenPictured, true);
+  assert.equal(update.bathroomPictured, false);
+  assert.equal(update.imageCoverageComplete, false);
+});
+
+test("coverage falls back to the model's roomCoverage when triage gave no classification", () => {
+  // displayCoverage is null (triage failed) -> use what the model reported.
+  const update = applyActiveAnalysisUpdate({
+    renovationScore: 7,
+    roomCoverage: { kitchenVisible: true, bathroomVisible: true },
+    displayCoverage: null,
+  });
+  assert.equal(update.kitchenPictured, true);
+  assert.equal(update.bathroomPictured, true);
+  assert.equal(update.imageCoverageComplete, true);
 });
 
 test("analysis update records triageGated when the triage gate fired", () => {
