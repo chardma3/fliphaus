@@ -87,4 +87,25 @@ function selectDisplayImages(images, classified = null) {
   return uniqueByUrl([...wetRooms, ...filler]).slice(0, MAX_DISPLAY_IMAGES);
 }
 
-module.exports = { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, MAX_DISPLAY_IMAGES };
+// Which wet rooms are actually present in the PERSISTED/display set — the photos
+// the feed will show — rather than the wider analysis gallery. Coverage must be
+// measured against what we keep: a bathroom the model saw in the full hydrated
+// gallery but that didn't make the curated set is NOT "pictured" as far as the
+// user is concerned. Keeping kitchenPictured/bathroomPictured honest against the
+// stored photos is what lets self-heal re-hydrate listings whose kept photos
+// lack a wet room. Returns null when there's no triage classification to read
+// (caller should then fall back to the model's roomCoverage).
+function coverageFromDisplaySet(images, displaySet, classified) {
+  if (!classified || !classified.length) return null;
+  const displayUrls = new Set(displaySet || []);
+  const result = { kitchenPictured: false, bathroomPictured: false };
+  for (const c of classified) {
+    const url = images[c.index];
+    if (!url || !displayUrls.has(url)) continue;
+    if (c.roomTypes?.includes("kitchen")) result.kitchenPictured = true;
+    if (c.roomTypes?.includes("bathroom")) result.bathroomPictured = true;
+  }
+  return result;
+}
+
+module.exports = { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, coverageFromDisplaySet, MAX_DISPLAY_IMAGES };

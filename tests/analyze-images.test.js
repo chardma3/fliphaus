@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { selectDisplayImages, MAX_DISPLAY_IMAGES } = require("../api/image-selection");
+const { selectDisplayImages, coverageFromDisplaySet, MAX_DISPLAY_IMAGES } = require("../api/image-selection");
 
 const gallery = (n) => Array.from({ length: n }, (_, i) => `img${i}`);
 
@@ -70,4 +70,34 @@ test("deduplicates so a photo picked as both wet-room and spread appears once", 
   const classified = [{ index: 0, roomTypes: ["kitchen"], confidence: 0.9 }];
   const result = selectDisplayImages(gallery(25), classified);
   assert.equal(new Set(result).size, result.length);
+});
+
+test("coverage is true only when a wet room actually survives into the display set", () => {
+  // Bathroom is classified at index 20 of a 25-photo gallery but the curated set
+  // leads wet-rooms-first then an even spread — so the kitchen (index 3) makes
+  // the cut while the lone bathroom is kept too. Both should read covered.
+  const images = gallery(25);
+  const classified = [
+    { index: 3, roomTypes: ["kitchen"], confidence: 0.9 },
+    { index: 20, roomTypes: ["bathroom"], confidence: 0.9 },
+  ];
+  const display = selectDisplayImages(images, classified);
+  const coverage = coverageFromDisplaySet(images, display, classified);
+  assert.deepEqual(coverage, { kitchenPictured: true, bathroomPictured: true });
+});
+
+test("coverage reports false for a wet room the model saw but the display set dropped", () => {
+  // The kitchen is in the gallery (so the OLD flag would have read true) but is
+  // NOT among the persisted photos -> must report kitchenPictured false so
+  // self-heal re-hydrates the listing.
+  const images = gallery(5);
+  const classified = [{ index: 2, roomTypes: ["kitchen"], confidence: 0.9 }];
+  const display = ["img0", "img1", "img3", "img4"]; // img2 (the kitchen) dropped
+  const coverage = coverageFromDisplaySet(images, display, classified);
+  assert.deepEqual(coverage, { kitchenPictured: false, bathroomPictured: false });
+});
+
+test("coverage is null when there's no classification to read", () => {
+  assert.equal(coverageFromDisplaySet(gallery(5), gallery(5), null), null);
+  assert.equal(coverageFromDisplaySet(gallery(5), gallery(5), []), null);
 });

@@ -10,7 +10,7 @@ const { PROJECT_ADDRESS } = require("./project-listing");
 const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
 const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null } = {}) {
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null } = {}) {
   // Never spend analysis on new-build/projekt listings — they're not flips and
   // their detail pages can't be hydrated anyway. They surface in the New builds
   // view as raw market data instead.
@@ -41,14 +41,30 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
         ],
       });
     }
+    if (reanalyzeBefore) {
+      // One-shot backfill: re-pick already-scored listings analysed before a
+      // cutoff (e.g. before the display-set coverage fix shipped), regardless of
+      // their kitchenPictured/bathroomPictured flags — those flags were written
+      // by the old pipeline against the transient full gallery, so they can
+      // wrongly read "covered" while the stored photos lack a wet room, which
+      // means self-heal never re-picks them. Re-analysing stamps a fresh
+      // analyzedAt so each listing drops out and the drain loop terminates.
+      query.$or.push({ analyzedAt: { $lt: reanalyzeBefore } });
+    }
   }
   return query;
 }
 
 function applyActiveAnalysisUpdate(analysis) {
+  // Coverage from the photos we actually persist (displayCoverage) is the source
+  // of truth — it's what the feed shows. Fall back to the model's roomCoverage
+  // (what it saw across the wider analysis gallery) only when triage produced no
+  // classification to measure the display set against. This keeps the flags from
+  // claiming a wet room the curated set dropped, so self-heal can re-hydrate it.
   const coverage = analysis.roomCoverage || {};
-  const kitchenPictured = coverage.kitchenVisible === true;
-  const bathroomPictured = coverage.bathroomVisible === true;
+  const display = analysis.displayCoverage;
+  const kitchenPictured = display ? display.kitchenPictured : coverage.kitchenVisible === true;
+  const bathroomPictured = display ? display.bathroomPictured : coverage.bathroomVisible === true;
   return {
     renovationScore: analysis.renovationScore,
     renovationConfidence: analysis.confidence,
@@ -169,7 +185,7 @@ async function analyzeActiveListings(options = {}) {
   };
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
@@ -202,7 +218,7 @@ async function analyzeListingImagesRefresh(options = {}) {
   const result = { dataset, limit, active: null, sold: null };
 
   if (dataset === "active" || dataset === "all") {
-    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing });
+    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore });
   }
 
   if (dataset === "sold" || dataset === "all") {

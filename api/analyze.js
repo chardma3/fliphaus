@@ -1,5 +1,5 @@
 const Anthropic = require("@anthropic-ai/sdk");
-const { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, MAX_DISPLAY_IMAGES } = require("./image-selection");
+const { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, coverageFromDisplaySet, MAX_DISPLAY_IMAGES } = require("./image-selection");
 
 const client = new Anthropic();
 
@@ -219,9 +219,16 @@ async function analyzeListingImages(images, listingInfo = {}) {
   // caller can persist a consistent set regardless of gate outcome.
   const displayImages = selectDisplayImages(images, classified);
 
+  // Coverage is measured against the photos we actually keep (displayImages),
+  // not the wider analysis gallery — so kitchenPictured/bathroomPictured can't
+  // claim a wet room the curated set dropped. When that set lacks a room,
+  // self-heal re-hydrates the listing on a later run. Null when triage produced
+  // no classification; the caller then falls back to the model's roomCoverage.
+  const displayCoverage = coverageFromDisplaySet(images, displayImages, classified);
+
   // Gate: skip the expensive score when both wet rooms are already modern.
   if (classified && triageGated(classified)) {
-    return { ...buildGatedAnalysis(images), displayImages };
+    return { ...buildGatedAnalysis(images), displayImages, displayCoverage };
   }
 
   // Stage 2 — full renovation score on the expensive model.
@@ -267,6 +274,7 @@ async function analyzeListingImages(images, listingInfo = {}) {
       selectionMethod: coverageSource,
     };
     analysis.displayImages = displayImages;
+    analysis.displayCoverage = displayCoverage;
     return analysis;
   } catch (err) {
     console.error(`  ✗ Analysis failed: ${err.message}`);
