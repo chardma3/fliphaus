@@ -13,17 +13,16 @@
  * listing left without a wet-room photo ends up flagged false, so the normal
  * self-heal re-hydrates it on a later analysis run.
  *
- * Targets only already-scored active listings whose stored set is still small
- * (<= 5 photos = thumbnail-clobbered), skipping new-build/projekt listings (their
- * detail pages can't be hydrated). Each processed listing gets a fresh
- * galleryHydrationAttemptedAt so it drops out of the query — the drain loop
- * terminates whether or not hydration succeeded.
+ * Targets only already-scored active listings flagged as missing a kitchen or
+ * bathroom photo (kitchenPictured/bathroomPictured false), skipping new-build/
+ * projekt listings (their detail pages can't be hydrated). Each processed listing
+ * gets a fresh galleryHydrationAttemptedAt so it drops out of the query — the
+ * drain loop terminates whether or not hydration succeeded.
  *
  * Cost: Haiku triage only (a small fraction of a full backfill); time is mostly
  * Puppeteer hydration. Needs MONGO_URI + ANTHROPIC_API_KEY + HEMNET_PROXY_*.
  *
- *   node scripts/recurate-images.js [maxImages] [batchLimit]
- *   # maxImages default 5 (only re-curate listings stuck at <= this many photos)
+ *   node scripts/recurate-images.js [batchLimit]
  *   # batchLimit default 25
  */
 require("dotenv").config();
@@ -34,16 +33,26 @@ const { fetchGalleries } = require("../api/listing-gallery");
 const { triageRooms, selectDisplayImages } = require("../api/analyze");
 const { coverageFromDisplaySet } = require("../api/image-selection");
 
-async function recurateBatch(maxImages, limit, runStart) {
+async function recurateBatch(limit, runStart) {
   const query = {
     status: "active",
     renovationScore: { $ne: null },
     streetAddress: { $not: PROJECT_ADDRESS },
-    $expr: { $lte: [{ $size: { $ifNull: ["$images", []] } }, maxImages] },
-    $or: [
-      { galleryHydrationAttemptedAt: null },
-      { galleryHydrationAttemptedAt: { $exists: false } },
-      { galleryHydrationAttemptedAt: { $lt: runStart } },
+    $and: [
+      // Only listings actually missing a wet-room photo — the same signal
+      // self-heal uses. More precise than image count: catches a 6-photo listing
+      // whose kept set still lacks a bathroom, and skips a genuine 5-photo
+      // listing that already shows both rooms.
+      { $or: [{ kitchenPictured: false }, { bathroomPictured: false }] },
+      // Drain guard: each processed listing gets a galleryHydrationAttemptedAt
+      // later than runStart, so it drops out and the loop terminates this run.
+      {
+        $or: [
+          { galleryHydrationAttemptedAt: null },
+          { galleryHydrationAttemptedAt: { $exists: false } },
+          { galleryHydrationAttemptedAt: { $lt: runStart } },
+        ],
+      },
     ],
   };
 
@@ -109,8 +118,7 @@ async function recurateBatch(maxImages, limit, runStart) {
 }
 
 (async () => {
-  const maxImages = Number(process.argv[2]) || 5;
-  const limit = Number(process.argv[3]) || 25;
+  const limit = Number(process.argv[2]) || 25;
   if (!process.env.MONGO_URI) {
     console.error("MONGO_URI is not set in this environment.");
     process.exit(1);
@@ -120,13 +128,13 @@ async function recurateBatch(maxImages, limit, runStart) {
   // Stamp the run start once; processed listings get a later
   // galleryHydrationAttemptedAt and so drop out of subsequent batches.
   const runStart = new Date();
-  console.log(`Re-curating scored active listings with <= ${maxImages} photos (batch ${limit}, no re-scoring)`);
+  console.log(`Re-curating scored active listings missing a wet-room photo (batch ${limit}, no re-scoring)`);
 
   let totals = { recurated: 0, noGallery: 0, triageFailed: 0 };
   let batch = 0;
   let r;
   do {
-    r = await recurateBatch(maxImages, limit, runStart);
+    r = await recurateBatch(limit, runStart);
     totals.recurated += r.recurated;
     totals.noGallery += r.noGallery;
     totals.triageFailed += r.triageFailed;
