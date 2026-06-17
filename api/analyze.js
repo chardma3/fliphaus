@@ -3,12 +3,17 @@ const { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, coverageFromD
 
 const client = new Anthropic();
 
-// Two-tier models. A cheap model triages every listing (room classification +
-// a coarse kitchen/bathroom condition read); the expensive model only runs the
-// full renovation score on listings that aren't gated out as already-modern.
-// Both are env-overridable for tuning without a redeploy.
+// Two-tier pipeline. A cheap pass triages every listing (room classification +
+// a coarse kitchen/bathroom condition read); the score pass runs the full
+// renovation score on listings that aren't gated out as already-modern. Both
+// default to Haiku 4.5 ($1/$5 per MTok vs Sonnet 4.6's $3/$15 — ~3x cheaper):
+// the scoring task is mostly classification over photos, where Haiku is enough,
+// and the self-heal loop re-runs scoring on a schedule, so cost compounds.
+// Both env-overridable, so the scorer can be bumped back to a stronger model
+// (e.g. ANALYSIS_MODEL=claude-sonnet-4-6) without a redeploy. Note: the analyser
+// passes no effort/thinking params, which Haiku would reject — keep it that way.
 const TRIAGE_MODEL = process.env.TRIAGE_MODEL || "claude-haiku-4-5";
-const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || "claude-sonnet-4-6";
+const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || "claude-haiku-4-5";
 
 const SYSTEM_PROMPT = `You are a Swedish apartment renovation analyst for FlipHaus, an investment platform that finds undervalued properties with renovation potential in Stockholm.
 
