@@ -55,6 +55,15 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
   return query;
 }
 
+// How the gallery-hydration attempt counter moves after one analysis pass. A
+// successful fetch counts toward the give-up cap; a bot-blocked fetch (no
+// gallery) is transient, so reset to 0 and keep retrying on later runs. Resetting
+// (rather than just holding) also self-clears the budget that one-off backfill/
+// recurate runs spent on now-blocked listings.
+function nextHydrationAttempts(previous, fetchedGallery) {
+  return fetchedGallery ? (previous || 0) + 1 : 0;
+}
+
 function applyActiveAnalysisUpdate(analysis) {
   // Coverage from the photos we actually persist (displayCoverage) is the source
   // of truth — it's what the feed shows. Fall back to the model's roomCoverage
@@ -153,12 +162,19 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
         } else if (gallery && gallery.length > stored.length) {
           update.images = gallery;
         }
-        // Record the attempt (success or failure) and bump the attempt count, so
-        // the self-heal re-pick spaces out retries and eventually stops on an
-        // un-hydratable listing. Coverage (kitchen/bathroom) — written by
-        // buildUpdate above — is what tells a healed listing from a stuck one.
+        // Stamp the attempt time (spaces out retries via the cooldown). But only
+        // a fetch that actually reached the gallery counts toward the give-up cap:
+        // a bot-blocked fetch is transient, so reset the counter and keep retrying
+        // on later runs until Hemnet lets the gallery through. The cap then only
+        // fires on listings whose gallery genuinely lacks a wet room (it loads,
+        // every time, and still has no bathroom). Previously every attempt counted,
+        // so a persistently blocked listing exhausted its tries on failures — and
+        // one-off backfill/recurate runs spent the budget too — and self-heal gave
+        // up. Coverage (kitchen/bathroom), written by buildUpdate, tells a healed
+        // listing from a stuck one.
+        const fetchedGallery = Array.isArray(gallery) && gallery.length > 0;
         update.galleryHydrationAttemptedAt = new Date();
-        update.galleryHydrationAttempts = (listing.galleryHydrationAttempts || 0) + 1;
+        update.galleryHydrationAttempts = nextHydrationAttempts(listing.galleryHydrationAttempts, fetchedGallery);
       }
       await Model.findByIdAndUpdate(listing._id, update);
       analyzed++;
@@ -234,4 +250,5 @@ module.exports = {
   applySoldAnalysisUpdate,
   buildAnalysisQuery,
   conditionLabelFromScore,
+  nextHydrationAttempts,
 };

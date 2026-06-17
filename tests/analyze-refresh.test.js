@@ -3,10 +3,24 @@ const assert = require("node:assert/strict");
 
 const {
   applyActiveAnalysisUpdate,
+  nextHydrationAttempts,
   applySoldAnalysisUpdate,
   buildAnalysisQuery,
   conditionLabelFromScore,
 } = require("../api/analyze-refresh");
+
+test("a successful gallery fetch counts toward the give-up cap", () => {
+  assert.equal(nextHydrationAttempts(0, true), 1);
+  assert.equal(nextHydrationAttempts(3, true), 4);
+  assert.equal(nextHydrationAttempts(undefined, true), 1);
+});
+
+test("a bot-blocked fetch resets the counter so self-heal keeps retrying", () => {
+  // No gallery this run -> transient block -> reset, don't burn a try. This also
+  // clears the budget one-off backfill/recurate runs spent on now-blocked listings.
+  assert.equal(nextHydrationAttempts(3, false), 0);
+  assert.equal(nextHydrationAttempts(4, false), 0);
+});
 
 test("active image analysis query self-heals incomplete-coverage listings, bounded by attempts and cooldown", () => {
   const cutoff = new Date("2026-06-01T00:00:00.000Z");
