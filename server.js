@@ -10,6 +10,7 @@ const path = require("path");
 const scrape = require("./api/scrape");
 const scrapeSold = require("./api/scrape-sold");
 const { analyzeListingImagesRefresh } = require("./api/analyze-refresh");
+const { startScheduler } = require("./api/scheduler");
 const SoldListing = require("./models/sold.model");
 const Listing = require("./api/listing.model");
 const User = require("./models/user.model");
@@ -687,4 +688,9 @@ app.get("/builder/login", (req, res) => res.sendFile(path.join(__dirname, "build
 app.get("/builder", (req, res) => res.sendFile(path.join(__dirname, "builder-portal.html")));
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
-app.listen(PORT, () => console.log(`🚀 Running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Running at http://localhost:${PORT}`);
+  // Nightly scrape + analysis (incl. self-heal) on the always-on service.
+  // No-op unless ENABLE_SCHEDULER=true, so it never fires in dev/tests.
+  startScheduler({ scrape, analyze: analyzeListingImagesRefresh });
+});
