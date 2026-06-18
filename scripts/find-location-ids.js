@@ -21,7 +21,7 @@ puppeteer.use(StealthPlugin());
 // Printed first as a calibration reference — their ids are already known to be
 // the right node level (Rissne 473493, Farsta 925962).
 const REFERENCE = ["Rissne", "Farsta"];
-const TARGETS = ["Bromma", "Blackeberg", "Kista", "Sollentuna", "Skarpnäck", "Bagarmossen", "Enskede", "Hökarängen"];
+const TARGETS = ["Bromma", "Blackeberg", "Kista", "Sollentuna", "Skarpnäck", "Bagarmossen", "Enskede", "Hökarängen", "Kärrtorp", "Högdalen"];
 
 async function lookup(page, area) {
   const url = `https://www.hemnet.se/locations/search?q=${encodeURIComponent(area)}`;

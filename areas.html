@@ -60,9 +60,19 @@
         padding: 16px; margin-bottom: 12px;
         border-left: 3px solid #69db7c;
       }
-      .area-card h4 { font-size: 1rem; color: #fff; margin-bottom: 8px; }
+      .area-card h4 { font-size: 1rem; color: #fff; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
       .area-card p { font-size: 0.82rem; color: #aaa; line-height: 1.5; margin-bottom: 6px; }
       .area-card p:last-child { margin-bottom: 0; }
+
+      .liquidity-badge {
+        font-size: 0.68rem; font-weight: 600; padding: 3px 9px;
+        border-radius: 999px; white-space: nowrap; letter-spacing: 0.02em;
+      }
+      .liquidity-badge .lq-count { opacity: 0.8; font-weight: 500; }
+      .liquidity-badge.positive { background: rgba(105,219,124,0.16); color: #69db7c; }
+      .liquidity-badge.neutral  { background: rgba(116,143,252,0.16); color: #91a7ff; }
+      .liquidity-badge.cautious { background: rgba(255,212,59,0.16); color: #ffd43b; }
+      .liquidity-badge.negative { background: rgba(255,107,107,0.18); color: #ff8787; }
 
       .stat-grid {
         display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
@@ -141,21 +151,22 @@
 
         <!-- Why these areas -->
         <div class="section">
-          <h3>Why these 10 areas?</h3>
-          <p>FlipHaus covers <span class="highlight">10 Stockholm areas</span>: Rissne, Farsta, Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Enskede, Solna and Årsta. They aren't picked at random — every one clears the same three filters that make a renovation flip work:</p>
+          <h3>Why these 13 areas?</h3>
+          <p>FlipHaus covers <span class="highlight">13 Stockholm areas</span>: Rissne, Farsta, Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Enskede, Solna, Årsta, Hökarängen, Kärrtorp and Högdalen. They aren't picked at random — every one clears the same three filters that make a renovation flip work:</p>
           <p>
             <span class="highlight">1. On the tunnelbana.</span> Each sits on a metro line (not just commuter rail), so the commute to T-Centralen is short and predictable. Good transit keeps demand — and therefore resale liquidity — high.<br/>
-            <span class="highlight">2. Renovation-age housing stock.</span> All are dominated by <span class="term" title="Sweden's massive public housing program (1965-1974) that built over one million homes in a decade">miljonprogrammet</span> and mid-century apartments now <span class="highlight-yellow">50-60 years old</span> — original kitchens, bathrooms and flooring entering a major renovation cycle.<br/>
+            <span class="highlight">2. Renovation-age housing stock.</span> The stock spans the 1930s–50s folkhem and garden-suburb era, the 1960s–70s <span class="term" title="Sweden's massive public housing program (1965-1974) that built over one million homes in a decade">miljonprogrammet</span>, and 1980s blocks (Skarpnäck) — but it is all now old enough that original kitchens, bathrooms and flooring are entering a major renovation cycle.<br/>
             <span class="highlight">3. A measurable price gap.</span> Each trades below inner-city prices while renovated apartments sell at a clear premium over unrenovated ones — the margin a flip captures.
           </p>
-          <p>We deliberately <span class="highlight-blue">left some areas out</span>: pendeltåg-only suburbs such as Sollentuna (weaker resale liquidity than the metro), and already-gentrified or thin-margin areas like Blackeberg and Hökarängen (where the renovated-vs-unrenovated gap is already priced in, or the area is already covered by a neighbour's broader search).</p>
+          <p>We deliberately <span class="highlight-blue">left some areas out</span>: pendeltåg-only suburbs such as Sollentuna (weaker resale liquidity than the metro), and already-gentrified or thin-margin areas like Blackeberg (where the renovated-vs-unrenovated gap is already priced in).</p>
+          <p>We also weigh <span class="highlight-blue">resale liquidity</span> — how many apartments actually sell in an area each year. A flip only works if you can sell soon after finishing, so thin markets (where a renovated unit can sit, racking up carrying cost) carry real exit risk. The badge on each area card below shows trailing-12-month sold volume.</p>
         </div>
 
         <!-- Area cards -->
         <div class="section">
           <h3>Target areas</h3>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Rissne">
             <h4>Rissne</h4>
             <p><strong>Municipality:</strong> Sundbybergs kommun</p>
             <p><strong>Built:</strong> 1967-1971 (miljonprogrammet)</p>
@@ -163,7 +174,7 @@
             <p><strong>Why it's high potential:</strong> Rissne's housing stock is almost entirely miljonprogrammet-era apartments with original kitchens, bathrooms, and flooring. Prices sit 30-40% below neighbouring Sundbyberg centrum, but the tunnel station gives identical commute times. As Sundbyberg's city centre gentrifies (Marabouparken, Ursvik development), Rissne is the next domino. Renovated apartments here consistently sell for 15-25% above unrenovated equivalents.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Farsta">
             <h4>Farsta</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1956-1965 (early miljonprogrammet / folkhem era)</p>
@@ -171,7 +182,7 @@
             <p><strong>Why it's high potential:</strong> Farsta was Sweden's first planned suburb and is now undergoing its biggest transformation since the 1960s. Stockholm stad is investing heavily in the Farsta centrum masterplan — new housing, retail, and public spaces. The existing apartment stock features classic 1960s layouts with dated wet rooms and kitchens ripe for modernisation. Prices per square metre remain among the lowest within the tunnelbana network, creating a wide margin for renovation uplift.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Kista">
             <h4>Kista</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1970s (miljonprogrammet)</p>
@@ -179,7 +190,7 @@
             <p><strong>Why it's high potential:</strong> Kista is Stockholm's tech cluster ("Kista Science City"), drawing a steady stream of well-paid IT professionals who want to live near work. The surrounding residential stock is largely original 1970s apartments, so renovated homes command a real premium against a deep, employed tenant/buyer base.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Bagarmossen">
             <h4>Bagarmossen</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1950s-1960s</p>
@@ -187,7 +198,7 @@
             <p><strong>Why it's high potential:</strong> A fast metro ride from the city with a strong neighbourhood identity and growing popularity among families and creatives priced out of Söder. Plenty of mid-century apartments with original interiors, and a clear, widening gap between renovated and unrenovated sale prices.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Skarpnäck">
             <h4>Skarpnäck</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1980s (terminus development)</p>
@@ -195,7 +206,7 @@
             <p><strong>Why it's high potential:</strong> The green-line terminus, so trains start here and the commute is reliable. A mix of 1980s stock with dated finishes and steady demand from young families. Renovations modernising kitchens and bathrooms capture an obvious uplift against the area's lower entry prices.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Johanneshov">
             <h4>Johanneshov</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1930s-1960s</p>
@@ -203,7 +214,7 @@
             <p><strong>Why it's high potential:</strong> Right on the edge of Södermalm around the Slakthusområdet redevelopment (one of Stockholm's largest urban projects). Very short commute, rapidly improving amenities, and older apartment stock that hasn't yet caught up to inner-city prices — a strong setup for renovation-led gains.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Bromma">
             <h4>Bromma</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> Mixed, 1940s-1970s</p>
@@ -211,7 +222,7 @@
             <p><strong>Why it's high potential:</strong> An established, leafy west-side district that already commands strong renovated prices, so a well-executed renovation in an older BRF building converts directly into resale value. The opportunity is the dated apartments within otherwise desirable blocks.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Enskede">
             <h4>Enskede</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1930s-1960s</p>
@@ -219,7 +230,7 @@
             <p><strong>Why it's high potential:</strong> A sought-after south-side area with a garden-suburb character and a quick metro link. Demand is high and consistent, so modernised apartments sell well — and there's still a healthy stock of dated interiors to upgrade.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Solna">
             <h4>Solna</h4>
             <p><strong>Municipality:</strong> Solna stad</p>
             <p><strong>Built:</strong> Mixed, 1950s-1970s</p>
@@ -227,12 +238,36 @@
             <p><strong>Why it's high potential:</strong> One of Stockholm's fastest-developing municipalities — Mall of Scandinavia, the Karolinska/Hagastaden life-science district and Friends Arena are all driving demand. Older apartments here renovate into a market with strong, rising prices and excellent transit.</p>
           </div>
 
-          <div class="area-card">
+          <div class="area-card" data-area="Årsta">
             <h4>Årsta</h4>
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1940s-1960s</p>
             <p><strong>Transit:</strong> Gullmarsplan metro + Tvärbanan/pendeltåg at Årstaberg — ~10-15 min to the city</p>
             <p><strong>Why it's high potential:</strong> Just south of Södermalm with one of Stockholm's original planned town centres (Årsta centrum). Very close to the city, increasingly popular, and full of mid-century apartments whose original kitchens and bathrooms leave clear room for renovation uplift.</p>
+          </div>
+
+          <div class="area-card" data-area="Hökarängen">
+            <h4>Hökarängen</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> Late 1940s-1950s (folkhem era)</p>
+            <p><strong>Transit:</strong> Hökarängen tunnelbana (Green line) — ~17 min to T-Centralen</p>
+            <p><strong>Why it's high potential:</strong> One of the fastest-rising green-line suburbs — a revived centrum and design-led local scene have pulled in buyers priced out of inner Söder, with sale prices up sharply in recent years. The folkhem-era apartment stock still has plenty of original interiors, so there's a clear renovated-vs-unrenovated gap to capture. Overlaps Farsta's broader search node; tracked separately for full coverage.</p>
+          </div>
+
+          <div class="area-card" data-area="Kärrtorp">
+            <h4>Kärrtorp</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> 1940s-1950s</p>
+            <p><strong>Transit:</strong> Kärrtorp tunnelbana (Green line) — ~13 min to T-Centralen</p>
+            <p><strong>Why it's high potential:</strong> A quiet, family-popular pocket between Björkhagen and Bagarmossen with a strong, rising reputation and a clean security profile. Close-in commute and good demand, with mid-century apartments whose dated kitchens and wet rooms renovate into a clear premium. Trades a touch thinner than the bigger nodes, so resale liquidity is worth watching.</p>
+          </div>
+
+          <div class="area-card" data-area="Högdalen">
+            <h4>Högdalen</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> Early 1950s (folkhem era)</p>
+            <p><strong>Transit:</strong> Högdalen tunnelbana (Green line) — ~18 min to T-Centralen</p>
+            <p><strong>Why it's high potential:</strong> The strongest policy-driven upside of the green-line south set — Stockholm stad has planned ~1,200 new homes and a major centrum densification, the kind of investment that re-rates an area over time. Entry prices are among the lowest within the metro network, and the early-1950s stock is squarely in its renovation cycle, leaving a wide margin for uplift.</p>
           </div>
         </div>
 
@@ -279,7 +314,32 @@
       </div>
     </div>
 
+    <script src="/profitability.js"></script>
     <script>
+      // Resale-liquidity badge per area card, from trailing-12m sold volume.
+      async function loadLiquidity() {
+        try {
+          const res = await fetch("/api/sold/stats");
+          const data = await res.json();
+          const byArea = {};
+          (data.areaStats || []).forEach((a) => { byArea[a.area] = a; });
+          document.querySelectorAll(".area-card[data-area]").forEach((card) => {
+            const stat = byArea[card.dataset.area];
+            if (!stat) return; // no sold data scraped for this area yet
+            const rating = liquidityRating(stat.totalSold, stat.avgDaysOnMarket);
+            if (rating.level === "unknown") return;
+            const badge = document.createElement("span");
+            badge.className = `liquidity-badge ${rating.cssClass}`;
+            badge.title = rating.detail;
+            badge.innerHTML = `${rating.label} <span class="lq-count">· ${rating.soldCount12m}/yr</span>`;
+            const h4 = card.querySelector("h4");
+            if (h4) h4.appendChild(badge);
+          });
+        } catch (e) {
+          console.error("Failed to load liquidity stats", e);
+        }
+      }
+
       async function init() {
         // User auth
         const res = await fetch("/api/me");
@@ -343,6 +403,7 @@
       }
 
       init();
+      loadLiquidity();
     </script>
   </body>
 </html>

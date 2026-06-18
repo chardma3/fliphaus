@@ -16,6 +16,8 @@
     Gubbängen: 46000,
     Hökarängen: 60000,
     Tallkrogen: 46000,
+    Kärrtorp: 58000,
+    Högdalen: 48000,
     Enskede: 52600,
     Bagarmossen: 46000,
     Skarpnäck: 50000,
@@ -53,6 +55,54 @@
       if (loc.includes(area.toLowerCase())) return price;
     }
     return DEFAULT_RENOVATED_SQM;
+  }
+
+  // Resale liquidity for an area, derived from trailing-12-month sold
+  // bostadsrätt volume (the /api/sold/stats `totalSold`, which is scraped with
+  // sold_age=12m). Liquidity is an exit-risk axis the profit calc doesn't
+  // capture: a flip only works if you can SELL within months of finishing. A
+  // thin market (e.g. Rissne — ~20 BR sales a year, because ~70% of its stock is
+  // rental) means a finished unit can sit, and every extra month of carrying
+  // cost erodes the profit; a deep one (Årsta — several hundred a year) lets you
+  // exit any week. Thresholds are per 12 months. avgDaysOnMarket refines the
+  // detail line but doesn't change the tier.
+  const LIQUIDITY_TIERS = [
+    { min: 250, level: "high", label: "High liquidity", cssClass: "positive" },
+    { min: 100, level: "moderate", label: "Moderate liquidity", cssClass: "neutral" },
+    { min: 35, level: "thin", label: "Thin market", cssClass: "cautious" },
+    { min: 0, level: "very-thin", label: "Very thin — exit risk", cssClass: "negative" },
+  ];
+
+  function liquidityRating(soldCount12m, avgDaysOnMarket) {
+    const count = parseNumber(soldCount12m);
+    if (!count) {
+      return {
+        level: "unknown",
+        label: "No sold data",
+        cssClass: "neutral",
+        soldCount12m: 0,
+        avgDaysOnMarket: null,
+        perMonth: 0,
+        detail: "No sold comparables collected yet for this area.",
+      };
+    }
+    const tier = LIQUIDITY_TIERS.find((t) => count >= t.min) || LIQUIDITY_TIERS[LIQUIDITY_TIERS.length - 1];
+    const days = parseNumber(avgDaysOnMarket);
+    const perMonth = Math.round((count / 12) * 10) / 10;
+    let detail = `~${count} sold in the last 12 months (~${perMonth}/month)`;
+    detail += days > 0 ? `, avg ${days} days on market.` : ".";
+    if (tier.level === "very-thin" || tier.level === "thin") {
+      detail += " A renovated unit may take longer to sell — budget extra carrying cost.";
+    }
+    return {
+      level: tier.level,
+      label: tier.label,
+      cssClass: tier.cssClass,
+      soldCount12m: count,
+      avgDaysOnMarket: days || null,
+      perMonth,
+      detail,
+    };
   }
 
   function hasMoveInReadySignal(listing) {
@@ -240,6 +290,7 @@
     DEFAULT_RENOVATED_SQM,
     MIN_RENOVATION_COST_FOR_UPSIDE,
     getAreaSqmPrice,
+    liquidityRating,
     isRenovationUpsideCandidate,
     calcInvestment,
     formatProfitBadgeModel,

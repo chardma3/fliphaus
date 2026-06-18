@@ -12,6 +12,15 @@ const LOCATION_IDS = {
   Enskede: 925961,
   Solna: 18028,
   Årsta: 473440,
+  // Green-line-south expansion (2026-06). All three are renovation-age stock
+  // with gentrification momentum and clean reputations (none on the Dec 2025
+  // police utsatt-område list). Hökarängen overlaps Farsta's broader node — kept
+  // separate for full coverage; overlap is harmless (dedup by Hemnet id).
+  // Högdalen has ~1,200 new homes planned (best policy-driven upside of the set).
+  // IDs read off public hemnet.se /salda location URLs.
+  Hökarängen: 473375,
+  Kärrtorp: 473382,
+  Högdalen: 473374,
 };
 
 // The active areas, as plain names. Single source of truth for the user/feed
