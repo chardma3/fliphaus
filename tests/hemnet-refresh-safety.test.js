@@ -104,8 +104,9 @@ test("refresh workflow keeps active scrape bounded and splits sold scraping into
   assert.match(workflow, /--max-time 300/);
   assert.match(workflow, /--retry 2/);
   assert.match(workflow, /--retry-all-errors/);
-  assert.match(workflow, /api\/scrape-sold\?area=Rissne/);
   assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
+  // Rissne (northern Sundbyberg) was dropped 2026-06-19 — must not be scraped.
+  assert.doesNotMatch(workflow, /area=Rissne/);
   assert.match(workflow, /api\/analyze-images\?dataset=all&limit=10/);
   assert.match(workflow, /continue-on-error: true/);
   assert.match(workflow, /detailLimit=5/);

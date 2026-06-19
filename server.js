@@ -26,7 +26,7 @@ const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
-const { buildActiveFeedFilter } = require("./api/listings-query");
+const { buildActiveFeedFilter, SITTING_MIN_DAYS } = require("./api/listings-query");
 const { AREA_NAMES } = require("./api/hemnet-refresh-safety");
 
 const app = express();
@@ -224,8 +224,14 @@ app.get("/api/listings", async (req, res) => {
     // flips + pending) and the "moveinready" browse view. Only currently-
     // available listings are returned; anything that left Hemnet is handled by
     // the sold view. See api/listings-query.js.
-    const view = ["moveinready", "newbuild"].includes(req.query.view) ? req.query.view : "deals";
-    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice });
+    const view = ["moveinready", "newbuild", "sitting"].includes(req.query.view) ? req.query.view : "deals";
+    // The "sitting" view needs a cutoff date: listings published at least
+    // SITTING_MIN_DAYS ago. Computed here (not in the pure query builder) so the
+    // builder stays deterministic/testable.
+    const sittingBefore = view === "sitting"
+      ? new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000)
+      : undefined;
+    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();

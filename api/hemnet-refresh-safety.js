@@ -1,5 +1,7 @@
 const LOCATION_IDS = {
-  Rissne: 473493,
+  // Rissne (473493, northern Sundbyberg: Rissne + Hallonbergen + Ör) removed
+  // 2026-06-19 — rental-heavy 1970s miljonprogram with a thin owner-occupier
+  // resale pool, so flips can't reliably exit. See fliphaus-hallonbergen memo.
   Farsta: 925962,
   // 8-area expansion (2026-06). Metro-connected, renovation-stock areas; dropped
   // Sollentuna (pendel-only) and Blackeberg/Hökarängen (already hot / covered by
