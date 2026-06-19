@@ -47,7 +47,7 @@ jobs:
         # drop the others.
         continue-on-error: true
         run: |
-          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Alvik "Stora Mossen" Enskede Solna Årsta Hökarängen Kärrtorp Högdalen; do
+          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Alvik "Stora Mossen" Enskede Solna Årsta Hägersten Hökarängen Kärrtorp Högdalen; do
             echo "→ sold scrape: $area"
             curl --fail-with-body -sS -G --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 \
               -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
