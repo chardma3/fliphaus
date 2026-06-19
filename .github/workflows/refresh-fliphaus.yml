@@ -31,13 +31,6 @@ jobs:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
-      - name: Refresh Rissne sold comparable properties
-        run: |
-          curl --fail-with-body -sS --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape-sold?area=Rissne&detailLimit=5&includeDetails=false&includeAnalysis=false"
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
-
       - name: Refresh Farsta sold comparable properties
         run: |
           curl --fail-with-body -sS --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape-sold?area=Farsta&detailLimit=5&includeDetails=false&includeAnalysis=false"
@@ -46,7 +39,7 @@ jobs:
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
       - name: Refresh expansion-area sold comparable properties
-        # The expansion areas in LOCATION_IDS beyond Rissne/Farsta (2026-06).
+        # The expansion areas in LOCATION_IDS beyond Farsta (2026-06).
         # Looped (not one step each) to keep the workflow compact; --data-urlencode
         # encodes the non-ASCII names (Skarpnäck, Årsta, Hökarängen, Kärrtorp,
         # Högdalen). A blocked area is logged and skipped so one failure doesn't

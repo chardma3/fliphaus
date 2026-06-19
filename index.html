@@ -371,7 +371,7 @@
       <header>
         <div>
           <a href="/" style="text-decoration:none;color:inherit;"><h1>FlipHaus</h1></a>
-          <h2 id="subtitle">AI-powered renovation investment analysis — 13 Stockholm areas</h2>
+          <h2 id="subtitle">AI-powered renovation investment analysis — 12 Stockholm areas</h2>
         </div>
         <div class="header-right" id="header-right"></div>
       </header>
@@ -393,11 +393,11 @@
         <span><strong style="color:#ffd43b;">4-6/10</strong> Some potential — partially updated, selective renovation could add value.</span>
         <span><strong style="color:#aaa;">1-3/10</strong> Move-in ready — recently renovated, minimal upside from further work.</span>
         <span><strong style="color:#69db7c;">+Green badge</strong> = estimated profit &nbsp; <strong style="color:#ff8888;">-Red badge</strong> = would lose money at current price</span>
-        <span style="color:#555;"><strong>Deals</strong> shows strong flips (7–10) — open here for the best opportunities. <strong>Move-in ready</strong> holds the rest (1–6) for browsing what's available and at what price. Covering 13 Stockholm areas.</span>
+        <span style="color:#555;"><strong>Deals</strong> shows strong flips (7–10) — open here for the best opportunities. <strong>Move-in ready</strong> holds the rest (1–6) for browsing what's available and at what price. Covering 12 Stockholm areas.</span>
       </div>
 
       <div class="instructions" style="border-left:3px solid #7eb8f7; background:#141a20;">
-        <span style="color:#7eb8f7; font-weight:500;">This is a prototype covering 13 Stockholm areas while the app is in development.</span>
+        <span style="color:#7eb8f7; font-weight:500;">This is a prototype covering 12 Stockholm areas while the app is in development.</span>
         <span>This is what the FlipHaus dashboard looks like before listings are chosen by a project manager and sent to a partner builder. Once a builder accepts and enters a quote, the listing appears on the project manager's dashboard for approval — which then makes it available on the investor dashboard for investment.</span>
       </div>
 
@@ -407,6 +407,7 @@
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
         <button class="view-tab" data-view="newbuild" title="New-build / projekt listings — market reference, not flips">🏗 New builds</button>
+        <button class="view-tab" data-view="sitting" title="On the market 7+ days — the visning/bidding cycle should have cleared by now, so these may be mispriced or have problems: room to make an offer">⏳ Sitting (7d+)</button>
       </div>
 
       <!-- Top-level sort: order the same listings by flip return or by lowest price -->
@@ -503,9 +504,9 @@
 
       function buildFilterBar(listings) {
         const bar = document.getElementById("reno-filters");
-        // New builds are already-renovated by definition — a renovation-score
-        // filter is meaningless there, so don't show the score buttons.
-        if (currentView === "newbuild") { bar.style.display = "none"; bar.innerHTML = ""; return; }
+        // No score filter on New builds (already-renovated by definition) or
+        // Sitting (the lens there is time on market, not renovation score).
+        if (currentView === "newbuild" || currentView === "sitting") { bar.style.display = "none"; bar.innerHTML = ""; return; }
 
         bar.innerHTML = "";
         const addBtn = (label, filter, active = false, title = "") => {
@@ -573,10 +574,10 @@
 
         // Name the active tab + sort so it's clear the count is scoped to this
         // view (e.g. "Move-in ready, cheapest first"), not the whole catalogue.
-        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds" }[currentView] || "Listings";
+        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds", sitting: "Sitting 7d+" }[currentView] || "Listings";
         const sortLabel = sortMode === "cheapest"
           ? "cheapest first"
-          : (currentView === "deals" ? "highest profit first" : "newest first");
+          : (currentView === "deals" ? "highest profit first" : (currentView === "sitting" ? "longest on market first" : "newest first"));
         statsEl.innerHTML = `<strong>${data.total}</strong> ${viewLabel} ${data.total === 1 ? "property" : "properties"} · ${sortLabel}`;
 
         data.listings.forEach((listing) => {
@@ -860,6 +861,12 @@
       //   "cheapest" — lowest asking price first, in every view.
       let sortMode = "profit";
 
+      // Days on the market, from the Hemnet publish date (−1 if unknown so it
+      // sorts last). Same basis as the days badge on each card.
+      function daysOnMarketOf(l) {
+        return l.publishedAt ? Math.floor((Date.now() - new Date(l.publishedAt).getTime()) / (1000 * 60 * 60 * 24)) : -1;
+      }
+
       function applySort(listings) {
         const arr = [...listings];
         if (sortMode === "cheapest") {
@@ -873,6 +880,10 @@
             .map(l => ({ l, c: calcInvestment(l) }))
             .sort((a, b) => (b.c.roi - a.c.roi) || (b.c.renovationProfit - a.c.renovationProfit))
             .map(x => x.l);
+        }
+        // Sitting: longest on the market first — the likeliest motivated sellers.
+        if (currentView === "sitting") {
+          return arr.sort((a, b) => daysOnMarketOf(b) - daysOnMarketOf(a));
         }
         return arr;
       }
