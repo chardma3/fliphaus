@@ -284,7 +284,7 @@
       /* Filter buttons */
       .filter-bar {
         width: 100%; max-width: 700px;
-        display: flex; flex-wrap: wrap; gap: 6px;
+        display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
         margin-bottom: 12px;
       }
       .filter-btn {
@@ -490,16 +490,24 @@
         return l.triageGated === true || (l.renovationSummary || "").startsWith("Triage gate:");
       }
 
+      // Does a listing match the active score filter? Deals use exact scores
+      // (7/10…10/10, where the number genuinely separates good flips from great
+      // ones); Move-in ready uses two bands — the only distinction that matters
+      // on a browse tab: fully renovated vs needs a little work.
+      function matchesScoreFilter(l, filter) {
+        if (filter === "all" || filter == null) return true;
+        if (filter === "reno") return l.renovationScore >= 1 && l.renovationScore <= 3;
+        if (filter === "partial") return l.renovationScore >= 4 && l.renovationScore <= 6;
+        return l.renovationScore === filter;
+      }
+
       function buildFilterBar(listings) {
         const bar = document.getElementById("reno-filters");
-        const scores = new Set();
-        listings.forEach(l => { if (l.renovationScore != null) scores.add(l.renovationScore); });
-        if (scores.size === 0) { bar.style.display = "none"; return; }
+        // New builds are already-renovated by definition — a renovation-score
+        // filter is meaningless there, so don't show the score buttons.
+        if (currentView === "newbuild") { bar.style.display = "none"; bar.innerHTML = ""; return; }
 
-        const sorted = [...scores].sort((a, b) => b - a);
-        bar.style.display = "flex";
         bar.innerHTML = "";
-
         const addBtn = (label, filter, active = false, title = "") => {
           const btn = document.createElement("button");
           btn.className = `filter-btn${active ? " active" : ""}`;
@@ -510,6 +518,24 @@
           bar.appendChild(btn);
         };
 
+        if (currentView === "moveinready") {
+          // Browse/reference tab: collapse the 1–6 scores into two useful bands.
+          const renoCount = listings.filter(l => matchesScoreFilter(l, "reno")).length;
+          const partialCount = listings.filter(l => matchesScoreFilter(l, "partial")).length;
+          if (!renoCount && !partialCount) { bar.style.display = "none"; return; }
+          bar.style.display = "flex";
+          addBtn("All", "all", true);
+          if (renoCount) addBtn("Renovated (1–3)", "reno", false, "Fully renovated — move-in ready, useful as price reference");
+          if (partialCount) addBtn("Partial reno (4–6)", "partial", false, "Partially renovated — some work still adds value");
+          return;
+        }
+
+        // Deals: exact per-score buttons.
+        const scores = new Set();
+        listings.forEach(l => { if (l.renovationScore != null) scores.add(l.renovationScore); });
+        if (scores.size === 0) { bar.style.display = "none"; return; }
+        const sorted = [...scores].sort((a, b) => b - a);
+        bar.style.display = "flex";
         addBtn("All", "all", true);
         sorted.forEach(score => addBtn(`${score}/10`, score));
         // No separate "triage-only" filter: gated listings are scored 2, so they
@@ -519,13 +545,11 @@
 
       function applyFilter(filter) {
         activeFilter = filter;
-        document.querySelectorAll(".filter-btn").forEach(btn => {
+        document.querySelectorAll("#reno-filters .filter-btn").forEach(btn => {
           btn.classList.toggle("active", btn.dataset.filter === String(filter));
         });
 
-        let filtered = allListingsData.listings;
-        if (filter !== "all" && filter !== null) filtered = filtered.filter(l => l.renovationScore === filter);
-
+        const filtered = allListingsData.listings.filter(l => matchesScoreFilter(l, filter));
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
 
