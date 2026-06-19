@@ -641,16 +641,25 @@
             : "";
           const brfIntel = listing.brfIntelligence;
           const arb = brfIntel?.renovationArbitrage;
-          const brfIntelHtml = brfIntel ? `<div class="brf-intel">
+          const b = brfIntel?.brf;
+          // The one-line "BRF · Built · Pipe" summary above already covers name/year/stambyte.
+          // Only show the intelligence box when it adds something new: real debt data or
+          // real renovation-arbitrage signal. Empty rows stay hidden until the scraper fills them,
+          // so the box lights up automatically once that data starts coming in.
+          const hasStambyte = b?.stambyte?.status && b.stambyte.status !== "unknown";
+          const hasDebt = b && (b.debtPerSqm || (b.avgiftRisk && b.avgiftRisk !== "unknown"));
+          const hasArb = arb && arb.scope !== "none" && (arb.estimatedUpliftPerSqm != null || arb.totalComparableSales > 0);
+          const brfIntelHtml = (hasDebt || hasArb) ? `<div class="brf-intel">
             <h5>BRF intelligence</h5>
-            <div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${brfIntel.brf.name || "Unknown"}${brfIntel.brf.buildYear ? " · " + brfIntel.brf.buildYear : ""}</span></div>
-            <div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${brfIntel.brf.stambyte.status || "unknown"}${brfIntel.brf.stambyte.year ? " " + brfIntel.brf.stambyte.year : ""}</span></div>
-            <div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${brfIntel.brf.debtPerSqm ? brfIntel.brf.debtPerSqm.toLocaleString("sv-SE") + " kr/m² · " : ""}${brfIntel.brf.avgiftRisk}</span></div>
+            ${b.name || b.buildYear ? `<div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${b.name || "Unknown"}${b.buildYear ? " · " + b.buildYear : ""}</span></div>` : ""}
+            ${hasStambyte ? `<div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${b.stambyte.status}${b.stambyte.year ? " " + b.stambyte.year : ""}</span></div>` : ""}
+            ${hasDebt ? `<div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${b.debtPerSqm ? b.debtPerSqm.toLocaleString("sv-SE") + " kr/m² · " : ""}${b.avgiftRisk}</span></div>` : ""}
+            ${hasArb ? `
             <div class="calc-divider"></div>
             <div class="calc-row sale"><span class="calc-label">Renovation uplift</span><span class="calc-value">${arb.estimatedUpliftPerSqm ? "+" + arb.estimatedUpliftPerSqm.toLocaleString("sv-SE") + " kr/m²" : "Not enough similar sales"}</span></div>
             ${arb.estimatedUpliftTotal ? `<div class="calc-row profit"><span class="calc-label">Potential uplift for this flat</span><span class="calc-value">+${formatSEKShort(arb.estimatedUpliftTotal)}</span></div>` : ""}
-            <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : arb.scope === "area" ? "Area-level" : "Insufficient"} · ${arb.confidence} confidence</span></div>
-            <div class="intel-note">${arb.summary}</div>
+            <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : "Area-level"} · ${arb.confidence} confidence</span></div>
+            <div class="intel-note">${arb.summary}</div>` : ""}
           </div>` : "";
 
           div.innerHTML = `
