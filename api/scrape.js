@@ -25,6 +25,11 @@ const TRANSIT_INFO = {
   Skarpnäck: { minutes: 15, station: "Skarpnäck", line: "Green line (T-bana)" },
   Bagarmossen: { minutes: 14, station: "Bagarmossen", line: "Green line (T-bana)" },
   Enskede: { minutes: 12, station: "Enskede Gård", line: "Green line (T-bana)" },
+  Hägersten: { minutes: 13, station: "Hägerstensåsen", line: "Red line (T-bana)" },
+  Hägerstensåsen: { minutes: 13, station: "Hägerstensåsen", line: "Red line (T-bana)" },
+  Telefonplan: { minutes: 11, station: "Telefonplan", line: "Red line (T-bana)" },
+  Midsommarkransen: { minutes: 9, station: "Midsommarkransen", line: "Red line (T-bana)" },
+  Västertorp: { minutes: 15, station: "Västertorp", line: "Red line (T-bana)" },
 };
 
 function getTransitForLocation(locationDesc) {

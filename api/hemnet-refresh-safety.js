@@ -18,6 +18,10 @@ const LOCATION_IDS = {
   Enskede: 925961,
   Solna: 18028,
   Årsta: 473440,
+  // Red-line southwest (broad Hägersten district) added 2026-06-19 — one ID that
+  // also pulls Hägerstensåsen, Telefonplan, Midsommarkransen, Aspudden, Örnsberg
+  // and Västertorp. Gentrifying 1940s-50s folkhem stock with strong demand.
+  Hägersten: 925964,
   // Green-line-south expansion (2026-06). All three are renovation-age stock
   // with gentrification momentum and clean reputations (none on the Dec 2025
   // police utsatt-område list). Hökarängen overlaps Farsta's broader node — kept
