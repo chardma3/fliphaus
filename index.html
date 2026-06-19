@@ -407,7 +407,7 @@
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
         <button class="view-tab" data-view="newbuild" title="New-build / projekt listings — market reference, not flips">🏗 New builds</button>
-        <button class="view-tab" data-view="sitting" title="On the market 7+ days — the visning/bidding cycle should have cleared by now, so these may be mispriced or have problems: room to make an offer">⏳ Sitting (7d+)</button>
+        <button class="view-tab" data-view="sitting" title="On the market 14+ days — the visning/bidding cycle should have cleared by now, so these may be mispriced or have problems: room to make an offer">⏳ Sitting (14d+)</button>
       </div>
 
       <!-- Top-level sort: order the same listings by flip return or by lowest price -->
@@ -574,7 +574,7 @@
 
         // Name the active tab + sort so it's clear the count is scoped to this
         // view (e.g. "Move-in ready, cheapest first"), not the whole catalogue.
-        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds", sitting: "Sitting 7d+" }[currentView] || "Listings";
+        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds", sitting: "Sitting 14d+" }[currentView] || "Listings";
         const sortLabel = sortMode === "cheapest"
           ? "cheapest first"
           : (currentView === "deals" ? "highest profit first" : (currentView === "sitting" ? "longest on market first" : "newest first"));

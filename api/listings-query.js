@@ -13,7 +13,7 @@ const EXCLUDED_LOCATIONS = /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/
 // Days on the market at or beyond which a listing counts as "sitting" — long
 // enough that the usual Stockholm visning/bidding cycle should have cleared it,
 // so it may be mispriced or have a problem, which is negotiating room.
-const SITTING_MIN_DAYS = 7;
+const SITTING_MIN_DAYS = 14;
 
 // The active dashboard splits into these views:
 //   deals       — strong renovation flips (score >= DEAL_MIN_SCORE).
