@@ -11,6 +11,10 @@ const LOCATION_IDS = {
   Skarpnäck: 941046,
   Johanneshov: 473376,
   Bromma: 898740,
+  // Inner Bromma green-line stations added 2026-06-19. Pricier/closer-in than
+  // outer Bromma so flip margins are tighter, but strong, liquid demand.
+  Alvik: 473337,
+  "Stora Mossen": 473423,
   Enskede: 925961,
   Solna: 18028,
   Årsta: 473440,

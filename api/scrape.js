@@ -17,6 +17,8 @@ const TRANSIT_INFO = {
   Hökarängen: { minutes: 15, station: "Hökarängen", line: "Green line (T-bana)" },
   Sköndal: { minutes: 20, station: "Farsta strand", line: "Green line (T-bana)" },
   Bromma: { minutes: 20, station: "Abrahamsberg", line: "Green line (T-bana)" },
+  Alvik: { minutes: 8, station: "Alvik", line: "Green line (T-bana)" },
+  "Stora Mossen": { minutes: 10, station: "Stora Mossen", line: "Green line (T-bana)" },
   Blackeberg: { minutes: 18, station: "Blackeberg", line: "Green line (T-bana)" },
   Kista: { minutes: 20, station: "Kista", line: "Blue line (T-bana)" },
   Sollentuna: { minutes: 20, station: "Sollentuna", line: "Pendeltåg" },
