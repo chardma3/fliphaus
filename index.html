@@ -236,6 +236,9 @@
       }
       .view-tab:hover { color: #ddd; }
       .view-tab.active { background: rgba(26,90,26,0.9); color: #69db7c; border-color: #2a7a2a; }
+      /* Sort toggle reuses the tab look but in blue, so it reads as a different control from the view tabs */
+      .sort-tab { padding: 7px 16px; font-size: 0.85rem; }
+      .sort-tab.active { background: rgba(26,54,90,0.9); color: #7eb8f7; border-color: #2a5a8a; }
 
       .invest-calc {
         background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
@@ -404,6 +407,12 @@
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
         <button class="view-tab" data-view="newbuild" title="New-build / projekt listings — market reference, not flips">🏗 New builds</button>
+      </div>
+
+      <!-- Top-level sort: order the same listings by flip return or by lowest price -->
+      <div id="sort-toggle" class="view-tabs" style="margin-top:6px;">
+        <button class="view-tab sort-tab active" data-sort="profit" title="Best estimated flip return first (ROI, then absolute profit)">💰 Highest profit</button>
+        <button class="view-tab sort-tab" data-sort="cheapest" title="Lowest asking price first">🏷 Cheapest first</button>
       </div>
 
       <div id="reno-filters" class="filter-bar" style="display:none;"></div>
@@ -815,6 +824,29 @@
         }
       }
 
+      // Top-level sort, applied across whichever view is active.
+      //   "profit"   — best estimated flip return first (Deals only; browse views
+      //                keep the server's score-newest order).
+      //   "cheapest" — lowest asking price first, in every view.
+      let sortMode = "profit";
+
+      function applySort(listings) {
+        const arr = [...listings];
+        if (sortMode === "cheapest") {
+          return arr.sort((a, b) => (a.askingPriceNum || Infinity) - (b.askingPriceNum || Infinity));
+        }
+        // Profit order only means something for flips. Lead with highest ROI
+        // (the confident green deals), then absolute renovation profit — the
+        // server's score-newest sort buries high-ROI deals otherwise.
+        if (currentView === "deals") {
+          return arr
+            .map(l => ({ l, c: calcInvestment(l) }))
+            .sort((a, b) => (b.c.roi - a.c.roi) || (b.c.renovationProfit - a.c.renovationProfit))
+            .map(x => x.l);
+        }
+        return arr;
+      }
+
       async function loadListings() {
         document.getElementById("stats").textContent = "Loading listings…";
         const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
@@ -828,17 +860,12 @@
         // negative — so deals aren't hidden before their benchmarks exist. Any
         // listing re-enters automatically if a price drop turns it profitable.
         if (currentView === "deals") {
+          // Deals only show flips our investment math doesn't peg as a loss.
           const LOSS = ["unprofitable", "preliminary-unprofitable"];
-          // Lead with the strongest return: highest ROI first (the confident
-          // green deals), then by absolute renovation profit. The server
-          // sort=score-newest only ordered by renovation score, burying high-ROI deals.
-          data.listings = data.listings
-            .filter(l => !LOSS.includes(calcInvestment(l).classification))
-            .map(l => ({ l, c: calcInvestment(l) }))
-            .sort((a, b) => (b.c.roi - a.c.roi) || (b.c.renovationProfit - a.c.renovationProfit))
-            .map(x => x.l);
-          data.total = data.listings.length;
+          data.listings = data.listings.filter(l => !LOSS.includes(calcInvestment(l).classification));
         }
+        data.listings = applySort(data.listings);
+        data.total = data.listings.length;
         allListingsData = data;
         // Profitability only makes sense for renovation deals — Move-in ready
         // listings aren't flips, so hide the profit filter there.
@@ -858,6 +885,26 @@
           document.querySelectorAll("#profit-filters .filter-btn").forEach((b) => b.classList.remove("active"));
           document.getElementById("filter-all").classList.add("active");
           loadListings();
+        });
+      });
+
+      // Sort toggle — re-orders the listings already loaded, no refetch. Resets
+      // the score/profit filters so the new order is shown in full, same as
+      // switching views.
+      document.querySelectorAll("#sort-toggle .sort-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          if (tab.dataset.sort === sortMode) return;
+          sortMode = tab.dataset.sort;
+          document.querySelectorAll("#sort-toggle .sort-tab").forEach((t) => t.classList.toggle("active", t === tab));
+          if (!allListingsData) return;
+          activeFilter = "all";
+          profitFilter = "all";
+          document.querySelectorAll("#profit-filters .filter-btn").forEach((b) => b.classList.remove("active"));
+          document.getElementById("filter-all").classList.add("active");
+          allListingsData.listings = applySort(allListingsData.listings);
+          allListingsData.total = allListingsData.listings.length;
+          buildFilterBar(allListingsData.listings);
+          renderListings(allListingsData);
         });
       });
 
