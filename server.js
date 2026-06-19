@@ -20,6 +20,7 @@ const Assignment = require("./models/assignment.model");
 const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence } = require("./api/brf-intelligence");
+const { buildAreaTrends } = require("./api/sold-trends");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
@@ -669,6 +670,17 @@ app.get("/api/sold/stats", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch sold stats" });
+  }
+});
+
+// Per-area price trend from scraped sold comps — direction (last 90d vs prior
+// 90d) + a monthly kr/m² series for sparklines. Powers the Areas page monitor.
+app.get("/api/sold/trends", async (req, res) => {
+  try {
+    const all = await SoldListing.find({}, { area: 1, soldDate: 1, soldPriceSqm: 1 }).lean();
+    res.json({ trends: buildAreaTrends(all) });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to build sold trends" });
   }
 });
 

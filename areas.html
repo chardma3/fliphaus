@@ -73,6 +73,16 @@
       .liquidity-badge.neutral  { background: rgba(116,143,252,0.16); color: #91a7ff; }
       .liquidity-badge.cautious { background: rgba(255,212,59,0.16); color: #ffd43b; }
       .liquidity-badge.negative { background: rgba(255,107,107,0.18); color: #ff8787; }
+      .kista-risk { background: rgba(255,107,107,0.10); border-left: 3px solid #ff6b6b; padding: 8px 10px; border-radius: 6px; color: #ffb3b3 !important; }
+      /* Per-area price-trend monitor (sold kr/m², last 90d vs prior 90d) */
+      .trend-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a2a; flex-wrap: wrap; }
+      .trend-badge { font-size: 0.74rem; font-weight: 600; padding: 3px 9px; border-radius: 12px; white-space: nowrap; }
+      .trend-badge.up   { background: rgba(105,219,124,0.16); color: #69db7c; }
+      .trend-badge.down { background: rgba(255,107,107,0.18); color: #ff8787; }
+      .trend-badge.flat { background: rgba(116,143,252,0.16); color: #91a7ff; }
+      .trend-badge.insufficient { background: rgba(120,120,120,0.16); color: #999; }
+      .trend-label { font-size: 0.72rem; color: #888; }
+      .trend-spark { display: block; }
 
       .stat-grid {
         display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
@@ -187,7 +197,8 @@
             <p><strong>Municipality:</strong> Stockholms kommun</p>
             <p><strong>Built:</strong> 1970s (miljonprogrammet)</p>
             <p><strong>Transit:</strong> Kista tunnelbana (Blue line) — ~20 min to T-Centralen</p>
-            <p><strong>Why it's high potential:</strong> Kista is Stockholm's tech cluster ("Kista Science City"), drawing a steady stream of well-paid IT professionals who want to live near work. The surrounding residential stock is largely original 1970s apartments, so renovated homes command a real premium against a deep, employed tenant/buyer base.</p>
+            <p><strong>The setup:</strong> Kista is Stockholm's tech cluster ("Kista Science City"), built around Ericsson and largely original 1970s apartments — historically a deep, employed buyer base that paid a premium for renovated homes.</p>
+            <p class="kista-risk"><strong>⚠️ Watch closely — prices falling on a structural shift, not just the rate cycle.</strong> Ericsson is relocating its Stockholm HQ out of Kista to Hagastaden and cutting ~1,600 Swedish jobs, and Q1-2026 office vacancy hit ~26.7% (double central Stockholm). The anchor employer that made Kista a flip area is leaving, so the recent fall isn't guaranteed to mean-revert just because rates have stabilised. <strong>Treat as comps/market data and hold off sourcing here until the trend below flattens and turns</strong> — that's the buy signal, not "it can't fall further".</p>
           </div>
 
           <div class="area-card" data-area="Bagarmossen">
@@ -340,6 +351,59 @@
         }
       }
 
+      // Tiny inline-SVG sparkline of monthly avg kr/m² — no chart library.
+      function sparkline(series, color) {
+        const pts = series.filter((p) => p.avgSqm != null);
+        if (pts.length < 2) return "";
+        const w = 90, h = 24, pad = 2;
+        const vals = pts.map((p) => p.avgSqm);
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = max - min || 1;
+        const coords = pts.map((p, i) => {
+          const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+          const y = h - pad - ((p.avgSqm - min) / span) * (h - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        });
+        const last = coords[coords.length - 1].split(",");
+        return `<svg class="trend-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+          <polyline fill="none" stroke="${color}" stroke-width="1.5" points="${coords.join(" ")}" />
+          <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="${color}" />
+        </svg>`;
+      }
+
+      // Per-area price-trend monitor: direction badge + monthly kr/m² sparkline.
+      async function loadTrends() {
+        try {
+          const res = await fetch("/api/sold/trends");
+          const data = await res.json();
+          const trends = data.trends || {};
+          document.querySelectorAll(".area-card[data-area]").forEach((card) => {
+            const t = trends[card.dataset.area];
+            if (!t) return;
+            const dir = t.direction || { level: "insufficient" };
+            const colors = { up: "#69db7c", down: "#ff8787", flat: "#91a7ff", insufficient: "#777" };
+            const arrow = { up: "▲", down: "▼", flat: "▬", insufficient: "" };
+            let badgeText;
+            if (dir.level === "insufficient") {
+              badgeText = "Not enough sold data yet";
+            } else {
+              const sign = dir.pct > 0 ? "+" : "";
+              badgeText = `${arrow[dir.level]} ${sign}${dir.pct}% kr/m² · last 90d`;
+            }
+            const spark = sparkline(t.series || [], colors[dir.level] || "#777");
+            const row = document.createElement("div");
+            row.className = "trend-row";
+            const title = dir.level === "insufficient"
+              ? "Need at least 4 sales in both the last 90 days and the prior 90 days to call a direction."
+              : `Avg sold price/m²: ${dir.recentAvgSqm?.toLocaleString("sv-SE")} kr (last 90d, ${dir.recentCount} sales) vs ${dir.priorAvgSqm?.toLocaleString("sv-SE")} kr (prior 90d, ${dir.priorCount} sales)`;
+            row.innerHTML = `<span class="trend-badge ${dir.level}" title="${title}">${badgeText}</span>${spark}${spark ? '<span class="trend-label">12-mo kr/m²</span>' : ""}`;
+            card.appendChild(row);
+          });
+        } catch (e) {
+          console.error("Failed to load price trends", e);
+        }
+      }
+
       async function init() {
         // User auth
         const res = await fetch("/api/me");
@@ -404,6 +468,7 @@
 
       init();
       loadLiquidity();
+      loadTrends();
     </script>
   </body>
 </html>
