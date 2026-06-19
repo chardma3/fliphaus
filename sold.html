@@ -43,7 +43,10 @@
       .area-table .red { color: #ff8888; }
       .area-table .blue { color: #7eb8f7; }
 
-      .sold-card { background: #252525; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 14px; align-items: center; }
+      .sold-card { background: #252525; border-radius: 8px; padding: 14px; margin-bottom: 10px; display: flex; gap: 14px; align-items: center; text-decoration: none; color: inherit; }
+      a.sold-card.clickable { transition: background 0.15s, transform 0.15s; }
+      a.sold-card.clickable:hover { background: #2e2e2e; transform: translateY(-1px); }
+      .sold-info h4 .ext { color: #7eb8f7; font-size: 0.8rem; }
       .sold-card img { width: 80px; height: 60px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
       .sold-card .no-img { width: 80px; height: 60px; border-radius: 6px; background: #333; flex-shrink: 0; }
       .sold-info { flex: 1; min-width: 0; }
@@ -124,11 +127,15 @@
           const changeClass = change > 0 ? "up" : change < 0 ? "down" : "";
           const changeText = change != null ? (change > 0 ? "+" : "") + change + "%" : "";
           const soldDate = l.soldDate ? new Date(l.soldDate).toLocaleDateString("sv-SE") : "";
+          // Listings carry the original Hemnet URL — make the whole card open it
+          // so you can read the full listing, rather than it being a dead tile.
+          const tag = l.link ? "a" : "div";
+          const attrs = l.link ? ` href="${l.link}" target="_blank" rel="noopener"` : "";
           return `
-            <div class="sold-card">
+            <${tag} class="sold-card${l.link ? " clickable" : ""}"${attrs}>
               ${img ? `<img src="${img}" />` : '<div class="no-img"></div>'}
               <div class="sold-info">
-                <h4>${l.streetAddress}</h4>
+                <h4>${l.streetAddress}${l.link ? ' <span class="ext">↗</span>' : ""}</h4>
                 <div class="sold-meta">${l.locationDescription || l.area} · ${l.rooms || ""} · ${l.size || ""}</div>
                 <div class="sold-meta">Sold <span>${soldDate}</span>${l.soldPriceSqm ? " · " + l.soldPriceSqm.toLocaleString("sv-SE") + " kr/m²" : ""}</div>
               </div>
@@ -137,7 +144,7 @@
                 ${l.askingPriceNum ? `<div class="asking">${formatK(l.askingPriceNum)} kr</div>` : ""}
                 ${changeText ? `<div class="change ${changeClass}">${changeText}</div>` : ""}
               </div>
-            </div>
+            </${tag}>
           `;
         }).join("");
       }
