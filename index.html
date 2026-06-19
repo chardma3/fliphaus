@@ -371,7 +371,7 @@
       <header>
         <div>
           <a href="/" style="text-decoration:none;color:inherit;"><h1>FlipHaus</h1></a>
-          <h2 id="subtitle">AI-powered renovation investment analysis — 10 Stockholm areas</h2>
+          <h2 id="subtitle">AI-powered renovation investment analysis — 13 Stockholm areas</h2>
         </div>
         <div class="header-right" id="header-right"></div>
       </header>
@@ -393,11 +393,11 @@
         <span><strong style="color:#ffd43b;">4-6/10</strong> Some potential — partially updated, selective renovation could add value.</span>
         <span><strong style="color:#aaa;">1-3/10</strong> Move-in ready — recently renovated, minimal upside from further work.</span>
         <span><strong style="color:#69db7c;">+Green badge</strong> = estimated profit &nbsp; <strong style="color:#ff8888;">-Red badge</strong> = would lose money at current price</span>
-        <span style="color:#555;"><strong>Deals</strong> shows strong flips (7–10) — open here for the best opportunities. <strong>Move-in ready</strong> holds the rest (1–6) for browsing what's available and at what price. Covering 10 Stockholm areas.</span>
+        <span style="color:#555;"><strong>Deals</strong> shows strong flips (7–10) — open here for the best opportunities. <strong>Move-in ready</strong> holds the rest (1–6) for browsing what's available and at what price. Covering 13 Stockholm areas.</span>
       </div>
 
       <div class="instructions" style="border-left:3px solid #7eb8f7; background:#141a20;">
-        <span style="color:#7eb8f7; font-weight:500;">This is a prototype focusing on a small sample while the app is in development.</span>
+        <span style="color:#7eb8f7; font-weight:500;">This is a prototype covering 13 Stockholm areas while the app is in development.</span>
         <span>This is what the FlipHaus dashboard looks like before listings are chosen by a project manager and sent to a partner builder. Once a builder accepts and enters a quote, the listing appears on the project manager's dashboard for approval — which then makes it available on the investor dashboard for investment.</span>
       </div>
 
@@ -571,7 +571,13 @@
           return;
         }
 
-        statsEl.innerHTML = `<strong>${data.total}</strong> properties found`;
+        // Name the active tab + sort so it's clear the count is scoped to this
+        // view (e.g. "Move-in ready, cheapest first"), not the whole catalogue.
+        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds" }[currentView] || "Listings";
+        const sortLabel = sortMode === "cheapest"
+          ? "cheapest first"
+          : (currentView === "deals" ? "highest profit first" : "newest first");
+        statsEl.innerHTML = `<strong>${data.total}</strong> ${viewLabel} ${data.total === 1 ? "property" : "properties"} · ${sortLabel}`;
 
         data.listings.forEach((listing) => {
           const isRejected = listing.preferenceStatus === "rejected";
@@ -898,11 +904,16 @@
         renderListings(data);
       }
 
-      document.querySelectorAll(".view-tab").forEach((tab) => {
+      // Scope to #view-tabs only: the sort buttons share the .view-tab class for
+      // styling, so an unscoped ".view-tab" selector would bind this handler to
+      // them too — clicking a sort button would then blank currentView and the
+      // server would fall back to the Deals view (the bug behind "cheapest first
+      // shows a Deals listing while on Move-in ready").
+      document.querySelectorAll("#view-tabs .view-tab").forEach((tab) => {
         tab.addEventListener("click", () => {
           if (tab.dataset.view === currentView) return;
           currentView = tab.dataset.view;
-          document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("active", t === tab));
+          document.querySelectorAll("#view-tabs .view-tab").forEach((t) => t.classList.toggle("active", t === tab));
           // Reset score + profit filters when switching views.
           activeFilter = "all";
           profitFilter = "all";
