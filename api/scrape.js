@@ -115,14 +115,21 @@ async function scrapeArea(page, areaName, locationId) {
   });
 }
 
+// An authenticated, sized tab. Detail-page scraping recycles these (see the
+// loop below) so Chromium can reclaim per-page renderer memory.
+async function createScrapePage(browser) {
+  const page = await browser.newPage();
+  await authenticateProxyPage(page);
+  await page.setViewport({ width: 1280, height: 800 });
+  return page;
+}
+
 module.exports = async (options = {}) => {
   const { includeDetails } = buildActiveScrapeOptions(options);
   logProxyStatus();
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
-  const page = await browser.newPage();
-  await authenticateProxyPage(page);
-  await page.setViewport({ width: 1280, height: 800 });
+  let page = await createScrapePage(browser);
 
   const allListings = [];
   const scrapedAreas = [];
@@ -182,8 +189,18 @@ module.exports = async (options = {}) => {
     // Visit each detail page to get all images + floor plan status.
     // AI image analysis is intentionally handled by /api/analyze-images after scraping.
     console.log(`Fetching detail pages for ${unique.length} listings...`);
+    // Reusing one tab across hundreds of navigations leaks Chromium memory —
+    // each detail page's renderer state accumulates, and on the 2 GB Render
+    // instance the scheduled includeDetails run climbs past 2 GB and OOMs ~30 min
+    // in. Recycle the tab every N listings so Chromium reclaims that memory.
+    // env-overridable; lower it further if the instance is still tight.
+    const RECYCLE_EVERY = Math.max(1, Number(process.env.SCRAPE_PAGE_RECYCLE_EVERY) || 25);
     for (let i = 0; i < unique.length; i++) {
       const l = unique[i];
+      if (i > 0 && i % RECYCLE_EVERY === 0) {
+        try { await page.close(); } catch { /* already gone */ }
+        page = await createScrapePage(browser);
+      }
       try {
         await page.goto(`https://www.hemnet.se/bostad/${l.slug}`, { waitUntil: "networkidle2", timeout: 20000 });
         const detail = await page.evaluate(() => {
