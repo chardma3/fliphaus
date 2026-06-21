@@ -10,7 +10,7 @@ const { PROJECT_ADDRESS } = require("./project-listing");
 const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
 const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null, target = null } = {}) {
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null, reanalyzeMinScore = null, target = null } = {}) {
   // Never spend analysis on new-build/projekt listings — they're not flips and
   // their detail pages can't be hydrated anyway. They surface in the New builds
   // view as raw market data instead.
@@ -56,7 +56,15 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
       // wrongly read "covered" while the stored photos lack a wet room, which
       // means self-heal never re-picks them. Re-analysing stamps a fresh
       // analyzedAt so each listing drops out and the drain loop terminates.
-      query.$or.push({ analyzedAt: { $lt: reanalyzeBefore } });
+      // reanalyzeMinScore scopes it to e.g. deals (renovationScore >= 7) so a
+      // prompt change can be rolled out to the listings that matter most without
+      // re-spending on the whole dataset.
+      const stale = { analyzedAt: { $lt: reanalyzeBefore } };
+      query.$or.push(
+        reanalyzeMinScore != null
+          ? { $and: [stale, { renovationScore: { $gte: reanalyzeMinScore } }] }
+          : stale
+      );
     }
   }
   return query;
@@ -218,7 +226,7 @@ async function analyzeActiveListings(options = {}) {
   };
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore, target: options.target }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target: options.target }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
@@ -254,7 +262,7 @@ async function analyzeListingImagesRefresh(options = {}) {
   const result = { dataset, limit, target, active: null, sold: null };
 
   if (dataset === "active" || dataset === "all") {
-    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, target });
+    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target });
   }
 
   if (dataset === "sold" || dataset === "all") {

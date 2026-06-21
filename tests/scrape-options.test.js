@@ -68,6 +68,8 @@ test("image analysis refresh defaults to a small post-scrape batch", () => {
     limit: 10,
     onlyMissing: true,
     target: null,
+    reanalyzeBefore: null,
+    reanalyzeMinScore: null,
   });
 });
 
@@ -77,13 +79,25 @@ test("image analysis refresh validates dataset and caps batch size", () => {
     limit: 25,
     onlyMissing: false,
     target: null,
+    reanalyzeBefore: null,
+    reanalyzeMinScore: null,
   });
   assert.deepEqual(buildImageAnalysisOptions({ dataset: "bad", limit: "0" }), {
     dataset: "all",
     limit: 1,
     onlyMissing: true,
     target: null,
+    reanalyzeBefore: null,
+    reanalyzeMinScore: null,
   });
+});
+
+test("image analysis refresh parses a reanalyzeBefore cutoff and optional min score", () => {
+  const opts = buildImageAnalysisOptions({ reanalyzeBefore: "2026-06-21T00:00:00.000Z", reanalyzeMinScore: "7" });
+  assert.equal(opts.reanalyzeBefore.toISOString(), "2026-06-21T00:00:00.000Z");
+  assert.equal(opts.reanalyzeMinScore, 7);
+  // Garbage date is ignored.
+  assert.equal(buildImageAnalysisOptions({ reanalyzeBefore: "not-a-date" }).reanalyzeBefore, null);
 });
 
 test("image analysis refresh accepts a single-listing target by id, slug or listing", () => {

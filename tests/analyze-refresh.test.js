@@ -68,6 +68,14 @@ test("reanalyzeBefore adds a one-shot stale-cutoff clause to the re-pick", () =>
   assert.ok(!without.$or.some((c) => c.analyzedAt && c.analyzedAt.$lt));
 });
 
+test("reanalyzeMinScore scopes the re-pick to deals (score >= threshold)", () => {
+  const before = new Date("2026-06-21T00:00:00.000Z");
+  const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, reanalyzeBefore: before, reanalyzeMinScore: 7 });
+  assert.deepEqual(query.$or.at(-1), {
+    $and: [{ analyzedAt: { $lt: before } }, { renovationScore: { $gte: 7 } }],
+  });
+});
+
 test("a target restricts the query to one listing by id or slug and ignores onlyMissing/self-heal", () => {
   const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, target: "abc123" });
   assert.deepEqual(query.$or, [{ id: "abc123" }, { slug: "abc123" }]);

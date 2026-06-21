@@ -31,11 +31,21 @@ function buildImageAnalysisOptions(query = {}) {
   // analysed. Used to correct a specific listing without a full recency batch.
   const target = String(query.listing || query.id || query.slug || "").trim() || null;
 
+  // Optional one-shot re-analysis of already-scored listings analysed before a
+  // cutoff (?reanalyzeBefore=<ISO date>), e.g. to roll out a prompt change.
+  // ?reanalyzeMinScore=7 scopes it to deals.
+  const reanalyzeDate = query.reanalyzeBefore ? new Date(query.reanalyzeBefore) : null;
+  const reanalyzeBefore = reanalyzeDate && !Number.isNaN(reanalyzeDate.getTime()) ? reanalyzeDate : null;
+  const rawMinScore = Number(query.reanalyzeMinScore);
+  const reanalyzeMinScore = Number.isFinite(rawMinScore) ? rawMinScore : null;
+
   return {
     dataset,
     limit,
     onlyMissing: isEnabled(query.onlyMissing),
     target,
+    reanalyzeBefore,
+    reanalyzeMinScore,
   };
 }
 

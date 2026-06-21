@@ -14,7 +14,13 @@
 //                             scrape (analysis re-hydrates galleries itself anyway)
 //   TZ=Europe/Stockholm       interpret SCHEDULE_HOUR in this zone
 
+const { DEAL_MIN_SCORE } = require("./listings-query");
+
 const DEFAULT_HOUR = 3;
+
+function isFlagOn(value) {
+  return value === "true" || value === "1";
+}
 
 // ms from `now` until the next occurrence of hour:00 in the server's local time.
 // Recomputed after each run, so DST shifts are absorbed automatically.
@@ -37,6 +43,13 @@ function startScheduler({ scrape, analyze, env = process.env, log = console.log 
 
   const hour = Number.isFinite(Number(env.SCHEDULE_HOUR)) ? Number(env.SCHEDULE_HOUR) : DEFAULT_HOUR;
   const includeDetails = env.SCHEDULE_SCRAPE_DETAILS !== "false";
+  // One-shot prompt rollout: set REANALYZE_DEALS_ONCE=true and the next nightly
+  // run re-scores active DEALS that were analysed before the server started (i.e.
+  // before this deploy / the new prompts). The cutoff is the start time, so once
+  // a deal is re-scored its fresh analyzedAt is past the cutoff and it drops out —
+  // no repeat, no future-date footgun. Safe to leave set (it re-runs once per
+  // deploy); remove it when you're done rolling out.
+  const reanalyzeBefore = isFlagOn(env.REANALYZE_DEALS_ONCE) ? new Date() : null;
   let running = false;
 
   const runJob = async () => {
@@ -50,7 +63,17 @@ function startScheduler({ scrape, analyze, env = process.env, log = console.log 
     log(`⏰ Scheduled run starting (${new Date().toISOString()})`);
     try {
       await scrape({ includeDetails });
-      const result = await analyze({ dataset: "active" });
+      const analyzeOpts = { dataset: "active" };
+      if (reanalyzeBefore) {
+        // Re-score deals analysed before the cutoff alongside the usual new-listing
+        // + self-heal pass. A wider limit drains the (small) deals set in one run;
+        // gallery hydration recycles its tab so the extra volume stays memory-safe.
+        analyzeOpts.reanalyzeBefore = reanalyzeBefore;
+        analyzeOpts.reanalyzeMinScore = DEAL_MIN_SCORE;
+        analyzeOpts.limit = 25;
+        log(`⏰ Re-scoring deals analysed before ${reanalyzeBefore.toISOString()} (score >= ${DEAL_MIN_SCORE})`);
+      }
+      const result = await analyze(analyzeOpts);
       log(`⏰ Scheduled run complete: ${JSON.stringify(result.active || result)}`);
     } catch (err) {
       console.error(`⏰ Scheduled run failed: ${err.message}`);

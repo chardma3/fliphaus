@@ -7,6 +7,17 @@ puppeteer.use(StealthPlugin());
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const PAGE_ATTEMPTS = Math.max(1, Number(process.env.GALLERY_MAX_PAGE_ATTEMPTS) || 4);
+// Recycle the tab every N galleries so Chromium reclaims per-page renderer
+// memory rather than accumulating it across navigations (same leak fixed in the
+// scrape). Keeps batched gallery hydration safe if the analyse limit is raised.
+const GALLERY_RECYCLE_EVERY = Math.max(1, Number(process.env.GALLERY_PAGE_RECYCLE_EVERY) || 25);
+
+async function createGalleryPage(browser) {
+  const page = await browser.newPage();
+  await authenticateProxyPage(page);
+  await page.setViewport({ width: 1280, height: 800 });
+  return page;
+}
 
 // Pull the full image gallery from a listing's detail page. The active scrape
 // runs includeDetails=false and only stores ~5 search-card thumbnails, which
@@ -51,11 +62,14 @@ async function fetchGalleries(slugs, { maxAttempts = PAGE_ATTEMPTS } = {}) {
   logProxyStatus();
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
   try {
-    const page = await browser.newPage();
-    await authenticateProxyPage(page);
-    await page.setViewport({ width: 1280, height: 800 });
+    let page = await createGalleryPage(browser);
 
-    for (const slug of unique) {
+    for (let i = 0; i < unique.length; i++) {
+      const slug = unique[i];
+      if (i > 0 && i % GALLERY_RECYCLE_EVERY === 0) {
+        try { await page.close(); } catch { /* already gone */ }
+        page = await createGalleryPage(browser);
+      }
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           const images = await fetchGalleryOnPage(page, slug);
