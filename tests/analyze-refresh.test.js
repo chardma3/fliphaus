@@ -68,6 +68,14 @@ test("reanalyzeBefore adds a one-shot stale-cutoff clause to the re-pick", () =>
   assert.ok(!without.$or.some((c) => c.analyzedAt && c.analyzedAt.$lt));
 });
 
+test("a target restricts the query to one listing by id or slug and ignores onlyMissing/self-heal", () => {
+  const query = buildAnalysisQuery({ onlyMissing: true, status: "active", requireAnalyzedAt: true, target: "abc123" });
+  assert.deepEqual(query.$or, [{ id: "abc123" }, { slug: "abc123" }]);
+  assert.equal(query.status, "active");
+  // No onlyMissing/self-heal clauses leaked in — the $or is exactly the target match.
+  assert.ok(!query.$or.some((c) => "renovationScore" in c || "$and" in c));
+});
+
 test("sold image analysis query does not require analyzedAt because sold listings do not store it", () => {
   assert.deepEqual(buildAnalysisQuery({ onlyMissing: true }), {
     "images.0": { $exists: true },

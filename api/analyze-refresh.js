@@ -10,12 +10,19 @@ const { PROJECT_ADDRESS } = require("./project-listing");
 const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
 const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null } = {}) {
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null, target = null } = {}) {
   // Never spend analysis on new-build/projekt listings — they're not flips and
   // their detail pages can't be hydrated anyway. They surface in the New builds
   // view as raw market data instead.
   const query = { "images.0": { $exists: true }, streetAddress: { $not: PROJECT_ADDRESS } };
   if (status) query.status = status;
+  if (target) {
+    // Targeted re-analysis of a single listing by Hemnet id or URL slug. Force a
+    // re-score regardless of onlyMissing/self-heal/coverage state, so a listing
+    // that's already scored (e.g. a top deal we want corrected) gets re-run.
+    query.$or = [{ id: target }, { slug: target }];
+    return query;
+  }
   if (onlyMissing) {
     query.$or = [
       { renovationScore: null },
@@ -211,7 +218,7 @@ async function analyzeActiveListings(options = {}) {
   };
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore, target: options.target }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
@@ -227,7 +234,7 @@ async function analyzeSoldListings(options = {}) {
   const SoldListing = require("../models/sold.model");
   return analyzeBatch({
     Model: SoldListing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, target: options.target }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
@@ -240,15 +247,18 @@ async function analyzeSoldListings(options = {}) {
 
 async function analyzeListingImagesRefresh(options = {}) {
   const dataset = options.dataset || "all";
-  const limit = options.limit || 10;
-  const result = { dataset, limit, active: null, sold: null };
+  const target = options.target || null;
+  // A targeted re-analysis only ever matches the one listing, so cap the batch
+  // at 1 regardless of the requested limit.
+  const limit = target ? 1 : options.limit || 10;
+  const result = { dataset, limit, target, active: null, sold: null };
 
   if (dataset === "active" || dataset === "all") {
-    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore });
+    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, target });
   }
 
   if (dataset === "sold" || dataset === "all") {
-    result.sold = await analyzeSoldListings({ limit, onlyMissing: options.onlyMissing });
+    result.sold = await analyzeSoldListings({ limit, onlyMissing: options.onlyMissing, target });
   }
 
   return result;

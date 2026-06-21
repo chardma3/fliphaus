@@ -26,10 +26,16 @@ function buildImageAnalysisOptions(query = {}) {
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 25) : 10;
   const dataset = ["active", "sold", "all"].includes(query.dataset) ? query.dataset : "all";
 
+  // Optional single-listing target: re-analyse just this listing by Hemnet id or
+  // URL slug (?listing=, ?id= or ?slug=), forcing a re-score even if it's already
+  // analysed. Used to correct a specific listing without a full recency batch.
+  const target = String(query.listing || query.id || query.slug || "").trim() || null;
+
   return {
     dataset,
     limit,
     onlyMissing: isEnabled(query.onlyMissing),
+    target,
   };
 }
 

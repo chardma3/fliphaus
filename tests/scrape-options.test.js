@@ -67,6 +67,7 @@ test("image analysis refresh defaults to a small post-scrape batch", () => {
     dataset: "all",
     limit: 10,
     onlyMissing: true,
+    target: null,
   });
 });
 
@@ -75,10 +76,19 @@ test("image analysis refresh validates dataset and caps batch size", () => {
     dataset: "sold",
     limit: 25,
     onlyMissing: false,
+    target: null,
   });
   assert.deepEqual(buildImageAnalysisOptions({ dataset: "bad", limit: "0" }), {
     dataset: "all",
     limit: 1,
     onlyMissing: true,
+    target: null,
   });
+});
+
+test("image analysis refresh accepts a single-listing target by id, slug or listing", () => {
+  assert.equal(buildImageAnalysisOptions({ listing: "  abc123 " }).target, "abc123");
+  assert.equal(buildImageAnalysisOptions({ id: "999" }).target, "999");
+  assert.equal(buildImageAnalysisOptions({ slug: "lagenhet-3rum-farsta" }).target, "lagenhet-3rum-farsta");
+  assert.equal(buildImageAnalysisOptions({}).target, null);
 });
