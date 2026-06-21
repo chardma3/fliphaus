@@ -21,6 +21,7 @@ const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence } = require("./api/brf-intelligence");
 const { buildAreaTrends } = require("./api/sold-trends");
+const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
 const { presentListingForFeed } = require("./api/listing-presenter");
@@ -687,6 +688,25 @@ app.get("/api/sold/trends", async (req, res) => {
     res.json({ trends: buildAreaTrends(all) });
   } catch (err) {
     res.status(500).json({ error: "Failed to build sold trends" });
+  }
+});
+
+// Deep per-area intelligence from our own slutpriser: renovated-vs-unrenovated
+// kr/m² spread, liquidity (days on market, sold-vs-asking), and new-build
+// sell-through. Answers "is this area's discount a trap or an opportunity" from
+// our data. ?area=Kista returns one area; omit it for a map of all areas.
+app.get("/api/sold/area-intel", async (req, res) => {
+  try {
+    const area = req.query.area;
+    const fields = { area: 1, soldDate: 1, soldPriceSqm: 1, daysOnMarket: 1, priceChange: 1, conditionLabel: 1, buildYear: 1 };
+    const listings = await SoldListing.find(area ? { area } : {}, fields).lean();
+    if (area) {
+      res.json({ area, intelligence: buildAreaIntelligence(listings) });
+    } else {
+      res.json({ areas: buildAllAreaIntelligence(listings) });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Failed to build area intelligence" });
   }
 });
 

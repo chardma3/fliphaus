@@ -100,6 +100,15 @@
           <p class="data-note">Only properties that first appeared on the FlipHaus dashboard and were later matched to a confirmed sale. General market sales have moved to Market sales.</p>
         </div>
 
+        <div class="section" id="area-intel-section">
+          <h3>Area intelligence <span style="font-weight:300;font-size:0.78rem;color:#888;">— our sold-data signal</span></h3>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <label for="intel-area" style="font-size:0.8rem;color:#888;">Area</label>
+            <select id="intel-area" style="background:#252525;color:#e0e0e0;border:1px solid #333;border-radius:6px;padding:6px 10px;font-family:Poppins,sans-serif;font-size:0.82rem;"></select>
+          </div>
+          <div id="intel-body"><div class="empty">Loading…</div></div>
+        </div>
+
         <div class="section">
           <h3>FlipHaus dashboard properties sold</h3>
           <div class="filter-bar" id="area-filters"></div>
@@ -110,11 +119,67 @@
     <script>
       let allSoldData = null;
       let activeAreaFilter = null;
+      let areasIntel = {};
 
       function formatK(n) {
         if (!n) return "—";
         if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
         return Math.round(n / 1000) + "K";
+      }
+
+      const fmtSqm = (n) => (n != null ? n.toLocaleString("sv-SE") + " kr/m²" : "—");
+      const fmtSigned = (n) => (n != null ? (n > 0 ? "+" : "") + n.toLocaleString("sv-SE") : "—");
+      const fmtPct = (n) => (n != null ? (n > 0 ? "+" : "") + n + "%" : "—");
+
+      // Render the deep area signal (renovation spread, liquidity, new-build
+      // sell-through) from /api/sold/area-intel for the selected area.
+      function renderAreaIntel(area) {
+        const body = document.getElementById("intel-body");
+        const intel = areasIntel[area];
+        if (!intel || !intel.sampleSize) {
+          body.innerHTML = '<div class="empty">No sold comps for this area yet — figures appear once its slutpriser are scraped and analysed.</div>';
+          return;
+        }
+        const o = intel.overall, rs = intel.renovationSpread, nb = intel.newBuild, c = intel.coverage, bc = intel.byCondition;
+        const range = intel.soldYearRange ? `${intel.soldYearRange.from}–${intel.soldYearRange.to}` : "";
+        const thin = '<span style="color:#e0a96d;">· thin sample</span>';
+
+        const renoRow = rs.perSqm != null
+          ? `<span class="${rs.perSqm > 0 ? "green" : "red"}">${fmtSigned(rs.perSqm)} kr/m²</span>${rs.pctUplift != null ? ` (${fmtPct(rs.pctUplift)})` : ""} ${rs.confident ? "" : thin}`
+          : '<span style="color:#888;">not enough renovated vs unrenovated comps yet</span>';
+        const nbRow = nb.premiumPerSqm != null
+          ? `<span class="${nb.premiumPerSqm > 0 ? "green" : "red"}">${fmtSigned(nb.premiumPerSqm)} kr/m²</span>${nb.fasterSaleDays != null ? ` · new sells <span class="${nb.fasterSaleDays > 0 ? "green" : "red"}">${nb.fasterSaleDays > 0 ? nb.fasterSaleDays + "d faster" : Math.abs(nb.fasterSaleDays) + "d slower"}</span>` : ""} ${nb.confident ? "" : thin}`
+          : '<span style="color:#888;">not enough new-build comps yet</span>';
+
+        body.innerHTML = `
+          <div class="stat-grid">
+            <div class="stat-box"><div class="stat-value">${fmtSqm(o.avgSqm)}</div><div class="stat-label">Avg sold</div></div>
+            <div class="stat-box"><div class="stat-value">${o.avgDaysOnMarket != null ? o.avgDaysOnMarket + "d" : "—"}</div><div class="stat-label">Avg days listed</div></div>
+            <div class="stat-box"><div class="stat-value">${fmtPct(o.avgPriceChange)}</div><div class="stat-label">Sold vs asking</div></div>
+            <div class="stat-box"><div class="stat-value">${intel.sampleSize}</div><div class="stat-label">Sold comps</div></div>
+          </div>
+          <table class="area-table">
+            <tr><th>Signal</th><th>Reading</th></tr>
+            <tr><td>Renovation premium<br><span style="color:#666;font-size:0.72rem;">renovated (${bc.renovated.n}) vs unrenovated (${bc.unrenovated.n}) kr/m²</span></td><td>${renoRow}</td></tr>
+            <tr><td>Quality demand<br><span style="color:#666;font-size:0.72rem;">new/recent builds (${nb.new.n}) vs existing (${nb.existing.n})</span></td><td>${nbRow}</td></tr>
+          </table>
+          <p class="data-note">Based on ${intel.sampleSize} sold comps${range ? " (" + range + ")" : ""}. Condition known for ${c.withConditionLabel}/${intel.sampleSize}, build year for ${c.withBuildYear}/${intel.sampleSize} — figures firm up as more sold listings are analysed. A renovation premium only matters if it clears renovation cost; "thin sample" = treat as indicative, not firm.</p>
+        `;
+      }
+
+      async function loadAreaIntel() {
+        try {
+          const r = await fetch("/api/sold/area-intel");
+          const d = await r.json();
+          areasIntel = d.areas || {};
+        } catch (e) { console.error("Failed to load area intelligence", e); areasIntel = {}; }
+        const select = document.getElementById("intel-area");
+        const areas = Object.keys(areasIntel).filter((a) => areasIntel[a].sampleSize > 0).sort();
+        if (!areas.length) { document.getElementById("intel-body").innerHTML = '<div class="empty">No analysed sold comps yet.</div>'; return; }
+        const def = areas.includes("Kista") ? "Kista" : areas[0];
+        select.innerHTML = areas.map((a) => `<option value="${a}"${a === def ? " selected" : ""}>${a}</option>`).join("");
+        select.addEventListener("change", (e) => renderAreaIntel(e.target.value));
+        renderAreaIntel(def);
       }
 
       function renderSoldList(listings) {
@@ -206,6 +271,9 @@
         } catch (e) {
           console.error("Failed to load sold data", e);
         }
+
+        // Deep area signal (renovation spread, liquidity, new-build demand).
+        loadAreaIntel();
       }
 
       init();
