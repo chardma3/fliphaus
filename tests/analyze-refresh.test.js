@@ -114,6 +114,30 @@ test("coverage flags come from the persisted display set, not the wider gallery"
   assert.equal(update.imageCoverageComplete, false);
 });
 
+test("a fully-analysed gallery lets the model's coverage rescue a triage false-negative", () => {
+  // Small 5-photo listing: triage mis-tagged the bathroom shots so displayCoverage
+  // says no bathroom, but the scoring model analysed every photo and saw it. Since
+  // the whole gallery was analysed, trust the stronger model.
+  const update = applyActiveAnalysisUpdate({
+    renovationScore: 7,
+    roomCoverage: { kitchenVisible: true, bathroomVisible: true, analysedImageCount: 5, totalImageCount: 5 },
+    displayCoverage: { kitchenPictured: true, bathroomPictured: false },
+  });
+  assert.equal(update.bathroomPictured, true);
+  assert.equal(update.imageCoverageComplete, true);
+});
+
+test("a partly-analysed gallery still defers to the display set (no rescue)", () => {
+  // Only 12 of 40 photos analysed: the bathroom the model saw may not be in the
+  // curated display set, so we must NOT claim it — self-heal should re-hydrate.
+  const update = applyActiveAnalysisUpdate({
+    renovationScore: 7,
+    roomCoverage: { kitchenVisible: true, bathroomVisible: true, analysedImageCount: 12, totalImageCount: 40 },
+    displayCoverage: { kitchenPictured: true, bathroomPictured: false },
+  });
+  assert.equal(update.bathroomPictured, false);
+});
+
 test("coverage falls back to the model's roomCoverage when triage gave no classification", () => {
   // displayCoverage is null (triage failed) -> use what the model reported.
   const update = applyActiveAnalysisUpdate({

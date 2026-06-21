@@ -72,8 +72,18 @@ function applyActiveAnalysisUpdate(analysis) {
   // claiming a wet room the curated set dropped, so self-heal can re-hydrate it.
   const coverage = analysis.roomCoverage || {};
   const display = analysis.displayCoverage;
-  const kitchenPictured = display ? display.kitchenPictured : coverage.kitchenVisible === true;
-  const bathroomPictured = display ? display.bathroomPictured : coverage.bathroomVisible === true;
+  // The cheap triage pass that builds displayCoverage can miss a wet room the
+  // stronger scoring model clearly saw (e.g. a bathroom thumbnail tagged "other").
+  // When the model analysed the WHOLE gallery (analysedImageCount >= totalImageCount),
+  // its roomCoverage is honest against the displayed photos too — so let a confident
+  // model "visible" rescue a triage false-negative. Larger galleries (only a subset
+  // analysed) still defer to displayCoverage so we never claim a dropped room.
+  const fullyAnalysed =
+    coverage.totalImageCount != null && coverage.analysedImageCount >= coverage.totalImageCount;
+  const rescue = (displayFlag, modelVisible) =>
+    display ? displayFlag || (fullyAnalysed && modelVisible === true) : modelVisible === true;
+  const kitchenPictured = rescue(display?.kitchenPictured, coverage.kitchenVisible);
+  const bathroomPictured = rescue(display?.bathroomPictured, coverage.bathroomVisible);
   return {
     renovationScore: analysis.renovationScore,
     renovationConfidence: analysis.confidence,

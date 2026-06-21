@@ -23,7 +23,7 @@ Important kitchen rule — judge the cabinets, worktop and appliances FIRST:
 The most reliable signal of a kitchen's age is the CABINET FRONTS, then the worktop, then the appliances. Decide "original vs renovated" from those before anything else. Do NOT let one dated-looking element (a sink, a tap, a tile) override clearly modern cabinetry.
 
 - Signs the kitchen is RENOVATED / NEWLY RENOVATED (do NOT flag for renovation; score it low):
-  - Cabinet doors are clean, consistent, modern fronts — flat/slab or simple shaker, often handleless or with slim bar/edge handles, in good condition with no wear or gaps.
+  - Cabinet doors are clean, consistent, modern fronts — flat/slab or simple shaker, often handleless or with slim bar/edge handles, in good condition with no wear. Doors sit FLUSH and tightly fitted in one even plane, with uniform narrow reveals and CONCEALED hinges.
   - Worktop is a solid modern surface: stone/quartz/composite, or a modern woodgrain/solid-colour laminate with a clean edge.
   - Appliances are integrated or panel-covered (or modern stainless built-ins), with an induction/ceramic hob and a discreet or integrated extractor.
   - If the cabinets AND worktop are clearly modern, classify the kitchen as renovated EVEN IF there is a stainless-steel sink, a farmhouse/apron-front sink, or another single older-looking detail. New cabinets + new worktop = a renovated kitchen.
@@ -31,9 +31,12 @@ The most reliable signal of a kitchen's age is the CABINET FRONTS, then the work
 - Signs the kitchen is ORIGINAL (flag for renovation; score it high) — these must appear TOGETHER, not in isolation:
   - A continuous shiny stainless-steel combined sink-and-bench/countertop unit (integrated drainer, metal worktop around the sink) COMBINED WITH dated cabinet fronts.
   - Dated cabinet fronts (worn laminate, old timber, 60s-80s hinges/handles), laminate worktops paired with those dated fronts, free-standing white appliances, no dishwasher.
+  - Doors that sit slightly PROUD of the carcass with visible gaps between them and surface-mounted/exposed hinges, usually with chrome cup-pull or round-knob handles.
 
 - A standalone farmhouse/apron-front/Belfast sink is NOT an "original" indicator. In a modern kitchen it is an intentional design choice — treat the kitchen as renovated and, if you mention the sink, note "farmhouse sink appears intentional".
 - When the cabinets look modern but a metal worktop/sink tempts you to call it original, DEFAULT TO RENOVATED and lower your confidence rather than scoring it for a full renovation.
+
+Door fit is a decisive age cue — judge it BEFORE colour: original mid-century Swedish cabinets have doors that sit slightly proud of the carcass with visible gaps and surface-mounted/exposed hinges; renovated cabinets have flush, tightly-fitted doors with even narrow reveals and concealed hinges. Do NOT call a kitchen "original" just because the fronts are plain or painted a pale/muted colour: a flat, flush, tightly-fitted front with concealed hinges is an UPDATE even if the styling is simple. Reserve "original" for doors that are clearly proud/gappy with exposed hinges — normally alongside a continuous steel sink-and-bench and a tiled splashback.
 
 Bathroom indicators of needed renovation:
 - Linoleum or vinyl flooring (very common in older Swedish apartments)
@@ -102,14 +105,14 @@ Return ONLY valid JSON in this format:
   ]
 }
 
-roomTypes (one or more): kitchen, bathroom, living, bedroom, hallway, exterior, floorplan, other. For an open-plan kitchen/living space include both kitchen and living.
+roomTypes (one or more): kitchen, bathroom, living, bedroom, hallway, exterior, floorplan, other. For an open-plan kitchen/living space include both kitchen and living. Tag a photo "bathroom" if it shows ANY of: a toilet/WC, a wash-basin or vanity, a shower or bathtub, a tiled wet wall, or a floor drain — even a partial, cropped or close-up shot. Don't miss bathrooms.
 
 condition (set ONLY for photos containing a kitchen or bathroom; use null otherwise). For kitchens, judge the CABINET FRONTS and WORKTOP first:
 - "renovated" — modern cabinet fronts (clean flat/slab or shaker, handleless or slim handles, no wear) AND a modern worktop (stone/quartz/composite or modern laminate), usually with integrated/built-in appliances. Classify as renovated EVEN IF a stainless-steel or farmhouse sink is present — new cabinets + new worktop outweigh the sink. For bathrooms: modern tiling, modern vanity/fixtures.
 - "dated" — tired but not fully original: older finishes, partial updates, mixed old and new.
-- "original" — clearly untouched: dated cabinet fronts TOGETHER WITH a continuous stainless-steel sink-and-bench unit and/or laminate worktop; for bathrooms, lino/blue tiles and old fixtures.
+- "original" — clearly untouched: cabinet doors that sit proud of the carcass with visible gaps and surface-mounted/exposed hinges (chrome cup-pull or knob handles), usually TOGETHER WITH a continuous stainless-steel sink-and-bench unit and/or laminate worktop; for bathrooms, lino/blue tiles and old fixtures.
 
-Do not call a kitchen "original" just because of a metal sink/worktop if the cabinet fronts are clearly modern. confidence is your 0.0-1.0 certainty. Only use "renovated" with high confidence when the cabinetry is unambiguously modern; when genuinely unsure between renovated and original, prefer "dated" with lower confidence.`;
+Do not call a kitchen "original" just because of a metal sink/worktop if the cabinet fronts are clearly modern. Judge door fit before colour: flush, tightly-fitted doors with concealed hinges are RENOVATED even if plain or pale-painted; reserve "original" for proud/gappy doors with exposed hinges. confidence is your 0.0-1.0 certainty. Only use "renovated" with high confidence when the cabinetry is unambiguously modern; when genuinely unsure between renovated and original, prefer "dated" with lower confidence.`;
 
 function parseJson(text) {
   try {
