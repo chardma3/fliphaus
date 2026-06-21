@@ -38,12 +38,19 @@ The most reliable signal of a kitchen's age is the CABINET FRONTS, then the work
 
 Door fit is a decisive age cue — judge it BEFORE colour: original mid-century Swedish cabinets have doors that sit slightly proud of the carcass with visible gaps and surface-mounted/exposed hinges; renovated cabinets have flush, tightly-fitted doors with even narrow reveals and concealed hinges. Do NOT call a kitchen "original" just because the fronts are plain or painted a pale/muted colour: a flat, flush, tightly-fitted front with concealed hinges is an UPDATE even if the styling is simple. Reserve "original" for doors that are clearly proud/gappy with exposed hinges — normally alongside a continuous steel sink-and-bench and a tiled splashback.
 
-Bathroom indicators of needed renovation:
-- Linoleum or vinyl flooring (very common in older Swedish apartments)
-- Blue flooring or blue tiles
-- Dated tile patterns, cracked tiles
-- Old fixtures (basin, toilet, shower)
-- Mould or water damage signs
+Bathroom rule — judge the WHOLE room, not one feature (same logic as the kitchen):
+A bathroom is RENOVATED when the wet zone has modern FULL-WALL tiling (clean large-format or subway) with modern fixtures. It is ORIGINAL/DATED when SEVERAL of these appear TOGETHER:
+- Vinyl/linoleum sheet flooring (plastmatta), especially blue or marbled blue/grey — a very common untouched-bathroom tell.
+- Walls painted/untiled, OR carrying only a small PARTIAL splashback of dated small SQUARE tiles. A patch of old square tiles above a basin is a DATED signal, NOT "modern tiling".
+- Dated tile patterns, cracked tiles, dated grout.
+- Old fixtures: pedestal/wall-hung basin with exposed trap, separate hot/cold cross-handle taps, old toilet with separate cistern, bidet, wall-mounted tub mixer with hose.
+- Surface-mounted/exposed wall pipes; an old tub with an exposed waste pipe dropping into the floor drain.
+- Mould or water-damage signs.
+
+Bathroom cautions (avoid false positives):
+- A vinyl/plastmatta floor ON ITS OWN, in a bathroom with modern full-wall tiling and modern fixtures, is NOT a renovation trigger — it is an intentional, code-compliant budget choice ("kakel på vägg, matta på golv") and converting it to tile is high-cost/low-value. Only treat the vinyl floor as dated when the walls and/or fixtures are ALSO dated.
+- An exposed tub waste pipe or a retained old tub is only a WEAK contextual clue (renovations often keep the old tub) — never raise the score on it alone.
+- "Tiled walls = modern" means modern FULL wet-zone tiling, not a small dated square-tile splashback.
 
 Kitchen indicators of needed renovation:
 - Continuous stainless-steel combined sink-and-bench/countertop unit (old Swedish original kitchen indicator)
@@ -108,9 +115,9 @@ Return ONLY valid JSON in this format:
 roomTypes (one or more): kitchen, bathroom, living, bedroom, hallway, exterior, floorplan, other. For an open-plan kitchen/living space include both kitchen and living. Tag a photo "bathroom" if it shows ANY of: a toilet/WC, a wash-basin or vanity, a shower or bathtub, a tiled wet wall, or a floor drain — even a partial, cropped or close-up shot. Don't miss bathrooms.
 
 condition (set ONLY for photos containing a kitchen or bathroom; use null otherwise). For kitchens, judge the CABINET FRONTS and WORKTOP first:
-- "renovated" — modern cabinet fronts (clean flat/slab or shaker, handleless or slim handles, no wear) AND a modern worktop (stone/quartz/composite or modern laminate), usually with integrated/built-in appliances. Classify as renovated EVEN IF a stainless-steel or farmhouse sink is present — new cabinets + new worktop outweigh the sink. For bathrooms: modern tiling, modern vanity/fixtures.
+- "renovated" — modern cabinet fronts (clean flat/slab or shaker, handleless or slim handles, no wear) AND a modern worktop (stone/quartz/composite or modern laminate), usually with integrated/built-in appliances. Classify as renovated EVEN IF a stainless-steel or farmhouse sink is present — new cabinets + new worktop outweigh the sink. For bathrooms: modern FULL-wall tiling AND modern fixtures (a vinyl/plastmatta floor with modern tiled walls + modern fixtures is still renovated — don't call it original for the floor alone).
 - "dated" — tired but not fully original: older finishes, partial updates, mixed old and new.
-- "original" — clearly untouched: cabinet doors that sit proud of the carcass with visible gaps and surface-mounted/exposed hinges (chrome cup-pull or knob handles), usually TOGETHER WITH a continuous stainless-steel sink-and-bench unit and/or laminate worktop; for bathrooms, lino/blue tiles and old fixtures.
+- "original" — clearly untouched: cabinet doors that sit proud of the carcass with visible gaps and surface-mounted/exposed hinges (chrome cup-pull or knob handles), usually TOGETHER WITH a continuous stainless-steel sink-and-bench unit and/or laminate worktop; for bathrooms, SEVERAL dated cues together — vinyl/plastmatta floor (esp. blue), painted/untiled walls or only a small partial square-tile splashback, and old fixtures (exposed-trap basin, cross-handle taps, bidet). A small patch of old square tiles is dated, not modern tiling.
 
 Do not call a kitchen "original" just because of a metal sink/worktop if the cabinet fronts are clearly modern. Judge door fit before colour: flush, tightly-fitted doors with concealed hinges are RENOVATED even if plain or pale-painted; reserve "original" for proud/gappy doors with exposed hinges. confidence is your 0.0-1.0 certainty. Only use "renovated" with high confidence when the cabinetry is unambiguously modern; when genuinely unsure between renovated and original, prefer "dated" with lower confidence.`;
 
