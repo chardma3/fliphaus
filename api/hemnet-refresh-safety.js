@@ -1,3 +1,6 @@
+// This is the ACTIVATION POINT — the areas we actually scrape. The tiered
+// expansion backlog (candidates, filters, rollout phases) lives in
+// api/area-priority.js; an area moves here once its Hemnet locationId is resolved.
 const LOCATION_IDS = {
   // Rissne (473493, northern Sundbyberg: Rissne + Hallonbergen + Ör) removed
   // 2026-06-19 — rental-heavy 1970s miljonprogram with a thin owner-occupier
