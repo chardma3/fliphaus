@@ -43,7 +43,7 @@ const AREA_PRIORITY = [
     name: "Gärdet",
     tier: "A",
     phase: 1,
-    status: "pending",
+    status: "active", // promoted 2026-06-22 — live id 925958 in LOCATION_IDS
     locationId: null,
     transit: "red line (Ropsten branch) / Östermalm",
     filters: { maxPriceSEK: null, excludeNewBuild: false, compsOnly: false, catalyst: null },
@@ -58,13 +58,14 @@ const AREA_PRIORITY = [
     name: "Essingeöarna",
     tier: "A",
     phase: 1,
-    status: "pending",
-    locationId: null,
+    status: "active", // promoted 2026-06-22 — Hemnet IDs the two islands separately,
+    locationId: null, // so LOCATION_IDS carries "Lilla Essingen" 473386 + "Stora Essingen" 473422
     transit: "Kungsholmen-adjacent islands (Stora/Lilla Essingen)",
     filters: { maxPriceSEK: null, excludeNewBuild: false, compsOnly: false, catalyst: null },
     note:
       "40s–60s folkhem stock, family demand, deep market. Same profile as Gärdet, " +
-      "slightly cheaper entry. Sits inside the Kungsholmen district hierarchy.",
+      "slightly cheaper entry. Sits inside the Kungsholmen district hierarchy. " +
+      "Live as two separate LOCATION_IDS entries (Lilla + Stora Essingen).",
   },
   {
     name: "Östermalm",

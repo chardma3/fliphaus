@@ -44,16 +44,18 @@ test("rolloutOrder sorts by tier then phase, sinking skips to the bottom", () =>
 });
 
 test("pendingForPhase returns only pending areas for that phase", () => {
-  const p1 = pendingForPhase(1);
-  assert.ok(p1.length >= 1, "phase 1 has candidates");
+  // Phase 1 (Gärdet + Essingeöarna) was promoted to active 2026-06-22, so it has
+  // no pending candidates left; Phase 2 (Östermalm + Södermalm) still does.
+  assert.equal(pendingForPhase(1).length, 0);
+  const p2 = pendingForPhase(2);
   assert.deepEqual(
-    p1.map((a) => a.name).sort(),
-    ["Essingeöarna", "Gärdet"],
-    "phase 1 is Gärdet + Essingeöarna"
+    p2.map((a) => a.name).sort(),
+    ["Södermalm", "Östermalm"],
+    "phase 2 is Östermalm + Södermalm"
   );
-  for (const a of p1) {
+  for (const a of p2) {
     assert.equal(a.status, "pending");
-    assert.equal(a.phase, 1);
+    assert.equal(a.phase, 2);
   }
   // Skips never surface, regardless of phase argument.
   assert.equal(pendingForPhase(null).length, 0);
