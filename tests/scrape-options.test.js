@@ -9,14 +9,21 @@ const {
   shouldFetchActiveDetails,
 } = require("../api/scrape-options");
 
-test("active scrape fetches listing details by default", () => {
+test("active scrape fetches listing details by default and scopes to all areas", () => {
   assert.equal(shouldFetchActiveDetails({}), true);
-  assert.deepEqual(buildActiveScrapeOptions({}), { includeDetails: true });
+  assert.deepEqual(buildActiveScrapeOptions({}), { includeDetails: true, batch: null, areas: null });
 });
 
 test("active scrape can skip listing detail pages for scheduled refreshes", () => {
   assert.equal(shouldFetchActiveDetails({ includeDetails: false }), false);
-  assert.deepEqual(buildActiveScrapeOptions({ includeDetails: "false" }), { includeDetails: false });
+  assert.deepEqual(buildActiveScrapeOptions({ includeDetails: "false" }), { includeDetails: false, batch: null, areas: null });
+});
+
+test("active scrape passes through batch / areas scoping for staggered runs", () => {
+  assert.deepEqual(buildActiveScrapeOptions({ batch: "2" }), { includeDetails: true, batch: "2", areas: null });
+  assert.deepEqual(buildActiveScrapeOptions({ areas: "Solna,Kista" }), { includeDetails: true, batch: null, areas: "Solna,Kista" });
+  // Empty strings are treated as "not provided" so a stray ?batch= scrapes all areas.
+  assert.deepEqual(buildActiveScrapeOptions({ batch: "", areas: "" }), { includeDetails: true, batch: null, areas: null });
 });
 
 test("scrape upsert seeds images on insert only, never overwriting a curated gallery", () => {

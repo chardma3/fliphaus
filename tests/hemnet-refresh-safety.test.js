@@ -4,12 +4,63 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const {
+  LOCATION_IDS,
+  ACTIVE_SCRAPE_BATCHES,
+  getAreaBatch,
+  resolveActiveScrapeTargets,
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
   planDisappearanceReconciliation,
   buildStaleListingQuery,
+  buildAreaDisappearanceQuery,
   resolveSoldScrapeTargets,
 } = require("../api/hemnet-refresh-safety");
+
+test("getAreaBatch splits LOCATION_IDS into contiguous, complete, non-overlapping batches", () => {
+  const all = Object.keys(LOCATION_IDS);
+  const batches = [];
+  for (let n = 1; n <= ACTIVE_SCRAPE_BATCHES; n++) batches.push(getAreaBatch(n));
+  // Union of all batches == every area, with nothing duplicated or dropped.
+  assert.deepEqual(batches.flat().sort(), [...all].sort());
+  assert.equal(new Set(batches.flat()).size, all.length);
+  // Each batch is small enough to keep one /api/scrape request under the timeout.
+  const maxSize = Math.ceil(all.length / ACTIVE_SCRAPE_BATCHES);
+  for (const b of batches) assert.ok(b.length <= maxSize, `batch size ${b.length} <= ${maxSize}`);
+});
+
+test("getAreaBatch rejects out-of-range batch numbers", () => {
+  assert.throws(() => getAreaBatch(0), /Invalid scrape batch/);
+  assert.throws(() => getAreaBatch(ACTIVE_SCRAPE_BATCHES + 1), /Invalid scrape batch/);
+});
+
+test("resolveActiveScrapeTargets: default = all areas, with location ids", () => {
+  const all = resolveActiveScrapeTargets({});
+  assert.equal(all.length, Object.keys(LOCATION_IDS).length);
+  assert.equal(all[0].locationId, LOCATION_IDS[all[0].area]);
+});
+
+test("resolveActiveScrapeTargets honours batch and a named (case-insensitive) subset", () => {
+  assert.deepEqual(resolveActiveScrapeTargets({ batch: 1 }).map((t) => t.area), getAreaBatch(1));
+  const named = resolveActiveScrapeTargets({ areas: "solna, Kista" });
+  assert.deepEqual(named.map((t) => t.area), ["Solna", "Kista"]);
+});
+
+test("resolveActiveScrapeTargets throws on an unknown area name", () => {
+  assert.throws(() => resolveActiveScrapeTargets({ areas: "Atlantis" }), /Unknown scrape area/);
+});
+
+test("area disappearance query is scoped to scraped areas, unseen ids, and a grace cutoff", () => {
+  const cutoff = new Date("2026-06-22T17:00:00.000Z");
+  assert.deepEqual(
+    buildAreaDisappearanceQuery({ scrapedAreas: ["Solna", "Kista"], currentIds: ["a"], cutoff }),
+    {
+      status: "active",
+      area: { $in: ["Solna", "Kista"] },
+      id: { $nin: ["a"] },
+      $or: [{ lastSeenAt: { $lt: cutoff } }, { lastSeenAt: null }],
+    }
+  );
+});
 
 test("stale-listing query targets only long-unseen active listings not seen this run", () => {
   const cutoff = new Date("2026-05-25T00:00:00.000Z");

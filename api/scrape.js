@@ -1,7 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
-const { LOCATION_IDS, assertHemnetPageUsable, assertNonEmptyRefreshResult, planDisappearanceReconciliation, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
+const { resolveActiveScrapeTargets, assertHemnetPageUsable, assertNonEmptyRefreshResult, buildAreaDisappearanceQuery, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions, buildListingUpsert } = require("./scrape-options");
 
@@ -128,7 +128,11 @@ async function createScrapePage(browser) {
 }
 
 module.exports = async (options = {}) => {
-  const { includeDetails } = buildActiveScrapeOptions(options);
+  const { includeDetails, areas, batch } = buildActiveScrapeOptions(options);
+  const targets = resolveActiveScrapeTargets({ areas, batch });
+  if (areas || batch) {
+    console.log(`Active scrape scoped to ${targets.length} area(s): ${targets.map((t) => t.area).join(", ")}`);
+  }
   logProxyStatus();
   const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
 
@@ -150,7 +154,7 @@ module.exports = async (options = {}) => {
   // (every area failed → zero listings) is caught by assertNonEmptyRefreshResult.
   const MAX_AREA_ATTEMPTS = Math.max(1, Number(process.env.SCRAPE_MAX_AREA_ATTEMPTS) || 6);
 
-  for (const [area, id] of Object.entries(LOCATION_IDS)) {
+  for (const { area, locationId: id } of targets) {
     let lastErr = null;
     for (let attempt = 1; attempt <= MAX_AREA_ATTEMPTS; attempt++) {
       try {
@@ -289,16 +293,21 @@ module.exports = async (options = {}) => {
     await Listing.findOneAndUpdate({ id: l.id }, buildListingUpsert(update, scrapedImages), { upsert: true, new: true });
   }
 
-  // Mark listings no longer in the active scrape as disappeared — but ONLY when
-  // the scrape was complete. A partial scrape (an area failed even after retry)
-  // never observed the missing area's listings, so inferring they "disappeared"
-  // from their absence would be a false positive. Defer reconciliation to the
-  // next complete run instead.
+  // Mark listings no longer present as disappeared — scoped to the areas that
+  // scraped OK this run. A listing in a successfully-scraped area that we haven't
+  // seen within the grace window is treated as gone (withdrawn or sold). Scoping
+  // by area (not all-or-nothing) means a blocked area never suppresses
+  // reconciliation for the others — so daily/staggered batch runs detect
+  // withdrawals same-day instead of waiting on the 14-day staleness net. The
+  // grace window spans a day's batches, so a listing seen by any batch today is
+  // safe; this also makes the inference safe on a partial scrape (a failed area is
+  // simply not in scrapedAreas, so its listings are never touched).
   const currentIds = unique.map((l) => l.id);
-  const plan = planDisappearanceReconciliation({ scrapedAreas, failedAreas });
+  const ACTIVE_GRACE_HOURS = Math.max(1, Number(process.env.ACTIVE_GRACE_HOURS) || 20);
+  const graceCutoff = new Date(Date.now() - ACTIVE_GRACE_HOURS * 3600000);
   let disappearedCount = 0;
-  if (plan.reconcile) {
-    const disappeared = await Listing.find({ id: { $nin: currentIds }, status: "active" });
+  if (scrapedAreas.length) {
+    const disappeared = await Listing.find(buildAreaDisappearanceQuery({ scrapedAreas, currentIds, cutoff: graceCutoff }));
     for (const d of disappeared) {
       const dom = d.publishedAt ? Math.floor((Date.now() - new Date(d.publishedAt).getTime()) / (1000*60*60*24)) : null;
       await Listing.findByIdAndUpdate(d._id, {
@@ -311,8 +320,9 @@ module.exports = async (options = {}) => {
       console.log(`  📋 Marked as disappeared: ${d.streetAddress} (${dom ? dom + ' days' : 'unknown'})`);
     }
     disappearedCount = disappeared.length;
-  } else {
-    console.warn(`  ⚠️ ${plan.reason}`);
+  }
+  if (failedAreas.length) {
+    console.warn(`  ⚠️ Skipped disappearance reconciliation for failed area(s): [${failedAreas.join(", ")}] (deferred to their next successful scrape).`);
   }
 
   // Refresh the listings we did see this run as active (safe on partial scrapes).
@@ -340,7 +350,7 @@ module.exports = async (options = {}) => {
     disappeared: disappearedCount,
     staleDisappeared,
     scrapeDate,
-    partial: plan.partial,
+    partial: failedAreas.length > 0,
     scrapedAreas,
     failedAreas,
   };
