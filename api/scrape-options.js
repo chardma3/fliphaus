@@ -5,6 +5,11 @@ function shouldFetchActiveDetails(options = {}) {
 function buildActiveScrapeOptions(query = {}) {
   return {
     includeDetails: shouldFetchActiveDetails(query),
+    // Optional area scoping for staggered scheduled scrapes: ?batch=N scrapes the
+    // Nth batch of LOCATION_IDS, ?areas=A,B,C scrapes a named subset. Both null =
+    // scrape every area (the manual / backward-compatible default).
+    batch: query.batch != null && query.batch !== "" ? query.batch : null,
+    areas: query.areas != null && query.areas !== "" ? query.areas : null,
   };
 }
 

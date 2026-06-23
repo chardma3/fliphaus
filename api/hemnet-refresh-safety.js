@@ -113,6 +113,63 @@ function buildStaleListingQuery({ currentIds = [], cutoff } = {}) {
   };
 }
 
+// How many staggered batches the active scrape is split into. Each scheduled run
+// scrapes one batch (a subset of LOCATION_IDS) so a single /api/scrape request
+// stays well under Hemnet's ~100s Cloudflare edge timeout even as areas grow.
+const ACTIVE_SCRAPE_BATCHES = 3;
+
+// The area names in batch N (1-based). Contiguous chunks of the LOCATION_IDS
+// order, so "batch 1" is a stable, predictable set.
+function getAreaBatch(batchNum, count = ACTIVE_SCRAPE_BATCHES) {
+  const names = Object.keys(LOCATION_IDS);
+  const size = Math.ceil(names.length / count);
+  const start = (Number(batchNum) - 1) * size;
+  if (!Number.isInteger(Number(batchNum)) || start < 0 || start >= names.length) {
+    throw new Error(`Invalid scrape batch "${batchNum}" (expected 1..${count})`);
+  }
+  return names.slice(start, start + size);
+}
+
+// Resolve which areas an active scrape should cover: an explicit ?batch=N, an
+// explicit ?areas=A,B,C list, or (default) every area. Returns [{area, locationId}].
+function resolveActiveScrapeTargets({ areas, batch } = {}) {
+  let names;
+  if (batch != null && batch !== "") {
+    names = getAreaBatch(batch);
+  } else if (areas != null && areas !== "") {
+    names = (Array.isArray(areas) ? areas : String(areas).split(","))
+      .map((a) => String(a).trim())
+      .filter(Boolean);
+  } else {
+    names = Object.keys(LOCATION_IDS);
+  }
+  const lookup = new Map(Object.keys(LOCATION_IDS).map((n) => [n.toLowerCase(), n]));
+  return names.map((name) => {
+    const canonical = lookup.get(String(name).trim().toLowerCase());
+    if (!canonical) {
+      throw new Error(`Unknown scrape area "${name}". Expected one of: ${Object.keys(LOCATION_IDS).join(", ")}`);
+    }
+    return { area: canonical, locationId: LOCATION_IDS[canonical] };
+  });
+}
+
+// Disappearance query scoped to the areas that scraped OK this run. A listing in
+// one of those areas that we haven't seen within the grace window is treated as
+// gone (withdrawn or sold). Scoping by area means a blocked area never suppresses
+// reconciliation for the others — the key fix for daily withdrawal detection when
+// scrapes are split into staggered batches. The grace window (default ~20h) spans
+// a day's batches, so a listing seen by ANY batch today is safe; only one genuinely
+// unseen for a full day is marked disappeared. No false positives from area-overlap
+// or batch ordering, and no waiting on the 14-day staleness net.
+function buildAreaDisappearanceQuery({ scrapedAreas = [], currentIds = [], cutoff } = {}) {
+  return {
+    status: "active",
+    area: { $in: scrapedAreas },
+    id: { $nin: currentIds },
+    $or: [{ lastSeenAt: { $lt: cutoff } }, { lastSeenAt: null }],
+  };
+}
+
 function resolveSoldScrapeTargets({ area } = {}) {
   if (!area) {
     return Object.entries(LOCATION_IDS).map(([areaName, locationId]) => ({ area: areaName, locationId }));
@@ -133,10 +190,14 @@ function isHemnetSafetyError(error) {
 module.exports = {
   LOCATION_IDS,
   AREA_NAMES,
+  ACTIVE_SCRAPE_BATCHES,
+  getAreaBatch,
+  resolveActiveScrapeTargets,
   assertHemnetPageUsable,
   assertNonEmptyRefreshResult,
   planDisappearanceReconciliation,
   buildStaleListingQuery,
+  buildAreaDisappearanceQuery,
   resolveSoldScrapeTargets,
   isHemnetSafetyError,
 };

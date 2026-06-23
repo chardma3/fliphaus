@@ -1,0 +1,30 @@
+# Staggered active scrape — batch 3 of 3. See scrape-batch-1.yml for rationale.
+# 11:50 UTC ≈ 13:50 Europe/Stockholm (summer); 25 min after batch 2.
+name: Scrape batch 3
+
+on:
+  schedule:
+    - cron: "50 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up FlipHaus server
+        continue-on-error: true
+        run: |
+          curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
+            "$FLIPHAUS_REFRESH_URL/api/scrape-health" \
+            -o /dev/null -w "warmup HTTP %{http_code} in %{time_total}s\n"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+
+      - name: Scrape batch 3 active listings
+        run: |
+          curl --fail-with-body -sS --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 \
+            -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+            "$FLIPHAUS_REFRESH_URL/api/scrape?includeDetails=false&batch=3"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
