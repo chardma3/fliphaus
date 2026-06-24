@@ -13,21 +13,15 @@ AI-powered digital investment platform for co-investing in renovation-based apar
 
 ## AI renovation analysis
 
-Analyses listing photos to detect indicators of dated/renovatable properties:
+Listing photos are analysed by Anthropic Claude (vision) in a two-stage pipeline (`api/analyze.js`), not by hardcoded colour/appliance heuristics:
 
-### Bathrooms
-- Linoleum flooring
-- Blue flooring (common in older Swedish apartments)
+1. **Triage (cheap, every photo)** — `TRIAGE_MODEL` (default `claude-haiku-4-5`) classifies each photo by room type and judges whether the kitchen and bathroom look original or already renovated (cabinet fronts and worktops first, not sink material). If both wet rooms are already modern, the expensive scoring pass is **gated out** — there's no renovation upside to score.
 
-### Kitchens
-- White range hood
-- White dishwasher
-- Combined sink/kitchen bench in shiny metallic material
+2. **Renovation scoring** — `ANALYSIS_MODEL` (default `claude-haiku-4-5`, override to `claude-sonnet-4-6` via env for stronger scoring) scores 1–10 (higher = more original/more upside), with a room-by-room breakdown, an estimated renovation cost, and a confidence flag. A score ≥ `DEAL_MIN_SCORE` (7) is a "strong flip" — both wet rooms need work.
 
-### Cost estimation
-- Extracts room dimensions from floorplan images
-- Predicts renovation cost with ±100,000 SEK accuracy
-- Suggests renovation templates (kitchen, bathroom, floors)
+**Photo curation & coverage.** A fresh scrape only stores ~5 Hemnet search-card thumbnails, which usually omit the bathroom. Before scoring, the analyser hydrates the full detail-page gallery (`api/listing-gallery.js`), curates a wet-rooms-first set (≤ `MAX_DISPLAY_IMAGES`) to persist, and records `kitchenPictured`/`bathroomPictured` measured against the *persisted* photos. A listing whose bathroom couldn't be fetched (Hemnet bot-block) keeps `bathroomPictured: false` and is re-tried by the coverage self-heal sweep (see below); its card is flagged "score provisional" until the wet room is actually seen.
+
+Both model ids are environment-overridable, so the whole pipeline can be made cheaper (Haiku) or stronger (Sonnet) without a redeploy.
 
 ## Financial model (base case)
 
@@ -52,11 +46,36 @@ Analyses listing photos to detect indicators of dated/renovatable properties:
 
 ## Tech stack
 
-- **Backend:** Node.js + Express
-- **Database:** MongoDB (Mongoose)
-- **Scraping:** Puppeteer + stealth plugin
-- **Auth:** Google OAuth 2.0 (Passport)
-- **Frontend:** Single-page HTML
+- **Runtime / API:** Node.js 20, Express 5 — a single always-on web service (hosted on Render) that also serves the static frontend.
+- **Database:** MongoDB Atlas via Mongoose; sessions stored in Mongo (`express-session` + `connect-mongo`).
+- **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku triage + Haiku/Sonnet renovation scoring (model ids env-overridable).
+- **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
+- **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the 5-minute coverage self-heal.
+- **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / builder).
+- **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps.
+- **Tests:** Node's built-in `node --test`; pure-function unit tests (no DB/network), run with `npm test`.
+
+## Backend architecture
+
+Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting is split into three pipelines that all share one MongoDB and one process-wide job lock.
+
+### Models (`models/`, plus `api/listing.model.js`)
+`listing` (active/disappeared/sold lifecycle, score, photos, coverage flags), `sold` (slutpriser comparables), `user`, `builder`, `assignment`, `proposal`, `investment`, `preference`.
+
+### 1. Scraping pipeline
+`api/scrape.js` (active listings) and `api/scrape-sold.js` (final sale prices) drive Puppeteer through the residential proxy. `api/hemnet-refresh-safety.js` is the safety + targeting layer: it holds `LOCATION_IDS` (the live areas), splits the active scrape into staggered batches (`getAreaBatch`), refuses to persist a zero/bot-blocked scrape, and scopes disappearance reconciliation to areas that actually scraped. The expansion backlog and per-area filters live in `api/area-priority.js`.
+
+### 2. Analysis pipeline
+`api/analyze.js` (the two-stage Claude pipeline above) + `api/analyze-refresh.js`, which selects which listings to (re)analyse: new/unscored listings, a bounded **self-heal** retry for listings missing a wet-room photo, a targeted single-listing re-score, and a one-shot deals re-score for prompt rollouts. `api/image-selection.js` curates the persisted photo set; `api/brf-intelligence.js` / `api/area-intelligence.js` add BRF debt + renovated-vs-unrenovated sold-comp signal.
+
+### 3. Feed
+`api/listings-query.js` builds the active-feed Mongo query, split into views — **deals** (score ≥ 7), **move-in ready** (1–6), **sitting** (long on market), **new builds** (projekt listings) — and applies the active per-area filters (price cap, comps-only). `api/listing-presenter.js` / `api/profitability.js` shape the investment maths per listing.
+
+### Scheduling & concurrency
+- **GitHub Actions** runs the daily heavy work: three staggered active-scrape batches + a sold/analysis/reconcile refresh (see *Data refresh pipeline* below).
+- The **in-process nightly scheduler** (`api/scheduler.js`) is intentionally **off** in production (`ENABLE_SCHEDULER` unset) — GitHub Actions already does that work, and running it in-process too would double-scrape.
+- The **coverage self-heal sweep** *is* in-process (`ENABLE_COVERAGE_SWEEP=true`): every `COVERAGE_SWEEP_MINUTES` (default 5) it re-hydrates and re-scores listings still missing a displayed wet room, so a bathroom-blind deal is corrected in minutes rather than the next day.
+- **`api/job-lock.js`** is a process-wide mutex shared by every Puppeteer job (HTTP `/api/scrape`, `/api/analyze-images`, and the sweep) so two headless Chromium sessions never run at once on the single instance — the sweep defers to any in-flight scrape and retries on its next tick.
 
 ## Scale plan
 
@@ -68,23 +87,31 @@ FlipHaus depends on fresh Hemnet data for property selection, renovation analysi
 
 ### Scheduled refresh
 
-GitHub Actions runs `.github/workflows/refresh-fliphaus.yml` once per day:
+The active scrape is split across **three staggered GitHub Actions workflows** (`scrape-batch-{1,2,3}.yml`) so a single `/api/scrape?batch=N` request stays well under Hemnet's ~100s Cloudflare edge timeout as areas grow. Each batch also reconciles its own areas' disappearances, so withdrawals are caught same-day.
 
-- Cron: `20 5 * * *`
-- UTC time: 05:20
-- Stockholm summer time: 07:20 CEST
+| Workflow | Cron (UTC) | Stockholm (CEST) | Does |
+|----------|-----------|------------------|------|
+| `scrape-batch-1.yml` | `0 11`  | 13:00 | Active listings, batch 1/3 |
+| `scrape-batch-2.yml` | `25 11` | 13:25 | Active listings, batch 2/3 |
+| `scrape-batch-3.yml` | `50 11` | 13:50 | Active listings, batch 3/3 |
+| `refresh-fliphaus.yml` | `20 12` | 14:20 | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
 
-The workflow uses `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub secrets. Do not commit token values.
+All workflows use the `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub secrets. Do not commit token values.
 
-### Refresh steps
+`refresh-fliphaus.yml` steps:
 
-1. `/api/scrape` refreshes active dashboard listings.
-2. `/api/scrape-sold?area=Rissne&detailLimit=20` refreshes Rissne sold comparable properties.
-3. `/api/scrape-sold?area=Farsta&detailLimit=20` refreshes Farsta sold comparable properties.
-4. A looped step refreshes sold comparables for the expansion areas (Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Enskede, Solna, Årsta), tolerating per-area blocks.
-5. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
+1. `/api/scrape-sold?area=Farsta&detailLimit=5&includeDetails=false&includeAnalysis=false` refreshes Farsta sold comparables.
+2. A looped step refreshes sold comparables for every other live area (Kista, Bagarmossen, …, Östermalm, Södermalm, Finntorp, Ektorp, Sickla), tolerating per-area blocks. The loop is the single source — add an area to `LOCATION_IDS` *and* to this loop.
+3. `/api/analyze-images?dataset=all&limit=10` scores newly-scraped photos and runs the bounded self-heal (separate post-scrape step, see below).
+4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
 
-The sold scrape is intentionally split by area and capped at 20 detail pages per request. This keeps each HTTP request shorter and reduces the chance of Render/GitHub/Cloudflare timeouts. Add more area-specific workflow steps if more areas are added to `api/hemnet-refresh-safety.js`.
+The sold scrape is intentionally split by area and capped at a low `detailLimit` per request to keep each HTTP request short and avoid Render/GitHub/Cloudflare timeouts. (Rissne was dropped as an area — thin owner-occupier resale; it must not be scraped.)
+
+### Continuous coverage self-heal (in-process, not GitHub Actions)
+
+Independently of the daily workflows, the always-on web service runs the coverage sweep every `COVERAGE_SWEEP_MINUTES` (default 5) when `ENABLE_COVERAGE_SWEEP=true`. It re-hydrates and re-scores listings still missing a displayed kitchen/bathroom — the bot-block tail — so a bathroom-blind deal self-corrects in minutes. It defers to any in-flight scrape via the shared job lock, and its last run is visible at `/api/scrape-health` (`coverageSweep.lastRun`) alongside the daily-scrape schedule and a "ran today" flag. Keep `ENABLE_SCHEDULER` **off** (GitHub Actions owns the daily scrape); the sweep has its own flag.
+
+A single stuck deal can be force-corrected without the sweep by re-running the **Reanalyse deals (manual)** workflow, or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>`.
 
 Longer-term architecture note: if Hemnet scraping continues to exceed HTTP/proxy time limits even after area splitting and lower `detailLimit` values, move the actual browser scraping into a background worker/queue. In that model the HTTP endpoint should enqueue a refresh job and return quickly, while the worker updates MongoDB and exposes job status separately.
 
