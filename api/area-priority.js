@@ -17,8 +17,10 @@
 // Hemnet locationId is resolved (browser — scripts/find-location-ids.js is stale)
 // and copied into LOCATION_IDS in api/hemnet-refresh-safety.js. Until then
 // locationId is null and status is "pending". Filters below are declarative intent
-// for the feed/analysis layer; getAreaFilters() exposes them, but nothing consumes
-// them yet — wiring into the listings query / analysis pipeline is a follow-up.
+// for the feed/analysis layer. The listings query consumes maxPriceSEK + compsOnly
+// for ACTIVE areas (see activeAreaConstraints in api/listings-query.js); they stay
+// dormant until an area carrying one is flipped live in LOCATION_IDS. excludeNewBuild
+// is not wired into the feed yet (flip views already drop projekt listings).
 //
 // Filter semantics:
 //   maxPriceSEK    — only surface listings at/under this total asking price. For

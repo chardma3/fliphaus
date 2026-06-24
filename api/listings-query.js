@@ -2,6 +2,7 @@
 // kitchen and bathroom need work, the real upside. The dashboard shows these;
 // everything below is browsable in the Move-in ready view.
 const { PROJECT_ADDRESS } = require("./project-listing");
+const { AREA_PRIORITY } = require("./area-priority");
 
 const DEAL_MIN_SCORE = 7;
 // Husby/Rinkeby/Vällingby/Akalla: thin-liquidity / weak-exit areas. Rissne and
@@ -25,12 +26,73 @@ const SITTING_MIN_DAYS = 14;
 //                 motivated seller may take an offer below asking.
 // Unscored/pending flips appear in NEITHER deals nor moveinready — they show up
 // once analysed, so a backlog of freshly-scraped listings can't flood the feed.
-function buildActiveFeedFilter({ view = "deals", maxPrice, dealMinScore = DEAL_MIN_SCORE, sittingBefore } = {}) {
+// Per-area feed constraints (api/area-priority.js). Two declarative filters are
+// consumed here:
+//   compsOnly    — scrape the area for sold comps/benchmarks but never surface it
+//                  as a buyable listing (same posture as the hardcoded
+//                  EXCLUDED_LOCATIONS). Folded into the exclusion regex.
+//   maxPriceSEK  — only surface listings at/under this asking price IN THAT AREA.
+//                  For prime inner-city (Östermalm/Södermalm) this forces the
+//                  unrenovated outliers into view instead of already-done premium
+//                  units. Other areas are unaffected.
+// excludeNewBuild isn't wired here: the flip views already drop projekt listings
+// via PROJECT_ADDRESS, and the build-year proxy lives in the analysis pipeline.
+//
+// Only areas live in LOCATION_IDS carry status "active"; the many areas that
+// predate area-priority.js aren't listed there and fall through to permissive
+// defaults, so this can only ADD constraints, never remove an area silently.
+function activeAreaConstraints() {
+  return AREA_PRIORITY.filter(
+    (a) =>
+      a.status === "active" &&
+      (a.filters.compsOnly || a.filters.maxPriceSEK != null)
+  );
+}
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function areaRegex(name) {
+  return new RegExp(escapeRegex(name), "i");
+}
+
+// Exclusion regex extended with any active compsOnly area names. Returns the
+// shared EXCLUDED_LOCATIONS object unchanged when there's nothing to add, so the
+// produced filter is byte-identical to the pre-wiring behaviour in that case.
+function exclusionRegex(compsOnlyNames) {
+  if (!compsOnlyNames.length) return EXCLUDED_LOCATIONS;
+  const parts = [EXCLUDED_LOCATIONS.source, ...compsOnlyNames.map(escapeRegex)];
+  return new RegExp(parts.join("|"), "i");
+}
+
+function buildActiveFeedFilter({
+  view = "deals",
+  maxPrice,
+  dealMinScore = DEAL_MIN_SCORE,
+  sittingBefore,
+  areaConstraints = activeAreaConstraints(),
+} = {}) {
+  const compsOnlyNames = areaConstraints
+    .filter((a) => a.filters.compsOnly)
+    .map((a) => a.name);
+  const capped = areaConstraints.filter((a) => a.filters.maxPriceSEK != null);
+
   const filter = {
     status: "active",
-    locationDescription: { $not: EXCLUDED_LOCATIONS },
+    locationDescription: { $not: exclusionRegex(compsOnlyNames) },
   };
   if (maxPrice != null) filter.askingPriceNum = { $lte: maxPrice };
+
+  // Each capped area adds a "NOT (in this area AND over its cap)" clause, so a
+  // listing outside the capped areas is never affected and an over-cap listing
+  // inside one is dropped from every view.
+  if (capped.length) {
+    filter.$nor = capped.map((a) => ({
+      locationDescription: areaRegex(a.name),
+      askingPriceNum: { $gt: a.filters.maxPriceSEK },
+    }));
+  }
 
   if (view === "newbuild") {
     // Only new-build/projekt listings; shown regardless of renovation score.
@@ -55,4 +117,4 @@ function buildActiveFeedFilter({ view = "deals", maxPrice, dealMinScore = DEAL_M
   return filter;
 }
 
-module.exports = { buildActiveFeedFilter, DEAL_MIN_SCORE, SITTING_MIN_DAYS };
+module.exports = { buildActiveFeedFilter, activeAreaConstraints, DEAL_MIN_SCORE, SITTING_MIN_DAYS };
