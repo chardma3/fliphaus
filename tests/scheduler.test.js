@@ -109,3 +109,18 @@ test("startCoverageSweep runs on its OWN flag (ENABLE_COVERAGE_SWEEP), not ENABL
   const handle = startCoverageSweep({ analyze, env: { ENABLE_COVERAGE_SWEEP: "true" }, log: () => {} });
   assert.ok(handle && typeof handle.runOnce === "function");
 });
+
+test("the coverage sweep records a heartbeat (getCoverageSweepStatus) on each pass", async () => {
+  const { getCoverageSweepStatus } = require("../api/scheduler");
+  lock._reset();
+  await runCoverageSweepOnce({ analyze: async () => ({ active: { candidates: 1, analyzed: 1, skipped: 0 } }), log: () => {} });
+  const s1 = getCoverageSweepStatus();
+  assert.ok(s1 && s1.at, "heartbeat has a timestamp");
+  assert.equal(s1.deferred, false);
+  assert.equal(s1.analyzed, 1);
+  // A deferral (scan running) is also recorded, so a stuck-busy state is visible.
+  lock.acquire("http-scrape");
+  await runCoverageSweepOnce({ analyze: async () => ({ active: {} }), log: () => {} });
+  assert.equal(getCoverageSweepStatus().deferred, true);
+  lock.release("http-scrape");
+});
