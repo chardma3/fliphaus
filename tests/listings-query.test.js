@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { buildActiveFeedFilter, DEAL_MIN_SCORE, SITTING_MIN_DAYS } = require("../api/listings-query");
 
-test("deals view shows scored strong flips (>=7) with both wet rooms actually pictured", () => {
+test("deals view shows scored strong flips (>=7) only — unscored and new-builds excluded", () => {
   // areaConstraints: [] isolates the view/score shape from the live per-area caps
   // (Östermalm/Södermalm), which are covered by their own tests below.
   assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
@@ -12,32 +12,16 @@ test("deals view shows scored strong flips (>=7) with both wet rooms actually pi
     askingPriceNum: { $lte: 4000000 },
     streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 7 },
-    // A deal scored without seeing the bathroom is unverified — excluded.
-    kitchenPictured: { $ne: false },
-    bathroomPictured: { $ne: false },
   });
 });
 
-test("the deal coverage gate excludes only explicit-false flags (legacy/undefined still show)", () => {
+test("deals are NOT hidden when a wet room wasn't pictured — they show flagged instead", () => {
+  // A blind-bathroom deal stays visible (the card shows a provisional warning and
+  // the coverage sweep corrects it). Hiding it made it vanish: gated out of Deals,
+  // score too high for Move-in ready. So no coverage clause on the deals filter.
   const f = buildActiveFeedFilter({ view: "deals", areaConstraints: [] });
-  // $ne:false matches true AND missing/undefined, so it never silently empties the
-  // feed — it drops only the known-blind (bathroom hydration failed) listings.
-  assert.deepEqual(f.bathroomPictured, { $ne: false });
-  assert.deepEqual(f.kitchenPictured, { $ne: false });
-});
-
-test("the coverage gate is opt-out via requireDealCoverage (escape hatch)", () => {
-  const f = buildActiveFeedFilter({ view: "deals", areaConstraints: [], requireDealCoverage: false });
   assert.equal(f.bathroomPictured, undefined);
   assert.equal(f.kitchenPictured, undefined);
-});
-
-test("only the Deals view is coverage-gated — browse/sitting/new-build are not", () => {
-  for (const view of ["moveinready", "sitting", "newbuild"]) {
-    const f = buildActiveFeedFilter({ view, areaConstraints: [] });
-    assert.equal(f.bathroomPictured, undefined, `${view} is not coverage-gated`);
-    assert.equal(f.kitchenPictured, undefined, `${view} is not coverage-gated`);
-  }
 });
 
 test("move-in-ready view shows scored-but-not-strong listings (1..6) and excludes unscored", () => {
@@ -88,8 +72,7 @@ test("SITTING_MIN_DAYS is exported and at least a week", () => {
 // --- per-area filters (api/area-priority.js) wired into the feed ---
 
 test("with no active area constraints, no $nor clause is added (additive wiring)", () => {
-  // requireDealCoverage:false isolates this to the area-constraint behaviour.
-  assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [], requireDealCoverage: false }), {
+  assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     askingPriceNum: { $lte: 4000000 },

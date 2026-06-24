@@ -72,7 +72,6 @@ function buildActiveFeedFilter({
   dealMinScore = DEAL_MIN_SCORE,
   sittingBefore,
   areaConstraints = activeAreaConstraints(),
-  requireDealCoverage = true,
 } = {}) {
   const compsOnlyNames = areaConstraints
     .filter((a) => a.filters.compsOnly)
@@ -116,19 +115,13 @@ function buildActiveFeedFilter({
     ? { $gte: 1, $lte: dealMinScore - 1 }
     : { $gte: dealMinScore };
 
-  // A deal scored >= DEAL_MIN_SCORE asserts BOTH wet rooms need work — the whole
-  // flip thesis. If the analyser never actually saw the bathroom (its gallery
-  // hydration was bot-blocked, leaving it on Hemnet's bathroom-less thumbnails),
-  // that assertion is unverified and the listing must NOT surface as a confident
-  // deal. So Deals require the kitchen and bathroom to be pictured. We exclude only
-  // an EXPLICIT false (the known-blind case) — a missing/undefined flag (legacy,
-  // never measured) still shows, so this can't silently empty the feed. Coverage-
-  // false listings are re-hydrated by the fast self-heal sweep and rejoin Deals
-  // once the bathroom is actually seen. Move-in ready (browse) is unaffected.
-  if (view === "deals" && requireDealCoverage) {
-    filter.kitchenPictured = { $ne: false };
-    filter.bathroomPictured = { $ne: false };
-  }
+  // NOTE: we deliberately DON'T hide deals whose bathroom wasn't pictured. A
+  // score >= DEAL_MIN_SCORE scored blind to the bathroom is provisional, but the
+  // dashboard already flags that on the card ("⚠ Bathroom not pictured — score
+  // provisional", driven by imageCoverageComplete), and the fast coverage sweep
+  // re-hydrates and corrects it within minutes. Excluding them instead made a
+  // high-score-but-unverified listing vanish entirely (gated out of Deals, score
+  // too high for Move-in ready) — worse than showing it flagged.
   return filter;
 }
 
