@@ -48,11 +48,14 @@ const LOCATION_IDS = {
   // against public hemnet.se /bostader URLs.
   "Östermalm": 473448,
   "Södermalm": 898472,
-  // Nacka kommun (17853) added 2026-06-24 — Tier B, blue-line metro ~2030 catalyst.
-  // Large + new-build-heavy (Nacka strand/Sickla); its area-priority entry carries
-  // excludeNewBuild. NOTE: excludeNewBuild is not yet enforced at the feed, so its
-  // new-builds score low and land in Move-in ready / New builds, never Deals.
-  Nacka: 17853,
+  // Nacka added 2026-06-24 — Tier B, blue-line metro ~2030 catalyst. We scrape the
+  // older original-stock pockets, NOT the whole kommun (17853): that's mostly
+  // new-build (Nacka strand/Kvarnholmen — nothing to arbitrage) and 1970s
+  // miljonprogram rental (Fisksätra/Orminge — thin BR, weak exit). These three are
+  // 1940s–60s BR stock near the coming metro. IDs verified on hemnet.se /bostader.
+  Finntorp: 946237,
+  Ektorp: 946236,
+  Sickla: 924002,
 };
 
 // The active areas, as plain names. Single source of truth for the user/feed
@@ -129,29 +132,10 @@ function buildStaleListingQuery({ currentIds = [], cutoff } = {}) {
 // stays well under Hemnet's ~100s Cloudflare edge timeout even as areas grow.
 const ACTIVE_SCRAPE_BATCHES = 3;
 
-// Areas large enough that scraping them inside a shared batch risks the ~100s
-// edge timeout on the HTTP /api/scrape path. Each gets its OWN scan (its own
-// request + cron, via scrape-heavy.yml) and is excluded from the normal batches
-// so those stay light. Nacka kommun (~560 active) is the first such area. This
-// only affects the HTTP batch path — the in-process scheduler scrapes everything
-// in one direct (non-HTTP, non-edge-timed) call, so it's unaffected.
-const HEAVY_AREAS = new Set(["Nacka"]);
-
-// Area names that go into the normal staggered batches (everything except the
-// heavy, own-scan areas).
-function getBatchableAreas() {
-  return Object.keys(LOCATION_IDS).filter((name) => !HEAVY_AREAS.has(name));
-}
-
-// Heavy areas, in LOCATION_IDS order, each scanned on its own.
-function getHeavyAreas() {
-  return Object.keys(LOCATION_IDS).filter((name) => HEAVY_AREAS.has(name));
-}
-
-// The area names in batch N (1-based). Contiguous chunks of the BATCHABLE areas
-// (heavy areas are scanned separately), so "batch 1" is a stable, predictable set.
+// The area names in batch N (1-based). Contiguous chunks of the LOCATION_IDS
+// order, so "batch 1" is a stable, predictable set.
 function getAreaBatch(batchNum, count = ACTIVE_SCRAPE_BATCHES) {
-  const names = getBatchableAreas();
+  const names = Object.keys(LOCATION_IDS);
   const size = Math.ceil(names.length / count);
   const start = (Number(batchNum) - 1) * size;
   if (!Number.isInteger(Number(batchNum)) || start < 0 || start >= names.length) {
@@ -221,9 +205,6 @@ module.exports = {
   LOCATION_IDS,
   AREA_NAMES,
   ACTIVE_SCRAPE_BATCHES,
-  HEAVY_AREAS,
-  getBatchableAreas,
-  getHeavyAreas,
   getAreaBatch,
   resolveActiveScrapeTargets,
   assertHemnetPageUsable,

@@ -42,7 +42,7 @@ jobs:
         # drop the others. (Gärdet retired 2026-06-24 — now covered by Östermalm.)
         continue-on-error: true
         run: |
-          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Alvik "Stora Mossen" Enskede Solna Årsta Hägersten Hökarängen Kärrtorp Högdalen "Lilla Essingen" "Stora Essingen" "Östermalm" "Södermalm" Nacka; do
+          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Alvik "Stora Mossen" Enskede Solna Årsta Hägersten Hökarängen Kärrtorp Högdalen "Lilla Essingen" "Stora Essingen" "Östermalm" "Södermalm" Finntorp Ektorp Sickla; do
             echo "→ sold scrape: $area"
             curl --fail-with-body -sS -G --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 \
               -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \

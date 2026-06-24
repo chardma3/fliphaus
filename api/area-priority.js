@@ -106,18 +106,21 @@ const AREA_PRIORITY = [
     name: "Nacka",
     tier: "B",
     phase: 3,
-    status: "active", // promoted 2026-06-24 — live id 17853 (whole Nacka kommun) in LOCATION_IDS
+    status: "active", // promoted 2026-06-24 — live as the Finntorp/Ektorp/Sickla sub-areas in LOCATION_IDS
     locationId: null,
     transit: "blue line extension (~2030) + Saltsjöbanan",
     filters: {
       maxPriceSEK: null,
       excludeNewBuild: true,
       compsOnly: false,
-      catalyst: "Blue-line metro extension opening ~2030 — structural UP catalyst (mirror of the Kista risk). Buy the older Finntorp/Järla stock, not new-build Nacka strand/Sickla.",
+      catalyst: "Blue-line metro extension opening ~2030 — structural UP catalyst (mirror of the Kista risk). Buy the older Finntorp/Ektorp stock, not new-build Nacka strand/Kvarnholmen.",
     },
     note:
-      "Worth tracking for the metro catalyst, but most of Nacka strand/Sickla is " +
-      "new-build with zero reno upside — excludeNewBuild is mandatory here.",
+      "Activated as three older-stock sub-areas — Finntorp (946237), Ektorp " +
+      "(946236), Sickla (924002) — NOT the whole kommun (17853). The kommun is " +
+      "mostly new-build (Nacka strand/Kvarnholmen) and 1970s miljonprogram rental " +
+      "(Fisksätra/Orminge — thin BR, weak exit). Sickla is the most new-build-diluted " +
+      "of the three, so excludeNewBuild matters most there.",
   },
   {
     name: "Älvsjö",
