@@ -193,3 +193,28 @@ test("sold analysis update sets condition label from score", () => {
   assert.equal(update.conditionLabel, "unrenovated");
   assert.equal(update.renovationScore, 8);
 });
+
+test("coverageOnly targets only scored listings missing a displayed wet room", () => {
+  const cutoff = new Date("2026-06-24T00:00:00Z");
+  const q = buildAnalysisQuery({
+    status: "active",
+    coverageOnly: true,
+    hydrationRetry: { maxAttempts: 4, cutoff },
+  });
+  // No new-build/projekt, must have images, active.
+  assert.deepEqual(q.streetAddress, { $not: /^[^0-9]+$/ });
+  assert.deepEqual(q["images.0"], { $exists: true });
+  assert.equal(q.status, "active");
+  // The coverage clause: kitchen OR bathroom not pictured, bounded by attempts +
+  // cooldown. Crucially it does NOT include the renovationScore-null clauses, so
+  // it re-picks ALREADY-SCORED listings (the whole point of fast self-heal).
+  assert.equal(q.$or, undefined, "no unscored-listing clause");
+  assert.ok(Array.isArray(q.$and));
+  assert.deepEqual(q.$and[0], { $or: [{ kitchenPictured: false }, { bathroomPictured: false }] });
+  assert.deepEqual(q.$and[1].$or[0], { galleryHydrationAttempts: { $lt: 4 } });
+  assert.ok(q.$and[2].$or.some((c) => c.galleryHydrationAttemptedAt && c.galleryHydrationAttemptedAt.$lte === cutoff));
+});
+
+test("coverageOnly without hydration bounds is a programming error", () => {
+  assert.throws(() => buildAnalysisQuery({ coverageOnly: true }), /coverageOnly requires hydrationRetry/);
+});

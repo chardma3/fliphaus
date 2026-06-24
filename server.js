@@ -10,7 +10,8 @@ const path = require("path");
 const scrape = require("./api/scrape");
 const scrapeSold = require("./api/scrape-sold");
 const { analyzeListingImagesRefresh } = require("./api/analyze-refresh");
-const { startScheduler } = require("./api/scheduler");
+const { startScheduler, startCoverageSweep } = require("./api/scheduler");
+const jobLock = require("./api/job-lock");
 const SoldListing = require("./models/sold.model");
 const Listing = require("./api/listing.model");
 const User = require("./models/user.model");
@@ -588,6 +589,11 @@ app.post("/api/invest", requireAuth, async (req, res) => {
 
 // Scrape trigger
 app.get("/api/scrape", requireRefreshToken, async (req, res) => {
+  // Hold the shared job lock so the coverage sweep / nightly run defer to this
+  // scrape. If another heavy job is mid-flight, 409 quickly; GitHub Actions retries.
+  if (!jobLock.acquire("http-scrape")) {
+    return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
+  }
   try {
     const result = await scrape(buildActiveScrapeOptions(req.query));
     res.json({ message: "Scrape complete", ...result });
@@ -595,6 +601,8 @@ app.get("/api/scrape", requireRefreshToken, async (req, res) => {
     console.error("❌ Scrape error:", err);
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Refusing to persist zero active listings/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Scraping failed", detail: err.message });
+  } finally {
+    jobLock.release("http-scrape");
   }
 });
 
@@ -623,12 +631,19 @@ app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
 
 // Analyse already-scraped listing photos separately from Hemnet scraping.
 app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
+  // Share the job lock with scrapes and the coverage sweep — one Puppeteer job at
+  // a time on the single instance. 409 if busy; GitHub Actions retries.
+  if (!jobLock.acquire("http-analyze")) {
+    return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
+  }
   try {
     const result = await analyzeListingImagesRefresh(buildImageAnalysisOptions(req.query));
     res.json({ message: "Image analysis complete", ...result });
   } catch (err) {
     console.error("❌ Image analysis refresh error:", err);
     res.status(500).json({ error: "Image analysis failed", detail: err.message });
+  } finally {
+    jobLock.release("http-analyze");
   }
 });
 
@@ -734,4 +749,5 @@ app.listen(PORT, () => {
   // Nightly scrape + analysis (incl. self-heal) on the always-on service.
   // No-op unless ENABLE_SCHEDULER=true, so it never fires in dev/tests.
   startScheduler({ scrape, analyze: analyzeListingImagesRefresh });
+  startCoverageSweep({ analyze: analyzeListingImagesRefresh });
 });
