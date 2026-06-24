@@ -149,9 +149,11 @@ test("sold scrape can be split by area for shorter cron requests", () => {
   );
 });
 
-test("refresh workflow keeps active scrape bounded and splits sold scraping into area requests", () => {
-  const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
-  assert.match(workflow, /api\/scrape\?includeDetails=false/);
+const workflowDir = path.join(__dirname, "..", ".github", "workflows");
+const readWorkflow = (name) => fs.readFileSync(path.join(workflowDir, name), "utf8");
+
+test("sold-refresh workflow does sold comps + analyse + reconcile (active scrape moved to batches)", () => {
+  const workflow = readWorkflow("refresh-fliphaus.yml");
   assert.match(workflow, /--max-time 300/);
   assert.match(workflow, /--retry 2/);
   assert.match(workflow, /--retry-all-errors/);
@@ -159,8 +161,26 @@ test("refresh workflow keeps active scrape bounded and splits sold scraping into
   // Rissne (northern Sundbyberg) was dropped 2026-06-19 — must not be scraped.
   assert.doesNotMatch(workflow, /area=Rissne/);
   assert.match(workflow, /api\/analyze-images\?dataset=all&limit=10/);
+  assert.match(workflow, /api\/reconcile-sold/);
   assert.match(workflow, /continue-on-error: true/);
   assert.match(workflow, /detailLimit=5/);
-  assert.match(workflow, /includeDetails=false/);
   assert.match(workflow, /includeAnalysis=false/);
+  // The active listing scrape moved to the staggered scrape-batch-* workflows.
+  assert.doesNotMatch(workflow, /api\/scrape\?/);
+});
+
+test("each staggered batch workflow scrapes exactly one bounded batch at its own cron", () => {
+  const crons = [];
+  for (let n = 1; n <= 3; n++) {
+    const wf = readWorkflow(`scrape-batch-${n}.yml`);
+    assert.match(wf, new RegExp(`api/scrape\\?includeDetails=false&batch=${n}`));
+    assert.match(wf, /--max-time 300/);
+    assert.match(wf, /--retry 2/);
+    assert.match(wf, /workflow_dispatch:/); // manually triggerable for verification
+    const m = wf.match(/cron:\s*"([^"]+)"/);
+    assert.ok(m, `batch ${n} has a cron`);
+    crons.push(m[1]);
+  }
+  // Distinct fire times so two batches never hit the single instance at once.
+  assert.equal(new Set(crons).size, 3);
 });
