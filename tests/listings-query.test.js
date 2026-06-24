@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const { buildActiveFeedFilter, DEAL_MIN_SCORE, SITTING_MIN_DAYS } = require("../api/listings-query");
 
 test("deals view shows scored strong flips (>=7) only — unscored and new-builds excluded", () => {
-  assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000 }), {
+  // areaConstraints: [] isolates the view/score shape from the live per-area caps
+  // (Östermalm/Södermalm), which are covered by their own tests below.
+  assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     askingPriceNum: { $lte: 4000000 },
@@ -20,7 +22,7 @@ test("move-in-ready view shows scored-but-not-strong listings (1..6) and exclude
 });
 
 test("new-build view shows only projekt listings (name-only address), no score filter", () => {
-  const f = buildActiveFeedFilter({ view: "newbuild", maxPrice: 4000000 });
+  const f = buildActiveFeedFilter({ view: "newbuild", maxPrice: 4000000, areaConstraints: [] });
   assert.deepEqual(f, {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
@@ -106,9 +108,14 @@ test("a compsOnly area is folded into the exclusion regex (never surfaced as buy
   assert.equal(f.$nor, undefined, "compsOnly does not add a price clause");
 });
 
-test("the live area-priority backlog produces no active constraints yet (additive, zero current effect)", () => {
+test("the live area-priority backlog now surfaces the Östermalm + Södermalm 6M caps", () => {
   const { activeAreaConstraints } = require("../api/listings-query");
-  // Gärdet/Essingeöarna are active but carry null filters; Östermalm/Södermalm
-  // are still pending. So wiring is dormant until Claire flips a capped area live.
-  assert.deepEqual(activeAreaConstraints(), []);
+  // Activated 2026-06-24: both inner-city cores are live with a 6M maxPriceSEK cap,
+  // so the wiring is no longer dormant. (Nacka is active too but its excludeNewBuild
+  // filter isn't consumed by the feed, so it produces no listings-query constraint.)
+  const capped = activeAreaConstraints()
+    .filter((a) => a.filters.maxPriceSEK != null)
+    .map((a) => a.name)
+    .sort();
+  assert.deepEqual(capped, ["Södermalm", "Östermalm"]);
 });
