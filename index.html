@@ -849,14 +849,57 @@
           const res = await fetch("/api/scrape-health");
           const health = await res.json();
           const active = health.active || {};
+          const sweep = health.coverageSweep || {};
+          const schedule = health.schedule || [];
           const lastUpdated = active.lastSeenAt || active.lastScrapeDate;
+
+          // A workflow's UTC "HH:MM" cron -> Stockholm local time (DST-correct).
+          const toLocal = (utc) => {
+            const [h, m] = utc.split(":").map(Number);
+            const d = new Date(); d.setUTCHours(h, m, 0, 0);
+            return d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Stockholm" });
+          };
+          const fmtWhen = (iso) => iso
+            ? new Date(iso).toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", dateStyle: "short", timeStyle: "short" })
+            : "—";
+
           const staleText = active.isStale
-            ? "This data may be stale; the automatic refresh should run daily."
+            ? "This data may be stale; the daily refresh hasn't completed recently."
             : "Automatic refresh is healthy.";
+          const todayText = active.ranToday
+            ? "✓ Today's scrape has run."
+            : `No scrape has run yet today${schedule.length ? ` — first runs at ${toLocal(schedule[0].utc)}` : ""}.`;
+
+          const scheduleRows = schedule.map((s) => `
+            <div style="display:flex; gap:10px;">
+              <span style="color:#ffd43b; min-width:48px;">${toLocal(s.utc)}</span>
+              <span>${s.job}<span style="color:#666;"> · ${s.does}</span></span>
+            </div>`).join("");
+
+          // Wetroom re-checks = the coverage self-heal sweep (re-fetches photos for
+          // listings missing a kitchen/bathroom and re-scores them).
+          let sweepText;
+          if (!sweep.enabled) {
+            sweepText = `<span style="color:#ff8888;">Wetroom re-checks: off</span>`;
+          } else if (sweep.lastRun) {
+            const r = sweep.lastRun;
+            const detail = r.error ? `error: ${r.error}`
+              : r.deferred ? "deferred (a scrape was running)"
+              : `${r.analyzed || 0} listing(s) re-checked`;
+            sweepText = `Wetroom re-checks: every 5 min · last ${fmtWhen(r.at)} — ${detail}`;
+          } else {
+            sweepText = `Wetroom re-checks: every 5 min · waiting for first run…`;
+          }
+
           healthEl.style.display = "flex";
           healthEl.innerHTML = `
-            <span><strong style="color:#ffd43b;">Last updated:</strong> ${formatHealthDate(lastUpdated)}</span>
-            <span>${staleText}</span>
+            <span><strong style="color:#ffd43b;">Last updated:</strong> ${formatHealthDate(lastUpdated)} — ${staleText}</span>
+            <span>${todayText}</span>
+            <div style="display:flex; flex-direction:column; gap:3px; margin-top:4px;">
+              <strong style="color:#ffd43b;">Scrapes every 24h (Stockholm time):</strong>
+              ${scheduleRows}
+            </div>
+            <span style="margin-top:4px;">${sweepText}</span>
           `;
         } catch (err) {
           healthEl.style.display = "flex";

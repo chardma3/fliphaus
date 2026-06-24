@@ -25,6 +25,17 @@ function formatDateOnly(date) {
   return date ? date.toISOString().slice(0, 10) : null;
 }
 
+// The scrapes that run every 24h, for the dashboard health panel. Times are UTC
+// (GitHub Actions' cron timezone) — KEEP IN SYNC with the cron lines in
+// .github/workflows/{scrape-batch-1,2,3}.yml and refresh-fliphaus.yml. The
+// frontend renders them in Stockholm local time so DST is handled there.
+const DAILY_SCRAPES = [
+  { job: "Active listings — batch 1 of 3", utc: "11:00", does: "New & changed listings" },
+  { job: "Active listings — batch 2 of 3", utc: "11:25", does: "New & changed listings" },
+  { job: "Active listings — batch 3 of 3", utc: "11:50", does: "New & changed listings" },
+  { job: "Sold prices + photo analysis", utc: "12:20", does: "Slutpriser, scoring, sold reconciliation" },
+];
+
 function buildScrapeHealth({ activeListings = [], soldListings = [], now = new Date() } = {}) {
   const activeLastSeen = latestDate(activeListings.map((l) => l.lastSeenAt));
   const activeScrapeDate = latestDate(activeListings.map((l) => l.scrapeDate));
@@ -32,13 +43,17 @@ function buildScrapeHealth({ activeListings = [], soldListings = [], now = new D
   const soldLatest = latestDate(soldListings.map((l) => l.scrapedAt || l.soldDate));
   const activeDays = daysBetween(now, activeLatest);
   const soldDays = daysBetween(now, soldLatest);
+  // Has any of today's scheduled scrape run yet? (Calendar day, UTC.)
+  const ranToday = formatDateOnly(activeScrapeDate) != null && formatDateOnly(activeScrapeDate) === formatDateOnly(now);
 
   return {
+    schedule: DAILY_SCRAPES,
     active: {
       total: activeListings.length,
       lastSeenAt: activeLastSeen ? activeLastSeen.toISOString() : null,
       lastScrapeDate: formatDateOnly(activeScrapeDate),
       daysSinceLastScrape: activeDays,
+      ranToday,
       isStale: activeDays == null || activeDays > 2,
     },
     soldMarketData: {
@@ -50,4 +65,4 @@ function buildScrapeHealth({ activeListings = [], soldListings = [], now = new D
   };
 }
 
-module.exports = { buildScrapeHealth, parseDate };
+module.exports = { buildScrapeHealth, parseDate, DAILY_SCRAPES };
