@@ -19,6 +19,14 @@ const lock = require("./job-lock");
 
 const DEFAULT_HOUR = 3;
 
+// Heartbeat for the coverage sweep so an operator can confirm it's alive without
+// reading Render logs (surfaced by /api/scrape-health). Updated on every pass,
+// including deferrals. Null until the first tick fires.
+let lastCoverageSweep = null;
+function getCoverageSweepStatus() {
+  return lastCoverageSweep;
+}
+
 function isFlagOn(value) {
   return value === "true" || value === "1";
 }
@@ -103,9 +111,13 @@ function startScheduler({ scrape, analyze, env = process.env, log = console.log 
 // scrape/analysis is already running it DEFERS — the caller's interval retries on
 // the next tick, i.e. it reschedules itself rather than colliding with the scan.
 async function runCoverageSweepOnce({ analyze, log = console.log, limit = 8 } = {}) {
+  const record = (outcome) => {
+    lastCoverageSweep = { at: new Date().toISOString(), ...outcome };
+    return outcome;
+  };
   if (lock.isBusy()) {
     log(`⏰ Coverage sweep deferred — "${lock.currentJob()}" is running; retrying next tick.`);
-    return { deferred: true, busyWith: lock.currentJob() };
+    return record({ deferred: true, busyWith: lock.currentJob() });
   }
   return lock.withLock("coverage-sweep", async () => {
     try {
@@ -114,10 +126,10 @@ async function runCoverageSweepOnce({ analyze, log = console.log, limit = 8 } = 
       if (a.candidates) {
         log(`⏰ Coverage sweep: ${a.analyzed}/${a.candidates} re-analysed, ${a.skipped} skipped.`);
       }
-      return { deferred: false, ...a };
+      return record({ deferred: false, candidates: a.candidates || 0, analyzed: a.analyzed || 0, skipped: a.skipped || 0 });
     } catch (err) {
       console.error(`⏰ Coverage sweep failed: ${err.message}`);
-      return { deferred: false, error: err.message };
+      return record({ deferred: false, error: err.message });
     }
   });
 }
@@ -150,4 +162,4 @@ function startCoverageSweep({ analyze, env = process.env, log = console.log } = 
   return { runOnce: () => runCoverageSweepOnce({ analyze, log, limit }) };
 }
 
-module.exports = { startScheduler, startCoverageSweep, runCoverageSweepOnce, msUntilNextRun };
+module.exports = { startScheduler, startCoverageSweep, runCoverageSweepOnce, getCoverageSweepStatus, msUntilNextRun };
