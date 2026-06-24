@@ -1,0 +1,51 @@
+# Manual one-off: re-score the active DEALS (renovationScore >= 7) so a prompt
+# change reaches existing listings, not just newly-scraped ones. Click "Run
+# workflow" in the Actions tab. Idempotent — each re-scored deal gets a fresh
+# analyzedAt past the cutoff captured at start, so it drops out; the loop drains
+# the (small) deals set. Safe to re-run any time.
+name: Reanalyse deals (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minScore:
+        description: "Min renovationScore to re-score (deals threshold)"
+        required: false
+        default: "7"
+      passes:
+        description: "How many drain passes (25 listings each)"
+        required: false
+        default: "3"
+
+jobs:
+  reanalyse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up FlipHaus server
+        continue-on-error: true
+        run: |
+          curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
+            "$FLIPHAUS_REFRESH_URL/api/scrape-health" -o /dev/null -w "warmup HTTP %{http_code}\n"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+
+      - name: Re-score deals analysed before now
+        run: |
+          CUTOFF="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Re-scoring deals (score >= ${MIN_SCORE}) analysed before ${CUTOFF}"
+          for i in $(seq 1 "${PASSES}"); do
+            echo "→ pass ${i}/${PASSES}"
+            curl --fail-with-body -sS -G --max-time 300 --retry 1 --retry-all-errors --retry-delay 20 \
+              -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+              --data-urlencode "dataset=active" \
+              --data-urlencode "reanalyzeBefore=${CUTOFF}" \
+              --data-urlencode "reanalyzeMinScore=${MIN_SCORE}" \
+              --data-urlencode "limit=25" \
+              "$FLIPHAUS_REFRESH_URL/api/analyze-images" \
+              || echo "  ✗ pass ${i} failed (continuing)"
+          done
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
+          MIN_SCORE: ${{ github.event.inputs.minScore }}
+          PASSES: ${{ github.event.inputs.passes }}

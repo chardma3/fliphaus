@@ -1,8 +1,13 @@
-name: Refresh FlipHaus data
+# Daily sold-comparables refresh + sold reconciliation + image analysis / self-heal.
+# The active listing scrape moved to the staggered scrape-batch-{1,2,3} workflows
+# (each reconciles its own areas' disappearances). This runs AFTER all three
+# batches so reconcile-sold matches freshly-disappeared listings against the
+# latest slutpriser. Cron is UTC; 12:20 UTC ≈ 14:20 Europe/Stockholm (summer).
+name: Refresh FlipHaus sold data
 
 on:
   schedule:
-    - cron: "20 5 * * *"
+    - cron: "20 12 * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,11 +16,8 @@ jobs:
     steps:
       - name: Warm up FlipHaus server
         # Wake a sleeping Render instance before the heavy scrape so the first
-        # /api/scrape request doesn't hit a cold start (which previously hung
-        # for the full 300s --max-time and then failed). /api/scrape-health is
-        # public and lightweight (two DB reads, no Puppeteer). Retries cover the
-        # dyno spin-up window. Never fails the run — the scrape step has its own
-        # retries.
+        # request doesn't hit a cold start. /api/scrape-health is public and
+        # lightweight (two DB reads, no Puppeteer). Never fails the run.
         continue-on-error: true
         run: |
           curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
@@ -23,13 +25,6 @@ jobs:
             -o /dev/null -w "warmup HTTP %{http_code} in %{time_total}s\n"
         env:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-
-      - name: Refresh active dashboard listings
-        run: |
-          curl --fail-with-body -sS --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/scrape?includeDetails=false"
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
       - name: Refresh Farsta sold comparable properties
         run: |
@@ -39,11 +34,11 @@ jobs:
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
       - name: Refresh expansion-area sold comparable properties
-        # The expansion areas in LOCATION_IDS beyond Farsta (2026-06).
-        # Looped (not one step each) to keep the workflow compact; --data-urlencode
-        # encodes the non-ASCII names (Skarpnäck, Årsta, Hökarängen, Kärrtorp,
-        # Högdalen) and the space in "Stora Mossen" (quoted so the for-loop keeps
-        # it one token). A blocked area is logged and skipped so one failure doesn't
+        # Every area in LOCATION_IDS beyond Farsta. Looped (not one step each) to
+        # keep the workflow compact; --data-urlencode encodes the non-ASCII names
+        # (Skarpnäck, Årsta, Gärdet, …) and the spaces in "Stora Mossen" /
+        # "Lilla Essingen" / "Stora Essingen" (quoted so the for-loop keeps each
+        # one token). A blocked area is logged and skipped so one failure doesn't
         # drop the others.
         continue-on-error: true
         run: |
@@ -63,6 +58,7 @@ jobs:
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
 
       - name: Analyse scraped listing images
+        # Scores new listings AND runs self-heal (re-hydrates the bot-block tail).
         continue-on-error: true
         run: |
           curl --fail-with-body -sS --max-time 300 --retry 1 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/analyze-images?dataset=all&limit=10"
