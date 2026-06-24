@@ -57,3 +57,58 @@ test("sitting view without a cutoff omits the publishedAt bound", () => {
 test("SITTING_MIN_DAYS is exported and at least a week", () => {
   assert.ok(SITTING_MIN_DAYS >= 7);
 });
+
+// --- per-area filters (api/area-priority.js) wired into the feed ---
+
+test("with no active area constraints the filter is unchanged (byte-identical)", () => {
+  assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
+    status: "active",
+    locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
+    askingPriceNum: { $lte: 4000000 },
+    streetAddress: { $not: /^[^0-9]+$/ },
+    renovationScore: { $gte: 7 },
+  });
+});
+
+test("a per-area maxPriceSEK cap adds a NOT(in-area AND over-cap) clause, leaving other areas free", () => {
+  const f = buildActiveFeedFilter({
+    view: "deals",
+    areaConstraints: [
+      { name: "Östermalm", filters: { maxPriceSEK: 6_000_000, compsOnly: false } },
+    ],
+  });
+  assert.deepEqual(f.$nor, [
+    { locationDescription: /Östermalm/i, askingPriceNum: { $gt: 6_000_000 } },
+  ]);
+  // A global price cap is untouched and composes with the per-area $nor.
+  assert.equal(f.askingPriceNum, undefined);
+});
+
+test("the per-area cap applies across views, not just deals", () => {
+  const constraints = [{ name: "Södermalm", filters: { maxPriceSEK: 6_000_000, compsOnly: false } }];
+  for (const view of ["deals", "moveinready", "sitting", "newbuild"]) {
+    const f = buildActiveFeedFilter({ view, areaConstraints: constraints });
+    assert.deepEqual(f.$nor, [
+      { locationDescription: /Södermalm/i, askingPriceNum: { $gt: 6_000_000 } },
+    ]);
+  }
+});
+
+test("a compsOnly area is folded into the exclusion regex (never surfaced as buyable)", () => {
+  const f = buildActiveFeedFilter({
+    view: "deals",
+    areaConstraints: [{ name: "Stuvsta", filters: { maxPriceSEK: null, compsOnly: true } }],
+  });
+  const re = f.locationDescription.$not;
+  assert.ok(re.test("Stuvsta, Huddinge"), "compsOnly area is excluded");
+  assert.ok(re.test("Rissne"), "the hardcoded exclusions are preserved");
+  assert.ok(!re.test("Östermalm"), "unrelated areas still pass");
+  assert.equal(f.$nor, undefined, "compsOnly does not add a price clause");
+});
+
+test("the live area-priority backlog produces no active constraints yet (additive, zero current effect)", () => {
+  const { activeAreaConstraints } = require("../api/listings-query");
+  // Gärdet/Essingeöarna are active but carry null filters; Östermalm/Södermalm
+  // are still pending. So wiring is dormant until Claire flips a capped area live.
+  assert.deepEqual(activeAreaConstraints(), []);
+});
