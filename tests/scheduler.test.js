@@ -52,3 +52,51 @@ test("runJob runs scrape then analyze, and won't overlap itself", async () => {
   await first;
   assert.deepEqual(calls, ["scrape", "analyze"], "analyze runs after scrape");
 });
+
+const { runCoverageSweepOnce } = require("../api/scheduler");
+const lock = require("../api/job-lock");
+
+test("coverage sweep defers (runs nothing) while a scan holds the lock", async () => {
+  lock._reset();
+  lock.acquire("http-scrape");
+  let analyzeCalled = false;
+  const out = await runCoverageSweepOnce({
+    analyze: async () => { analyzeCalled = true; return { active: {} }; },
+    log: () => {},
+  });
+  assert.equal(analyzeCalled, false, "did not run analysis while a scan was running");
+  assert.equal(out.deferred, true);
+  assert.equal(out.busyWith, "http-scrape");
+  lock.release("http-scrape");
+});
+
+test("coverage sweep runs a coverageOnly active pass when idle, holding the lock", async () => {
+  lock._reset();
+  let opts = null;
+  let heldDuringRun = false;
+  const out = await runCoverageSweepOnce({
+    analyze: async (o) => {
+      opts = o;
+      heldDuringRun = lock.currentJob() === "coverage-sweep";
+      return { active: { candidates: 2, analyzed: 1, skipped: 1 } };
+    },
+    log: () => {},
+    limit: 8,
+  });
+  assert.deepEqual(opts, { dataset: "active", coverageOnly: true, limit: 8 });
+  assert.equal(heldDuringRun, true, "held the lock so scrapes defer to it");
+  assert.equal(out.deferred, false);
+  assert.equal(out.analyzed, 1);
+  assert.equal(lock.isBusy(), false, "lock released after the pass");
+});
+
+test("coverage sweep survives an analysis error and releases the lock", async () => {
+  lock._reset();
+  const out = await runCoverageSweepOnce({
+    analyze: async () => { throw new Error("hydration blew up"); },
+    log: () => {},
+  });
+  assert.equal(out.deferred, false);
+  assert.match(out.error, /hydration blew up/);
+  assert.equal(lock.isBusy(), false);
+});

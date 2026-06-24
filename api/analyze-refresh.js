@@ -10,7 +10,7 @@ const { PROJECT_ADDRESS } = require("./project-listing");
 const MAX_HYDRATION_ATTEMPTS = Number(process.env.MAX_HYDRATION_ATTEMPTS) || 4;
 const HYDRATION_RETRY_COOLDOWN_MS = Number(process.env.HYDRATION_RETRY_COOLDOWN_MS) || 6 * 60 * 60 * 1000;
 
-function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null, reanalyzeMinScore = null, target = null } = {}) {
+function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = false, hydrationRetry = null, reanalyzeBefore = null, reanalyzeMinScore = null, target = null, coverageOnly = false } = {}) {
   // Never spend analysis on new-build/projekt listings — they're not flips and
   // their detail pages can't be hydrated anyway. They surface in the New builds
   // view as raw market data instead.
@@ -21,6 +21,23 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
     // re-score regardless of onlyMissing/self-heal/coverage state, so a listing
     // that's already scored (e.g. a top deal we want corrected) gets re-run.
     query.$or = [{ id: target }, { slug: target }];
+    return query;
+  }
+  if (coverageOnly) {
+    // Fast coverage self-heal: ONLY already-scored listings whose persisted photos
+    // miss a wet room (kitchen or bathroom). Bypasses the unscored-listing clauses
+    // so the 5-minute sweep re-hydrates exactly these and nothing else. Same
+    // attempt + cooldown bounds as nightly self-heal (the sweep just passes a much
+    // shorter cooldown so a still-blocked listing is eligible again ~5 min later,
+    // not 6 h). A successfully-hydrated listing flips its flag and drops out; a
+    // genuinely photo-poor one exhausts MAX_HYDRATION_ATTEMPTS and stops; a bot-
+    // blocked one resets to 0 attempts and keeps retrying — exactly the intent.
+    if (!hydrationRetry) throw new Error("coverageOnly requires hydrationRetry bounds");
+    query.$and = [
+      { $or: [{ kitchenPictured: false }, { bathroomPictured: false }] },
+      { $or: [{ galleryHydrationAttempts: { $lt: hydrationRetry.maxAttempts } }, { galleryHydrationAttempts: { $exists: false } }] },
+      { $or: [{ galleryHydrationAttemptedAt: null }, { galleryHydrationAttemptedAt: { $exists: false } }, { galleryHydrationAttemptedAt: { $lte: hydrationRetry.cutoff } }] },
+    ];
     return query;
   }
   if (onlyMissing) {
@@ -220,13 +237,20 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
 
 async function analyzeActiveListings(options = {}) {
   const Listing = require("./listing.model");
+  // The fast coverage sweep re-picks still-incomplete listings every few minutes,
+  // so it uses a short cooldown (default 4 min, < the 5-min sweep interval) instead
+  // of the 6 h nightly cooldown — otherwise a just-attempted listing would be
+  // locked out until long after the next sweep.
+  const cooldownMs = options.coverageOnly
+    ? Number(process.env.COVERAGE_SWEEP_COOLDOWN_MS) || 4 * 60 * 1000
+    : HYDRATION_RETRY_COOLDOWN_MS;
   const hydrationRetry = {
     maxAttempts: MAX_HYDRATION_ATTEMPTS,
-    cutoff: new Date(Date.now() - HYDRATION_RETRY_COOLDOWN_MS),
+    cutoff: new Date(Date.now() - cooldownMs),
   };
   return analyzeBatch({
     Model: Listing,
-    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target: options.target }),
+    query: buildAnalysisQuery({ onlyMissing: options.onlyMissing, status: "active", requireAnalyzedAt: true, hydrationRetry, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target: options.target, coverageOnly: options.coverageOnly }),
     limit: options.limit,
     describeListing: (listing) => ({
       size: listing.size,
@@ -262,7 +286,7 @@ async function analyzeListingImagesRefresh(options = {}) {
   const result = { dataset, limit, target, active: null, sold: null };
 
   if (dataset === "active" || dataset === "all") {
-    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target });
+    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target, coverageOnly: options.coverageOnly });
   }
 
   if (dataset === "sold" || dataset === "all") {
