@@ -232,7 +232,10 @@ app.get("/api/listings", async (req, res) => {
     const sittingBefore = view === "sitting"
       ? new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000)
       : undefined;
-    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore });
+    // Deals require both wet rooms actually pictured (a deal scored blind to the
+    // bathroom is unverified). Escape hatch: DEALS_REQUIRE_WETROOM_COVERAGE=false.
+    const requireDealCoverage = process.env.DEALS_REQUIRE_WETROOM_COVERAGE !== "false";
+    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore, requireDealCoverage });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
