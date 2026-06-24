@@ -72,6 +72,7 @@ function buildActiveFeedFilter({
   dealMinScore = DEAL_MIN_SCORE,
   sittingBefore,
   areaConstraints = activeAreaConstraints(),
+  requireDealCoverage = true,
 } = {}) {
   const compsOnlyNames = areaConstraints
     .filter((a) => a.filters.compsOnly)
@@ -114,6 +115,20 @@ function buildActiveFeedFilter({
   filter.renovationScore = view === "moveinready"
     ? { $gte: 1, $lte: dealMinScore - 1 }
     : { $gte: dealMinScore };
+
+  // A deal scored >= DEAL_MIN_SCORE asserts BOTH wet rooms need work — the whole
+  // flip thesis. If the analyser never actually saw the bathroom (its gallery
+  // hydration was bot-blocked, leaving it on Hemnet's bathroom-less thumbnails),
+  // that assertion is unverified and the listing must NOT surface as a confident
+  // deal. So Deals require the kitchen and bathroom to be pictured. We exclude only
+  // an EXPLICIT false (the known-blind case) — a missing/undefined flag (legacy,
+  // never measured) still shows, so this can't silently empty the feed. Coverage-
+  // false listings are re-hydrated by the fast self-heal sweep and rejoin Deals
+  // once the bathroom is actually seen. Move-in ready (browse) is unaffected.
+  if (view === "deals" && requireDealCoverage) {
+    filter.kitchenPictured = { $ne: false };
+    filter.bathroomPictured = { $ne: false };
+  }
   return filter;
 }
 
