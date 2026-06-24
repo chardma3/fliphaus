@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { startScheduler, msUntilNextRun } = require("../api/scheduler");
+const { startScheduler, startCoverageSweep, msUntilNextRun } = require("../api/scheduler");
 
 test("msUntilNextRun targets today's hour when it's still ahead", () => {
   const now = new Date("2026-06-17T01:30:00");
@@ -99,4 +99,13 @@ test("coverage sweep survives an analysis error and releases the lock", async ()
   assert.equal(out.deferred, false);
   assert.match(out.error, /hydration blew up/);
   assert.equal(lock.isBusy(), false);
+});
+
+test("startCoverageSweep runs on its OWN flag (ENABLE_COVERAGE_SWEEP), not ENABLE_SCHEDULER", () => {
+  const analyze = async () => ({ active: {} });
+  assert.equal(startCoverageSweep({ analyze, env: {}, log: () => {} }), null);
+  assert.equal(startCoverageSweep({ analyze, env: { ENABLE_SCHEDULER: "true" }, log: () => {} }), null,
+    "ENABLE_SCHEDULER alone does NOT start the sweep");
+  const handle = startCoverageSweep({ analyze, env: { ENABLE_COVERAGE_SWEEP: "true" }, log: () => {} });
+  assert.ok(handle && typeof handle.runOnce === "function");
 });

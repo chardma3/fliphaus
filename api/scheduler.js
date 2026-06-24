@@ -124,10 +124,17 @@ async function runCoverageSweepOnce({ analyze, log = console.log, limit = 8 } = 
 
 // Fast coverage self-heal loop. Every COVERAGE_SWEEP_MINUTES (default 5) it runs
 // one pass; while a scan is running it defers and the next tick retries (so a
-// collision just pushes the work ~5 min later, automatically). Shares the
-// ENABLE_SCHEDULER switch and the single-instance assumption with the nightly job.
+// collision just pushes the work ~5 min later, automatically).
+//
+// Gated on its OWN flag, ENABLE_COVERAGE_SWEEP — NOT ENABLE_SCHEDULER. The heavy
+// nightly scheduler is deliberately off here (scraping + nightly analysis run in
+// GitHub Actions, so running it in-process too would double-scrape). But this
+// sweep is lightweight (no scrape, just coverage re-hydration) and defers to any
+// GitHub-Actions scrape via the shared job lock, so it's safe to run on the
+// always-on web service even with ENABLE_SCHEDULER off. Default off so it never
+// fires in local dev/tests; single-instance only (set on ONE instance if scaled).
 function startCoverageSweep({ analyze, env = process.env, log = console.log } = {}) {
-  if (!isEnabled(env)) return null;
+  if (!isFlagOn(env.ENABLE_COVERAGE_SWEEP)) return null;
   const minutes = Number(env.COVERAGE_SWEEP_MINUTES) > 0 ? Number(env.COVERAGE_SWEEP_MINUTES) : 5;
   const limit = Number(env.COVERAGE_SWEEP_LIMIT) > 0 ? Number(env.COVERAGE_SWEEP_LIMIT) : 8;
   const intervalMs = minutes * 60 * 1000;
