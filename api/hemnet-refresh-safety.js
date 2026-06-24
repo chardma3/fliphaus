@@ -129,10 +129,29 @@ function buildStaleListingQuery({ currentIds = [], cutoff } = {}) {
 // stays well under Hemnet's ~100s Cloudflare edge timeout even as areas grow.
 const ACTIVE_SCRAPE_BATCHES = 3;
 
-// The area names in batch N (1-based). Contiguous chunks of the LOCATION_IDS
-// order, so "batch 1" is a stable, predictable set.
+// Areas large enough that scraping them inside a shared batch risks the ~100s
+// edge timeout on the HTTP /api/scrape path. Each gets its OWN scan (its own
+// request + cron, via scrape-heavy.yml) and is excluded from the normal batches
+// so those stay light. Nacka kommun (~560 active) is the first such area. This
+// only affects the HTTP batch path — the in-process scheduler scrapes everything
+// in one direct (non-HTTP, non-edge-timed) call, so it's unaffected.
+const HEAVY_AREAS = new Set(["Nacka"]);
+
+// Area names that go into the normal staggered batches (everything except the
+// heavy, own-scan areas).
+function getBatchableAreas() {
+  return Object.keys(LOCATION_IDS).filter((name) => !HEAVY_AREAS.has(name));
+}
+
+// Heavy areas, in LOCATION_IDS order, each scanned on its own.
+function getHeavyAreas() {
+  return Object.keys(LOCATION_IDS).filter((name) => HEAVY_AREAS.has(name));
+}
+
+// The area names in batch N (1-based). Contiguous chunks of the BATCHABLE areas
+// (heavy areas are scanned separately), so "batch 1" is a stable, predictable set.
 function getAreaBatch(batchNum, count = ACTIVE_SCRAPE_BATCHES) {
-  const names = Object.keys(LOCATION_IDS);
+  const names = getBatchableAreas();
   const size = Math.ceil(names.length / count);
   const start = (Number(batchNum) - 1) * size;
   if (!Number.isInteger(Number(batchNum)) || start < 0 || start >= names.length) {
@@ -202,6 +221,9 @@ module.exports = {
   LOCATION_IDS,
   AREA_NAMES,
   ACTIVE_SCRAPE_BATCHES,
+  HEAVY_AREAS,
+  getBatchableAreas,
+  getHeavyAreas,
   getAreaBatch,
   resolveActiveScrapeTargets,
   assertHemnetPageUsable,

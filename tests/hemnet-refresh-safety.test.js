@@ -6,6 +6,9 @@ const path = require("node:path");
 const {
   LOCATION_IDS,
   ACTIVE_SCRAPE_BATCHES,
+  HEAVY_AREAS,
+  getBatchableAreas,
+  getHeavyAreas,
   getAreaBatch,
   resolveActiveScrapeTargets,
   assertHemnetPageUsable,
@@ -16,16 +19,40 @@ const {
   resolveSoldScrapeTargets,
 } = require("../api/hemnet-refresh-safety");
 
-test("getAreaBatch splits LOCATION_IDS into contiguous, complete, non-overlapping batches", () => {
-  const all = Object.keys(LOCATION_IDS);
+test("getAreaBatch splits the BATCHABLE areas into contiguous, complete, non-overlapping batches", () => {
+  const batchable = getBatchableAreas();
   const batches = [];
   for (let n = 1; n <= ACTIVE_SCRAPE_BATCHES; n++) batches.push(getAreaBatch(n));
-  // Union of all batches == every area, with nothing duplicated or dropped.
-  assert.deepEqual(batches.flat().sort(), [...all].sort());
-  assert.equal(new Set(batches.flat()).size, all.length);
+  // Union of all batches == every batchable area, with nothing duplicated/dropped.
+  assert.deepEqual(batches.flat().sort(), [...batchable].sort());
+  assert.equal(new Set(batches.flat()).size, batchable.length);
   // Each batch is small enough to keep one /api/scrape request under the timeout.
-  const maxSize = Math.ceil(all.length / ACTIVE_SCRAPE_BATCHES);
+  const maxSize = Math.ceil(batchable.length / ACTIVE_SCRAPE_BATCHES);
   for (const b of batches) assert.ok(b.length <= maxSize, `batch size ${b.length} <= ${maxSize}`);
+});
+
+test("heavy areas are excluded from the batches and covered by their own scan", () => {
+  const batched = new Set([1, 2, 3].flatMap((n) => getAreaBatch(n)));
+  const heavy = getHeavyAreas();
+  // Nacka is heavy today.
+  assert.ok(HEAVY_AREAS.has("Nacka"));
+  assert.deepEqual(heavy, ["Nacka"]);
+  // No heavy area appears in any batch...
+  for (const h of heavy) assert.ok(!batched.has(h), `${h} is not in a shared batch`);
+  // ...but batchable + heavy together still cover every live area (nothing dropped).
+  assert.deepEqual(
+    [...batched, ...heavy].sort(),
+    Object.keys(LOCATION_IDS).sort()
+  );
+});
+
+test("a dedicated heavy-area scrape workflow exists and scans heavy areas on their own", () => {
+  const wf = readWorkflow("scrape-heavy.yml");
+  assert.match(wf, /api\/scrape/);
+  assert.match(wf, /areas=\$area/); // one request per heavy area, not a shared batch
+  assert.match(wf, /for area in Nacka/);
+  assert.match(wf, /--max-time 300/);
+  assert.match(wf, /workflow_dispatch:/);
 });
 
 test("getAreaBatch rejects out-of-range batch numbers", () => {

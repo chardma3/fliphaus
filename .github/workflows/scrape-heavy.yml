@@ -1,0 +1,41 @@
+# Heavy-area active scrape (see api/hemnet-refresh-safety.js HEAVY_AREAS). Areas
+# large enough to risk the ~100s Cloudflare edge timeout inside a shared batch get
+# their OWN scan here — one /api/scrape?areas=<name> request each — and are
+# excluded from the normal staggered batches. Nacka kommun (~560 active) is the
+# first. Each area reconciles its own disappearances (per-area, not all-or-nothing).
+# Cron is UTC; 12:50 UTC ≈ 14:50 Europe/Stockholm (summer) — distinct from the
+# batch crons so two scrapes never hit the single Render instance at once.
+name: Scrape heavy areas
+
+on:
+  schedule:
+    - cron: "50 12 * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up FlipHaus server
+        continue-on-error: true
+        run: |
+          curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
+            "$FLIPHAUS_REFRESH_URL/api/scrape-health" \
+            -o /dev/null -w "warmup HTTP %{http_code} in %{time_total}s\n"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+
+      - name: Scrape each heavy area on its own
+        run: |
+          for area in Nacka; do
+            echo "→ heavy scrape: $area"
+            curl --fail-with-body -sS -G --max-time 300 --retry 2 --retry-all-errors --retry-delay 20 \
+              -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+              --data-urlencode "includeDetails=false" \
+              --data-urlencode "areas=$area" \
+              "$FLIPHAUS_REFRESH_URL/api/scrape" \
+              || echo "  ✗ $area heavy scrape failed (continuing)"
+          done
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
