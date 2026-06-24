@@ -44,21 +44,29 @@ test("rolloutOrder sorts by tier then phase, sinking skips to the bottom", () =>
 });
 
 test("pendingForPhase returns only pending areas for that phase", () => {
-  // Phase 1 (Gärdet + Essingeöarna) was promoted to active 2026-06-22, so it has
-  // no pending candidates left; Phase 2 (Östermalm + Södermalm) still does.
+  // Phases 1+2 (Gärdet/Essingeöarna, then Östermalm/Södermalm) and Nacka were all
+  // promoted to active by 2026-06-24, so no Phase 1/2/3 candidates remain pending.
   assert.equal(pendingForPhase(1).length, 0);
-  const p2 = pendingForPhase(2);
+  assert.equal(pendingForPhase(2).length, 0);
+  // The rest of the Phase-3 Tier-B backlog is still pending (Nacka now active).
+  const p3 = pendingForPhase(3);
   assert.deepEqual(
-    p2.map((a) => a.name).sort(),
-    ["Södermalm", "Östermalm"],
-    "phase 2 is Östermalm + Södermalm"
+    p3.map((a) => a.name).sort(),
+    ["Bergshamra", "Stuvsta", "Älvsjö"],
+    "phase 3 pending = the rest of Tier B"
   );
-  for (const a of p2) {
+  for (const a of p3) {
     assert.equal(a.status, "pending");
-    assert.equal(a.phase, 2);
+    assert.equal(a.phase, 3);
   }
   // Skips never surface, regardless of phase argument.
   assert.equal(pendingForPhase(null).length, 0);
+});
+
+test("the three areas activated 2026-06-24 are marked active in the backlog", () => {
+  for (const name of ["Östermalm", "Södermalm", "Nacka"]) {
+    assert.equal(getArea(name).status, "active", `${name} is active`);
+  }
 });
 
 test("getArea is case- and whitespace-insensitive; unknown -> null", () => {

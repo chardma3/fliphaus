@@ -34,14 +34,25 @@ const LOCATION_IDS = {
   Hökarängen: 473375,
   Kärrtorp: 473382,
   Högdalen: 473374,
-  // Inner-city reno-arbitrage core added 2026-06-22 (Tier A in api/area-priority.js).
-  // Gärdet (1930s–40s funkis, deep liquid resale) sits inside the Östermalm node
-  // but is added as its own narrow ID. Lilla + Stora Essingen are the two
-  // Essingeöarna islands (40s–60s folkhem, Kungsholmen-adjacent) — Hemnet IDs them
-  // separately, so both are listed. IDs read off public hemnet.se /bostader URLs.
-  "Gärdet": 925958,
+  // Inner-city reno-arbitrage core (Tier A in api/area-priority.js). Lilla + Stora
+  // Essingen are the two Essingeöarna islands (40s–60s folkhem, Kungsholmen-adjacent)
+  // — Hemnet IDs them separately, so both are listed.
   "Lilla Essingen": 473386,
   "Stora Essingen": 473422,
+  // Phase 2 inner-city cores added 2026-06-24. Östermalm (473448) is the full
+  // district node — it subsumes Gärdet (the narrow 925958 ID was retired here to
+  // avoid double-scraping the same listings, per the area-priority note) plus
+  // Stadion/Karlaplan/Tekniska högskolan. Östermalm + Södermalm (898472) carry a
+  // 6M maxPriceSEK cap in api/area-priority.js (enforced by the feed) so they
+  // surface unrenovated outliers, not already-done premium units. IDs verified
+  // against public hemnet.se /bostader URLs.
+  "Östermalm": 473448,
+  "Södermalm": 898472,
+  // Nacka kommun (17853) added 2026-06-24 — Tier B, blue-line metro ~2030 catalyst.
+  // Large + new-build-heavy (Nacka strand/Sickla); its area-priority entry carries
+  // excludeNewBuild. NOTE: excludeNewBuild is not yet enforced at the feed, so its
+  // new-builds score low and land in Move-in ready / New builds, never Deals.
+  Nacka: 17853,
 };
 
 // The active areas, as plain names. Single source of truth for the user/feed

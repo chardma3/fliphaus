@@ -45,16 +45,16 @@ const AREA_PRIORITY = [
     name: "Gärdet",
     tier: "A",
     phase: 1,
-    status: "active", // promoted 2026-06-22 — live id 925958 in LOCATION_IDS
+    status: "active", // sourced via the Östermalm node (473448) since 2026-06-24
     locationId: null,
     transit: "red line (Ropsten branch) / Östermalm",
     filters: { maxPriceSEK: null, excludeNewBuild: false, compsOnly: false, catalyst: null },
     note:
       "1930s–40s funkis with tons of ORIGINAL kitchens/baths and fierce resale " +
-      "liquidity — almost the platonic reno-arbitrage area. Östermalm-quality " +
-      "signal at lower capital and competition than the prime cores. Note: Gärdet " +
-      "sits inside the Östermalm district node; Phase 1 uses the narrow Gärdet ID, " +
-      "Phase 2 broadens to the full Östermalm node (don't run both — double-scrape).",
+      "liquidity — almost the platonic reno-arbitrage area. Gärdet sits INSIDE the " +
+      "Östermalm district node, so when Östermalm (473448) went live 2026-06-24 the " +
+      "narrow Gärdet ID (925958) was retired from LOCATION_IDS to avoid double-" +
+      "scraping the same listings. Still sourced — just under the Östermalm node now.",
   },
   {
     name: "Essingeöarna",
@@ -73,7 +73,7 @@ const AREA_PRIORITY = [
     name: "Östermalm",
     tier: "A",
     phase: 2,
-    status: "pending",
+    status: "active", // promoted 2026-06-24 — live id 473448 in LOCATION_IDS (full district node)
     locationId: null,
     transit: "red line — Stadion, Karlaplan, Tekniska högskolan all subsumed here",
     filters: { maxPriceSEK: 6_000_000, excludeNewBuild: false, compsOnly: false, catalyst: null },
@@ -89,7 +89,7 @@ const AREA_PRIORITY = [
     name: "Södermalm",
     tier: "A",
     phase: 2,
-    status: "pending",
+    status: "active", // promoted 2026-06-24 — live id 898472 in LOCATION_IDS
     locationId: null,
     transit: "red/green lines — Slussen, Medborgarplatsen, Mariatorget",
     filters: { maxPriceSEK: 6_000_000, excludeNewBuild: false, compsOnly: false, catalyst: null },
@@ -106,7 +106,7 @@ const AREA_PRIORITY = [
     name: "Nacka",
     tier: "B",
     phase: 3,
-    status: "pending",
+    status: "active", // promoted 2026-06-24 — live id 17853 (whole Nacka kommun) in LOCATION_IDS
     locationId: null,
     transit: "blue line extension (~2030) + Saltsjöbanan",
     filters: {
