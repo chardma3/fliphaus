@@ -1,3 +1,6 @@
+// This is the ACTIVATION POINT — the areas we actually scrape. The tiered
+// expansion backlog (candidates, filters, rollout phases) lives in
+// api/area-priority.js; an area moves here once its Hemnet locationId is resolved.
 const LOCATION_IDS = {
   // Rissne (473493, northern Sundbyberg: Rissne + Hallonbergen + Ör) removed
   // 2026-06-19 — rental-heavy 1970s miljonprogram with a thin owner-occupier
@@ -31,6 +34,14 @@ const LOCATION_IDS = {
   Hökarängen: 473375,
   Kärrtorp: 473382,
   Högdalen: 473374,
+  // Inner-city reno-arbitrage core added 2026-06-22 (Tier A in api/area-priority.js).
+  // Gärdet (1930s–40s funkis, deep liquid resale) sits inside the Östermalm node
+  // but is added as its own narrow ID. Lilla + Stora Essingen are the two
+  // Essingeöarna islands (40s–60s folkhem, Kungsholmen-adjacent) — Hemnet IDs them
+  // separately, so both are listed. IDs read off public hemnet.se /bostader URLs.
+  "Gärdet": 925958,
+  "Lilla Essingen": 473386,
+  "Stora Essingen": 473422,
 };
 
 // The active areas, as plain names. Single source of truth for the user/feed
