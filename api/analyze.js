@@ -3,17 +3,25 @@ const { uniqueByUrl, selectImagesForAnalysis, selectDisplayImages, coverageFromD
 
 const client = new Anthropic();
 
-// Two-tier pipeline. A cheap pass triages every listing (room classification +
-// a coarse kitchen/bathroom condition read); the score pass runs the full
-// renovation score on listings that aren't gated out as already-modern. Both
-// default to Haiku 4.5 ($1/$5 per MTok vs Sonnet 4.6's $3/$15 — ~3x cheaper):
-// the scoring task is mostly classification over photos, where Haiku is enough,
-// and the self-heal loop re-runs scoring on a schedule, so cost compounds.
-// Both env-overridable, so the scorer can be bumped back to a stronger model
-// (e.g. ANALYSIS_MODEL=claude-sonnet-4-6) without a redeploy. Note: the analyser
-// passes no effort/thinking params, which Haiku would reject — keep it that way.
+// Two-tier pipeline. A cheap WORKER pass triages every listing (room
+// classification + a coarse kitchen/bathroom condition read) and gates out
+// already-modern listings; the ARCHITECT pass then runs the full renovation
+// score (1–10, room breakdown, cost estimate) on whatever isn't gated.
+//
+// The worker stays on Haiku 4.5 ($1/$5 per MTok): it runs on every photo of
+// every listing, so it's the cost-sensitive stage, and it only classifies/gates.
+// The architect runs on Sonnet 4.6 ($3/$15) — Haiku's renovation scores were too
+// weak (the visible deal score), and the triage gate already limits how many
+// listings reach this stage, so the extra cost is bounded. If Sonnet still isn't
+// good enough, the next step up is ANALYSIS_MODEL=claude-opus-4-8 (Anthropic's
+// strongest vision model: high-res images + better surface/material perception).
+//
+// Both env-overridable (no redeploy needed to retune). Note: the analyser passes
+// no effort/thinking params — Haiku rejects them, and Sonnet/Opus run fine
+// without — so a model swap stays a pure model swap. Keep it that way unless you
+// add model-conditional thinking.
 const TRIAGE_MODEL = process.env.TRIAGE_MODEL || "claude-haiku-4-5";
-const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || "claude-haiku-4-5";
+const ANALYSIS_MODEL = process.env.ANALYSIS_MODEL || "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `You are a Swedish apartment renovation analyst for FlipHaus, an investment platform that finds undervalued properties with renovation potential in Stockholm.
 

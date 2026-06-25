@@ -17,11 +17,11 @@ Listing photos are analysed by Anthropic Claude (vision) in a two-stage pipeline
 
 1. **Triage (cheap, every photo)** — `TRIAGE_MODEL` (default `claude-haiku-4-5`) classifies each photo by room type and judges whether the kitchen and bathroom look original or already renovated (cabinet fronts and worktops first, not sink material). If both wet rooms are already modern, the expensive scoring pass is **gated out** — there's no renovation upside to score.
 
-2. **Renovation scoring** — `ANALYSIS_MODEL` (default `claude-haiku-4-5`, override to `claude-sonnet-4-6` via env for stronger scoring) scores 1–10 (higher = more original/more upside), with a room-by-room breakdown, an estimated renovation cost, and a confidence flag. A score ≥ `DEAL_MIN_SCORE` (7) is a "strong flip" — both wet rooms need work.
+2. **Renovation scoring** — `ANALYSIS_MODEL` (default `claude-sonnet-4-6`; Haiku's scores were too weak, so the scorer was upgraded — bump to `claude-opus-4-8` via env for the strongest vision if Sonnet isn't enough) scores 1–10 (higher = more original/more upside), with a room-by-room breakdown, an estimated renovation cost, and a confidence flag. A score ≥ `DEAL_MIN_SCORE` (7) is a "strong flip" — both wet rooms need work.
 
 **Photo curation & coverage.** A fresh scrape only stores ~5 Hemnet search-card thumbnails, which usually omit the bathroom. Before scoring, the analyser hydrates the full detail-page gallery (`api/listing-gallery.js`), curates a wet-rooms-first set (≤ `MAX_DISPLAY_IMAGES`) to persist, and records `kitchenPictured`/`bathroomPictured` measured against the *persisted* photos. A listing whose bathroom couldn't be fetched (Hemnet bot-block) keeps `bathroomPictured: false` and is re-tried by the coverage self-heal sweep (see below); its card is flagged "score provisional" until the wet room is actually seen.
 
-Both model ids are environment-overridable, so the whole pipeline can be made cheaper (Haiku) or stronger (Sonnet) without a redeploy.
+Both model ids are environment-overridable, so the worker (triage) and architect (scoring) can be retuned independently — cheaper (Haiku) or stronger (Sonnet → Opus) — without a code change.
 
 ## Financial model (base case)
 
@@ -48,7 +48,7 @@ Both model ids are environment-overridable, so the whole pipeline can be made ch
 
 - **Runtime / API:** Node.js 20, Express 5 — a single always-on web service (hosted on Render) that also serves the static frontend.
 - **Database:** MongoDB Atlas via Mongoose; sessions stored in Mongo (`express-session` + `connect-mongo`).
-- **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku triage + Haiku/Sonnet renovation scoring (model ids env-overridable).
+- **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku 4.5 triage (worker) + Sonnet 4.6 renovation scoring (architect); model ids env-overridable.
 - **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
 - **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the 5-minute coverage self-heal.
 - **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / builder).
