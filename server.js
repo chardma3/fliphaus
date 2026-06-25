@@ -666,6 +666,13 @@ app.get("/api/scrape-health", async (req, res) => {
   }
 });
 
+// The canonical list of live areas (names only) so the frontend area picker and
+// areas page can render from the server's LOCATION_IDS instead of a hardcoded
+// copy that drifts every time an area is added. No auth: non-secret.
+app.get("/api/areas", (req, res) => {
+  res.json({ areas: AREA_NAMES });
+});
+
 // Sold data API with stats
 app.get("/api/sold/stats", async (req, res) => {
   try {
