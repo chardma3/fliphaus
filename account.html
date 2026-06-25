@@ -178,12 +178,15 @@
     </div>
 
     <script>
-      // Keep in sync with LOCATION_IDS in api/hemnet-refresh-safety.js (the
-      // active scraped areas). Client-side, so it can't import that module.
-      const ALL_AREAS = [
+      // Live areas come from GET /api/areas (the server's LOCATION_IDS), so this
+      // picker never drifts when an area is added. The list below is only a
+      // fallback if that request fails.
+      let ALL_AREAS = [
         "Farsta", "Kista", "Bagarmossen", "Skarpnäck", "Johanneshov",
         "Bromma", "Alvik", "Stora Mossen", "Enskede", "Solna", "Årsta",
-        "Hägersten", "Hökarängen", "Kärrtorp", "Högdalen"
+        "Hägersten", "Hökarängen", "Kärrtorp", "Högdalen",
+        "Lilla Essingen", "Stora Essingen", "Östermalm", "Södermalm",
+        "Finntorp", "Ektorp", "Sickla"
       ];
 
       let currentUser = null;
@@ -307,6 +310,16 @@
       }
 
       async function init() {
+        // Pull the live area list from the server so the picker matches what's
+        // actually scraped; fall back to the hardcoded list on failure.
+        try {
+          const areasRes = await fetch("/api/areas");
+          if (areasRes.ok) {
+            const { areas } = await areasRes.json();
+            if (Array.isArray(areas) && areas.length) ALL_AREAS = areas;
+          }
+        } catch (e) { /* keep fallback ALL_AREAS */ }
+
         const res = await fetch("/api/me");
         const data = await res.json();
         currentUser = data.user;

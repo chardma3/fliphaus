@@ -162,7 +162,7 @@
         <!-- Why these areas -->
         <div class="section">
           <h3>Why these 15 areas?</h3>
-          <p>FlipHaus covers <span class="highlight">15 Stockholm areas</span>: Farsta, Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Alvik, Stora Mossen, Enskede, Solna, Årsta, Hägersten, Hökarängen, Kärrtorp and Högdalen. They aren't picked at random — every one clears the same three filters that make a renovation flip work:</p>
+          <p>FlipHaus covers <span class="highlight" id="area-count">22 Stockholm areas</span>: <span id="area-list">Farsta, Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Alvik, Stora Mossen, Enskede, Solna, Årsta, Hägersten, Hökarängen, Kärrtorp, Högdalen, Lilla Essingen, Stora Essingen, Östermalm, Södermalm, Finntorp, Ektorp and Sickla</span>. They aren't picked at random — every one clears the same three filters that make a renovation flip work:</p>
           <p>
             <span class="highlight">1. On the tunnelbana.</span> Each sits on a metro line (not just commuter rail), so the commute to T-Centralen is short and predictable. Good transit keeps demand — and therefore resale liquidity — high.<br/>
             <span class="highlight">2. Renovation-age housing stock.</span> The stock spans the 1930s–50s folkhem and garden-suburb era, the 1960s–70s <span class="term" title="Sweden's massive public housing program (1965-1974) that built over one million homes in a decade">miljonprogrammet</span>, and 1980s blocks (Skarpnäck) — but it is all now old enough that original kitchens, bathrooms and flooring are entering a major renovation cycle.<br/>
@@ -295,6 +295,54 @@
             <p><strong>Built:</strong> Early 1950s (folkhem era)</p>
             <p><strong>Transit:</strong> Högdalen tunnelbana (Green line) — ~18 min to T-Centralen</p>
             <p><strong>Why it's high potential:</strong> The strongest policy-driven upside of the green-line south set — Stockholm stad has planned ~1,200 new homes and a major centrum densification, the kind of investment that re-rates an area over time. Entry prices are among the lowest within the metro network, and the early-1950s stock is squarely in its renovation cycle, leaving a wide margin for uplift.</p>
+          </div>
+
+          <div class="area-card" data-area="Lilla Essingen">
+            <h4>Lilla Essingen</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> Mostly 1940s–60s folkhem era, with some newer infill</p>
+            <p><strong>Transit:</strong> Bus to Fridhemsplan/Kungsholmen — a few minutes from the inner city; no tunnelbana of its own</p>
+            <p><strong>Why it's high potential:</strong> Part of our inner-city reno-arbitrage core. An island moments from Kungsholmen where the folkhem-era stock still holds plenty of original interiors — yet it sits in one of the city's most liquid demand pools, so the renovated-vs-unrenovated gap is wide and the exit is fast.</p>
+          </div>
+
+          <div class="area-card" data-area="Stora Essingen">
+            <h4>Stora Essingen</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> Mixed, 1940s–60s apartments plus older villas</p>
+            <p><strong>Transit:</strong> Bus to Kungsholmen/Fridhemsplan; no tunnelbana — quiet island setting just west of the city</p>
+            <p><strong>Why it's high potential:</strong> The larger of the two Essingeöarna islands — leafier and calmer than Lilla Essingen, but the same thesis: original-stock apartments a stone's throw from Kungsholmen, where inner-city demand underwrites a quick, profitable exit after renovation.</p>
+          </div>
+
+          <div class="area-card" data-area="Östermalm">
+            <h4>Östermalm</h4>
+            <p><strong>Municipality:</strong> Stockholms kommun</p>
+            <p><strong>Built:</strong> Sekelskifte (late 1800s–early 1900s) core, plus 1930s–60s stock toward Gärdet</p>
+            <p><strong>Transit:</strong> Red line (Östermalmstorg, Stadion, Karlaplan, Tekniska högskolan) + Tvärbanan</p>
+            <p><strong>Why it's high potential:</strong> Prime inner-city — so we apply a 6M SEK price cap to surface the <em>unrenovated outliers</em>, not already-done premium flats. A tired apartment at a prestige address carries the steepest renovation uplift in the city. This node also covers Gärdet, Stadion and Karlaplan.</p>
+          </div>
+
+          <div class="area-card" data-area="Finntorp">
+            <h4>Finntorp</h4>
+            <p><strong>Municipality:</strong> Nacka kommun</p>
+            <p><strong>Built:</strong> Mostly 1940s–60s owner-occupier (BR) stock</p>
+            <p><strong>Transit:</strong> Saltsjöbanan + bus today; blue-line tunnelbana extension to Nacka opening ~2030</p>
+            <p><strong>Why it's high potential:</strong> A metro catalyst play. We target the older original-stock pockets near the coming tunnelbana — not Nacka's new-build — so a renovation today is bought ahead of the transit re-rating expected when the blue line opens.</p>
+          </div>
+
+          <div class="area-card" data-area="Ektorp">
+            <h4>Ektorp</h4>
+            <p><strong>Municipality:</strong> Nacka kommun</p>
+            <p><strong>Built:</strong> Mainly 1950s–60s</p>
+            <p><strong>Transit:</strong> Bus + Saltsjöbanan; blue-line tunnelbana to Nacka ~2030</p>
+            <p><strong>Why it's high potential:</strong> Established Nacka residential area with renovation-age BR stock and the same blue-line metro catalyst ahead. Solid, liquid local demand with clear original-vs-renovated gaps to capture.</p>
+          </div>
+
+          <div class="area-card" data-area="Sickla">
+            <h4>Sickla</h4>
+            <p><strong>Municipality:</strong> Nacka kommun</p>
+            <p><strong>Built:</strong> Mixed 1940s–60s residential alongside the Sickla retail/work cluster</p>
+            <p><strong>Transit:</strong> Tvärbanan + Saltsjöbanan today; blue-line tunnelbana (Sickla station) ~2030</p>
+            <p><strong>Why it's high potential:</strong> Nacka's fast-developing gateway, anchored by a major retail and workplace cluster. Original-stock pockets near the new metro station offer arbitrage before the line opens and the area fully re-rates.</p>
           </div>
         </div>
 
@@ -482,6 +530,36 @@
         }
       }
 
+      // Keep the intro count/list — and the set of cards — in step with the live
+      // areas from the server (LOCATION_IDS), so adding an area can't leave this
+      // page stale. The authored cards above are kept; any live area without one
+      // gets a minimal placeholder until a full write-up is added.
+      async function syncAreas() {
+        try {
+          const res = await fetch("/api/areas");
+          if (!res.ok) return;
+          const { areas } = await res.json();
+          if (!Array.isArray(areas) || !areas.length) return;
+          const countEl = document.getElementById("area-count");
+          const listEl = document.getElementById("area-list");
+          if (countEl) countEl.textContent = `${areas.length} Stockholm areas`;
+          if (listEl) listEl.textContent = areas.length > 1
+            ? areas.slice(0, -1).join(", ") + " and " + areas[areas.length - 1]
+            : areas[0];
+          const container = document.querySelector(".area-card")?.parentElement;
+          if (!container) return;
+          const have = new Set([...container.querySelectorAll(".area-card[data-area]")].map((c) => c.dataset.area));
+          areas.filter((a) => !have.has(a)).forEach((a) => {
+            const card = document.createElement("div");
+            card.className = "area-card";
+            card.dataset.area = a;
+            card.innerHTML = `<h4>${a}</h4><p>Coverage area — full write-up coming soon.</p>`;
+            container.appendChild(card);
+          });
+        } catch (e) { /* leave authored intro/cards as-is */ }
+      }
+
+      syncAreas();
       init();
       loadLiquidity();
       loadTrends();
