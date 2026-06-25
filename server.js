@@ -25,6 +25,7 @@ const { buildAreaTrends } = require("./api/sold-trends");
 const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
+const { recordScrapeRun, getRecentScrapeRuns } = require("./api/scrape-run.model");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
@@ -585,17 +586,32 @@ app.post("/api/invest", requireAuth, async (req, res) => {
 });
 
 // Scrape trigger
+// Human label for an active-scrape run, given its query — matches the wording of
+// the DAILY_SCRAPES schedule so the run log and the schedule list read alike.
+function activeScrapeLabel(query = {}) {
+  if (query.batch != null && query.batch !== "") {
+    const total = process.env.ACTIVE_SCRAPE_BATCHES || 3;
+    return `Active listings — batch ${query.batch} of ${total}`;
+  }
+  if (query.areas != null && query.areas !== "") return `Active listings — ${query.areas}`;
+  return "Active listings — all areas";
+}
+
 app.get("/api/scrape", requireRefreshToken, async (req, res) => {
   // Hold the shared job lock so the coverage sweep / nightly run defer to this
   // scrape. If another heavy job is mid-flight, 409 quickly; GitHub Actions retries.
   if (!jobLock.acquire("http-scrape")) {
     return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
   }
+  const startedAt = new Date();
+  const label = activeScrapeLabel(req.query);
   try {
     const result = await scrape(buildActiveScrapeOptions(req.query));
+    await recordScrapeRun({ job: "active-scrape", label, status: result.partial ? "partial" : "success", startedAt, result });
     res.json({ message: "Scrape complete", ...result });
   } catch (err) {
     console.error("❌ Scrape error:", err);
+    await recordScrapeRun({ job: "active-scrape", label, status: "failed", startedAt, error: err.message });
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Refusing to persist zero active listings/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Scraping failed", detail: err.message });
   } finally {
@@ -616,11 +632,15 @@ app.all("/api/reconcile-sold", requireRefreshToken, async (req, res) => {
 
 // Scrape sold (slutpriser)
 app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
+  const startedAt = new Date();
+  const label = req.query.area ? `Sold prices — ${req.query.area}` : "Sold prices (slutpriser)";
   try {
     const result = await scrapeSold(buildSoldScrapeOptions(req.query));
+    await recordScrapeRun({ job: "sold-scrape", label, status: "success", startedAt, result });
     res.json({ message: "Sold scrape complete", ...result });
   } catch (err) {
     console.error("❌ Sold scrape error:", err);
+    await recordScrapeRun({ job: "sold-scrape", label, status: "failed", startedAt, error: err.message });
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Unknown sold scrape area/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Sold scraping failed", detail: err.message });
   }
@@ -633,11 +653,14 @@ app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
   if (!jobLock.acquire("http-analyze")) {
     return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
   }
+  const startedAt = new Date();
   try {
     const result = await analyzeListingImagesRefresh(buildImageAnalysisOptions(req.query));
+    await recordScrapeRun({ job: "image-analysis", label: "Photo analysis & scoring", status: "success", startedAt, result });
     res.json({ message: "Image analysis complete", ...result });
   } catch (err) {
     console.error("❌ Image analysis refresh error:", err);
+    await recordScrapeRun({ job: "image-analysis", label: "Photo analysis & scoring", status: "failed", startedAt, error: err.message });
     res.status(500).json({ error: "Image analysis failed", detail: err.message });
   } finally {
     jobLock.release("http-analyze");
@@ -654,8 +677,10 @@ app.get("/api/scrape-health", async (req, res) => {
   try {
     const activeListings = await Listing.find({}, { scrapeDate: 1, lastSeenAt: 1 }).lean();
     const soldListings = await SoldListing.find({}, { scrapedAt: 1, soldDate: 1 }).lean();
+    const recentRuns = await getRecentScrapeRuns(20);
     res.json({
       ...buildScrapeHealth({ activeListings, soldListings }),
+      recentRuns,
       coverageSweep: {
         enabled: process.env.ENABLE_COVERAGE_SWEEP === "true" || process.env.ENABLE_COVERAGE_SWEEP === "1",
         lastRun: getCoverageSweepStatus(),
