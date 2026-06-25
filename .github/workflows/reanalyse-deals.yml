@@ -1,8 +1,14 @@
 # Manual one-off: re-score the active DEALS (renovationScore >= 7) so a prompt
-# change reaches existing listings, not just newly-scraped ones. Click "Run
-# workflow" in the Actions tab. Idempotent — each re-scored deal gets a fresh
-# analyzedAt past the cutoff captured at start, so it drops out; the loop drains
-# the (small) deals set. Safe to re-run any time.
+# or model change reaches existing listings, not just newly-scraped ones. Click
+# "Run workflow" in the Actions tab. Idempotent — each re-scored deal gets a
+# fresh analyzedAt past the cutoff captured at start, so it drops out; the loop
+# drains the (small) deals set. Safe to re-run any time.
+#
+# IMPORTANT: keep `limit` small. The scorer (ANALYSIS_MODEL) is Sonnet 4.6, which
+# is much slower than Haiku — a single /api/analyze-images call must finish inside
+# the 300s curl cap, or the client times out while the server keeps running and
+# holds the job lock, making every following pass 409 "Busy". 8 listings/call is a
+# safe Sonnet batch; raise only if you confirm calls still finish well under 300s.
 name: Reanalyse deals (manual)
 
 on:
@@ -12,10 +18,14 @@ on:
         description: "Min renovationScore to re-score (deals threshold)"
         required: false
         default: "7"
-      passes:
-        description: "How many drain passes (25 listings each)"
+      limit:
+        description: "Listings per request (keep small for Sonnet — must finish < 300s)"
         required: false
-        default: "3"
+        default: "8"
+      passes:
+        description: "How many drain passes"
+        required: false
+        default: "6"
 
 jobs:
   reanalyse:
@@ -32,7 +42,7 @@ jobs:
       - name: Re-score deals analysed before now
         run: |
           CUTOFF="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "Re-scoring deals (score >= ${MIN_SCORE}) analysed before ${CUTOFF}"
+          echo "Re-scoring deals (score >= ${MIN_SCORE}) analysed before ${CUTOFF}, ${LIMIT}/pass"
           for i in $(seq 1 "${PASSES}"); do
             echo "→ pass ${i}/${PASSES}"
             curl --fail-with-body -sS -G --max-time 300 --retry 1 --retry-all-errors --retry-delay 20 \
@@ -40,12 +50,14 @@ jobs:
               --data-urlencode "dataset=active" \
               --data-urlencode "reanalyzeBefore=${CUTOFF}" \
               --data-urlencode "reanalyzeMinScore=${MIN_SCORE}" \
-              --data-urlencode "limit=25" \
+              --data-urlencode "limit=${LIMIT}" \
               "$FLIPHAUS_REFRESH_URL/api/analyze-images" \
               || echo "  ✗ pass ${i} failed (continuing)"
+            sleep 8
           done
         env:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
           MIN_SCORE: ${{ github.event.inputs.minScore }}
+          LIMIT: ${{ github.event.inputs.limit }}
           PASSES: ${{ github.event.inputs.passes }}
