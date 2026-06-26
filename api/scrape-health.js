@@ -31,9 +31,9 @@ function formatDateOnly(date) {
 // frontend renders them in Stockholm local time so DST is handled there.
 const DAILY_SCRAPES = [
   { job: "Active listings — batch 1 of 3", utc: "11:00", does: "New & changed listings" },
-  { job: "Active listings — batch 2 of 3", utc: "11:25", does: "New & changed listings" },
-  { job: "Active listings — batch 3 of 3", utc: "11:50", does: "New & changed listings" },
-  { job: "Sold prices + photo analysis", utc: "12:20", does: "Slutpriser, scoring, sold reconciliation" },
+  { job: "Active listings — batch 2 of 3", utc: "11:40", does: "New & changed listings" },
+  { job: "Active listings — batch 3 of 3", utc: "12:20", does: "New & changed listings" },
+  { job: "Sold prices + photo analysis", utc: "13:00", does: "Slutpriser, scoring, sold reconciliation" },
 ];
 
 function buildScrapeHealth({ activeListings = [], soldListings = [], now = new Date() } = {}) {

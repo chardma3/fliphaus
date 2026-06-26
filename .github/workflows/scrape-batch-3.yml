@@ -1,10 +1,11 @@
 # Staggered active scrape — batch 3 of 3. See scrape-batch-1.yml for rationale.
-# 11:50 UTC ≈ 13:50 Europe/Stockholm (summer); 25 min after batch 2.
+# 12:20 UTC ≈ 14:20 Europe/Stockholm (summer); 40 min after batch 2 so batch 2's
+# scrape fully finishes and releases the job lock before this fires (no collision).
 name: Scrape batch 3
 
 on:
   schedule:
-    - cron: "50 11 * * *"
+    - cron: "20 12 * * *"
   workflow_dispatch:
 
 jobs:
