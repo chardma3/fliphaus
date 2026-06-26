@@ -1101,17 +1101,19 @@
             const more = items.length > 10 ? `<br/><span style="color:#666;">…and ${items.length - 10} more</span>` : "";
             return `<div style="margin-top:4px;"><strong style="color:#69db7c;">${label}</strong><br/><span style="color:#aaa;">${shown}${more}</span></div>`;
           };
-          const total = d.deals.count + d.moveInReady.count + d.newBuilds.count + d.disappeared.count;
+          const sit = d.sitting || { count: 0, listings: [] };
+          const total = d.deals.count + d.moveInReady.count + d.newBuilds.count + sit.count + d.disappeared.count;
           el.style.display = "flex";
           if (total === 0) {
-            el.innerHTML = `<span><strong style="color:#69db7c;">Last 24h:</strong> no new listings or disappearances.</span>`;
+            el.innerHTML = `<span><strong style="color:#69db7c;">Last 24h:</strong> no new listings, sitting changes, or disappearances.</span>`;
             return;
           }
           el.innerHTML = `
-            <span><strong style="color:#69db7c;">Last 24h —</strong> 💰 ${d.deals.count} new deals · 🛋 ${d.moveInReady.count} move-in ready · 🏗 ${d.newBuilds.count} new builds · 👋 ${d.disappeared.count} disappeared</span>
+            <span><strong style="color:#69db7c;">Last 24h —</strong> 💰 ${d.deals.count} new deals · 🛋 ${d.moveInReady.count} move-in ready · 🏗 ${d.newBuilds.count} new builds · ⏳ ${sit.count} newly sitting · 👋 ${d.disappeared.count} disappeared</span>
             ${section("💰 New deals (7–10)", d.deals.listings)}
             ${section("🛋 New move-in ready", d.moveInReady.listings)}
             ${section("🏗 New builds", d.newBuilds.listings)}
+            ${section("⏳ Newly sitting (long on market)", sit.listings)}
             ${section("👋 Disappeared", d.disappeared.listings)}
           `;
         } catch (e) { /* leave hidden on failure */ }
