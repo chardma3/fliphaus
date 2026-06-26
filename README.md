@@ -50,7 +50,7 @@ Both model ids are environment-overridable, so the worker (triage) and architect
 - **Database:** MongoDB Atlas via Mongoose; sessions stored in Mongo (`express-session` + `connect-mongo`).
 - **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku 4.5 triage (worker) + Sonnet 4.6 renovation scoring (architect); model ids env-overridable.
 - **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
-- **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the 5-minute coverage self-heal.
+- **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the hourly coverage self-heal.
 - **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / builder).
 - **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps.
 - **Tests:** Node's built-in `node --test`; pure-function unit tests (no DB/network), run with `npm test`.
@@ -74,7 +74,7 @@ Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting 
 ### Scheduling & concurrency
 - **GitHub Actions** runs the daily heavy work: three staggered active-scrape batches + a sold/analysis/reconcile refresh (see *Data refresh pipeline* below).
 - The **in-process nightly scheduler** (`api/scheduler.js`) is intentionally **off** in production (`ENABLE_SCHEDULER` unset) — GitHub Actions already does that work, and running it in-process too would double-scrape.
-- The **coverage self-heal sweep** *is* in-process (`ENABLE_COVERAGE_SWEEP=true`): every `COVERAGE_SWEEP_MINUTES` (default 5) it re-hydrates and re-scores listings still missing a displayed wet room, so a bathroom-blind deal is corrected in minutes rather than the next day.
+- The **coverage self-heal sweep** *is* in-process (`ENABLE_COVERAGE_SWEEP=true`): every `COVERAGE_SWEEP_MINUTES` (default **60**) it re-hydrates and re-scores listings still missing a displayed wet room. It **skips the model call when Hemnet returns no richer gallery** (re-scoring the same thumbnails wastes tokens) and counts the attempt, so bot-blocked listings drain out after `MAX_HYDRATION_ATTEMPTS` instead of being re-scored every tick forever. Was 5 min — that ran up the AI bill once the scorer moved to Sonnet; see the cost note below.
 - **`api/job-lock.js`** is a process-wide mutex shared by every Puppeteer job (HTTP `/api/scrape`, `/api/analyze-images`, and the sweep) so two headless Chromium sessions never run at once on the single instance — the sweep defers to any in-flight scrape and retries on its next tick.
 
 ## Scale plan
@@ -87,14 +87,16 @@ FlipHaus depends on fresh Hemnet data for property selection, renovation analysi
 
 ### Scheduled refresh
 
-The active scrape is split across **three staggered GitHub Actions workflows** (`scrape-batch-{1,2,3}.yml`) so a single `/api/scrape?batch=N` request stays well under Hemnet's ~100s Cloudflare edge timeout as areas grow. Each batch also reconciles its own areas' disappearances, so withdrawals are caught same-day.
+The active scrape is split across **three staggered GitHub Actions workflows** (`scrape-batch-{1,2,3}.yml`) so a single `/api/scrape?batch=N` request stays well under Hemnet's ~100s Cloudflare edge timeout as areas grow. Each batch also reconciles its own areas' disappearances, so withdrawals are caught same-day. The batches are spaced **40 min apart** so each one's scrape (up to 6 proxy retries per area) finishes and releases the single-instance job lock before the next fires — otherwise the later batch gets `409 Busy` and fails (the lock only allows one Puppeteer job at a time).
 
 | Workflow | Cron (UTC) | Stockholm (CEST) | Does |
 |----------|-----------|------------------|------|
 | `scrape-batch-1.yml` | `0 11`  | 13:00 | Active listings, batch 1/3 |
-| `scrape-batch-2.yml` | `25 11` | 13:25 | Active listings, batch 2/3 |
-| `scrape-batch-3.yml` | `50 11` | 13:50 | Active listings, batch 3/3 |
-| `refresh-fliphaus.yml` | `20 12` | 14:20 | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
+| `scrape-batch-2.yml` | `40 11` | 13:40 | Active listings, batch 2/3 |
+| `scrape-batch-3.yml` | `20 12` | 14:20 | Active listings, batch 3/3 |
+| `refresh-fliphaus.yml` | `0 13` | 15:00 | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
+
+> Keep these times in sync with `DAILY_SCRAPES` in `api/scrape-health.js` (the dashboard schedule panel) — same UTC values.
 
 All workflows use the `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub secrets. Do not commit token values.
 
@@ -124,7 +126,7 @@ The sold scrape is intentionally split by area and capped at a low `detailLimit`
 
 ### Continuous coverage self-heal (in-process, not GitHub Actions)
 
-Independently of the daily workflows, the always-on web service runs the coverage sweep every `COVERAGE_SWEEP_MINUTES` (default 5) when `ENABLE_COVERAGE_SWEEP=true`. It re-hydrates and re-scores listings still missing a displayed kitchen/bathroom — the bot-block tail — so a bathroom-blind deal self-corrects in minutes. It defers to any in-flight scrape via the shared job lock, and its last run is visible at `/api/scrape-health` (`coverageSweep.lastRun`) alongside the daily-scrape schedule and a "ran today" flag. Keep `ENABLE_SCHEDULER` **off** (GitHub Actions owns the daily scrape); the sweep has its own flag.
+Independently of the daily workflows, the always-on web service runs the coverage sweep every `COVERAGE_SWEEP_MINUTES` (default **60**, was 5) when `ENABLE_COVERAGE_SWEEP=true`. It re-hydrates and re-scores listings still missing a displayed kitchen/bathroom — the bot-block tail. **Cost guard:** when a fetch returns no richer gallery than what's stored (Hemnet blocked the detail page), it skips the model call and counts the attempt, so a permanently-blocked listing drains out of the queue after `MAX_HYDRATION_ATTEMPTS` (default 4) rather than being re-scored every tick. Without this, ~4 un-fetchable listings re-scored every 5 min on Sonnet burned a \$20 credit overnight. It defers to any in-flight scrape via the shared job lock; every tick logs the queue size, and its last run is visible at `/api/scrape-health` (`coverageSweep.lastRun`, incl. `queued`). Keep `ENABLE_SCHEDULER` **off** (GitHub Actions owns the daily scrape); the sweep has its own flag.
 
 A single stuck deal can be force-corrected without the sweep by re-running the **Reanalyse deals (manual)** workflow, or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>`.
 
@@ -241,8 +243,15 @@ If data is stale and GitHub Actions failed:
 
 1. Open the failed GitHub Actions run and identify which endpoint failed.
 2. If the error mentions Hemnet bot protection or missing `__NEXT_DATA__`, the source site blocked or changed the scraper; do not trust zero-result data.
-3. If the error is `524` or a long timeout on `/api/scrape-sold`, keep the area-split workflow and lower `detailLimit` further.
-4. Re-run the workflow manually only after checking that the source site is reachable.
+3. **`Refusing to persist zero active listings`** on every batch = the scraper got nothing from Hemnet across all areas — almost always the **residential proxy is out of data/credit** (top it up) or blocked. The guard is working: it refuses to save a zero result that would mark every listing `disappeared`, so no data is lost.
+4. If the error is `524` or a long timeout on `/api/scrape-sold`, keep the area-split workflow and lower `detailLimit` further.
+5. Re-run the workflow manually only after checking that the source site is reachable.
+
+### Dashboard data endpoints (read-only, no auth)
+
+- `/api/areas` → `{ areas: [...] }` — the live area names from `LOCATION_IDS`. The account-page area picker and the areas-page cards/intro read this, so they never drift from what's actually scraped.
+- `/api/market-stats` — aggregates over ALL active listings (count, avg price, high-reno count, avg kr/m², new this week/month). Powers the areas-page "Market snapshot" (don't compute it from `/api/listings`, which returns only the ~10 deals).
+- `/api/daily-digest?hours=24` — what changed in the window: new deals / move-in-ready / new builds (by `firstSeenAt`, falling back to `publishedAt` for older rows), **newly sitting** (crossed `SITTING_MIN_DAYS`), and **disappeared** (by `disappearedAt`). Powers the homepage "Last 24h" panel.
 
 ## Setup
 

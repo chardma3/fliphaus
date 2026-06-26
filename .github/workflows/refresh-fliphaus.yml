@@ -2,12 +2,13 @@
 # The active listing scrape moved to the staggered scrape-batch-{1,2,3} workflows
 # (each reconciles its own areas' disappearances). This runs AFTER all three
 # batches so reconcile-sold matches freshly-disappeared listings against the
-# latest slutpriser. Cron is UTC; 12:20 UTC ≈ 14:20 Europe/Stockholm (summer).
+# latest slutpriser. Cron is UTC; 13:00 UTC ≈ 15:00 Europe/Stockholm (summer) —
+# 40 min after batch 3 so its scrape has finished and freed the job lock.
 name: Refresh FlipHaus sold data
 
 on:
   schedule:
-    - cron: "20 12 * * *"
+    - cron: "0 13 * * *"
   workflow_dispatch:
 
 jobs:

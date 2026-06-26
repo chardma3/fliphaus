@@ -1,11 +1,12 @@
 # Staggered active scrape — batch 2 of 3. See scrape-batch-1.yml for rationale.
-# 11:25 UTC ≈ 13:25 Europe/Stockholm (summer); 25 min after batch 1 so the two
-# never hit the single Render instance's browser/proxy at once.
+# 11:40 UTC ≈ 13:40 Europe/Stockholm (summer); 40 min after batch 1 — wide enough
+# that batch 1's scrape (up to 6 proxy retries/area) fully finishes and releases
+# the single-instance job lock before this fires, so the two never 409-collide.
 name: Scrape batch 2
 
 on:
   schedule:
-    - cron: "25 11 * * *"
+    - cron: "40 11 * * *"
   workflow_dispatch:
 
 jobs:
