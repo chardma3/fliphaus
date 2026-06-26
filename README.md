@@ -60,7 +60,7 @@ Both model ids are environment-overridable, so the worker (triage) and architect
 Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting is split into three pipelines that all share one MongoDB and one process-wide job lock.
 
 ### Models (`models/`, plus `api/listing.model.js`)
-`listing` (active/disappeared/sold lifecycle, score, photos, coverage flags), `sold` (slutpriser comparables), `user`, `builder`, `assignment`, `proposal`, `investment`, `preference`.
+`listing` (active/disappeared/sold lifecycle, score, photos, coverage flags), `sold` (slutpriser comparables), `scrapeRun` (one row per scrape/analysis run actually performed — the audit log behind the dashboard's *Completed scrapes* list), `user`, `builder`, `assignment`, `proposal`, `investment`, `preference`.
 
 ### 1. Scraping pipeline
 `api/scrape.js` (active listings) and `api/scrape-sold.js` (final sale prices) drive Puppeteer through the residential proxy. `api/hemnet-refresh-safety.js` is the safety + targeting layer: it holds `LOCATION_IDS` (the live areas), splits the active scrape into staggered batches (`getAreaBatch`), refuses to persist a zero/bot-blocked scrape, and scopes disappearance reconciliation to areas that actually scraped. The expansion backlog and per-area filters live in `api/area-priority.js`.
@@ -106,6 +106,21 @@ All workflows use the `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub
 4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
 
 The sold scrape is intentionally split by area and capped at a low `detailLimit` per request to keep each HTTP request short and avoid Render/GitHub/Cloudflare timeouts. (Rissne was dropped as an area — thin owner-occupier resale; it must not be scraped.)
+
+### Run history — every scrape that actually ran (not just the schedule)
+
+**What it is.** The table above is the *schedule* — what is *meant* to run. Separately, the dashboard's *Completed scrapes (most recent first)* list and `/api/scrape-health` (`recentRuns`) show every scrape/analysis that the server *actually performed*: timestamp, label (e.g. "Active listings — batch 2 of 3"), outcome status (✓ success / ⚠ partial / ✗ failed), and a one-line result summary (listings found, sold added, photos analysed, or the error).
+
+**How it works.** Each of the three refresh endpoints — `/api/scrape`, `/api/scrape-sold`, `/api/analyze-images` (`server.js`) — records one row to a `scrapeRun` collection (`api/scrape-run.model.js`) when it finishes, capturing start time, duration, status and the endpoint's own result object. Recording is **best-effort**: `recordScrapeRun()` swallows its own errors so a logging hiccup can never fail or slow a scrape that already succeeded. `/api/scrape-health` reads back the 20 most recent rows via `getRecentScrapeRuns()`. Because every run logs itself regardless of trigger, the list is **trigger-agnostic** — it captures GitHub Actions batches, a manual `curl`, and the in-process scheduler identically. Note it records runs *going forward*: scrapes from before this was deployed were never logged, so the history fills in from first run after deploy.
+
+**Why we built it.** Previously the panel rendered only the static schedule plus one "last updated" timestamp, so it looked like a single scrape — there was no way to see whether each staggered batch fired, whether an area was blocked, or how many listings/sold/photos a run actually returned. Operationally, "is the data fresh?" was answerable but "did batch 3 run and what did it find?" was not — that lived only in GitHub Actions logs, off the dashboard. The run log puts that on the dashboard.
+
+**Why this technology / why not the alternatives.** It reuses the stack already in place — Mongoose on the existing MongoDB Atlas connection — so there is no new service, dependency, or credential. Two alternatives were considered and rejected:
+
+- **Query the GitHub Actions API on each health check.** That is GitHub's own run record, but it adds an external API call (latency + rate limits + a stored token) to a frequently-polled endpoint, and it only ever sees GitHub-triggered runs — not a manual `curl` or the in-process scheduler. The dashboard is meant to reflect what *the server did*, which a self-written log captures directly.
+- **Derive run history from listings' `lastSeenAt` timestamps.** No extra writes, but it is an expensive, approximate read (clustering thousands of timestamps into "runs") and structurally **cannot** represent a *failed* run, a *sold*-scrape, or a *photo-analysis* run — those don't touch `lastSeenAt`. It would under-report exactly the events you most want to see.
+
+**Why this is the efficient choice.** Write volume is ~4 rows/day (one per scheduled run) — a single indexed insert each, negligible against the scrape work itself. A single index on `startedAt` does double duty: it is both the TTL that auto-expires rows after 180 days (MongoDB prunes in the background, so the collection never grows unbounded — ~720 rows at steady state) **and** the sort key for the limit-20 read, so the dashboard query is an indexed descending scan with no in-memory sort. There are deliberately **no** per-field indexes on `job`/`status` because nothing queries by them yet — adding unused indexes would only tax every write. If run analytics are wanted later (e.g. success rate per batch over 30 days), the collection is already the right shape to aggregate over.
 
 ### Continuous coverage self-heal (in-process, not GitHub Actions)
 
@@ -220,6 +235,7 @@ Use `/api/scrape-health` to inspect:
 - active listing count and latest active scrape date
 - sold comparable-property count and latest sold scrape date
 - stale flags for each dataset separately
+- `recentRuns` — the last 20 scrape/analysis runs that actually executed, with per-run status and result counts (see *Run history* above)
 
 If data is stale and GitHub Actions failed:
 
