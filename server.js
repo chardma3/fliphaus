@@ -673,6 +673,33 @@ app.get("/api/areas", (req, res) => {
   res.json({ areas: AREA_NAMES });
 });
 
+// Market snapshot: aggregates over ALL active listings (not the deals feed). The
+// areas-page snapshot used to compute these from /api/listings, which defaults to
+// the ~10-listing deals view — so it reported "10 active / 10 high reno". This
+// counts the real active market instead.
+app.get("/api/market-stats", async (req, res) => {
+  try {
+    const actives = await Listing.find(
+      { status: "active" },
+      { askingPriceNum: 1, renovationScore: 1, squareMeterPrice: 1, publishedAt: 1 }
+    ).lean();
+    const total = actives.length;
+    const prices = actives.map((l) => l.askingPriceNum).filter(Boolean);
+    const avgAskingPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
+    const highReno = actives.filter((l) => (l.renovationScore ?? 0) >= 7).length;
+    const sqm = actives
+      .map((l) => (l.squareMeterPrice ? parseInt(String(l.squareMeterPrice).replace(/\D/g, ""), 10) : null))
+      .filter((n) => n > 0);
+    const avgSqmPrice = sqm.length ? Math.round(sqm.reduce((a, b) => a + b, 0) / sqm.length) : 0;
+    const now = Date.now();
+    const newThisWeek = actives.filter((l) => l.publishedAt && now - new Date(l.publishedAt).getTime() < 7 * 864e5).length;
+    const newThisMonth = actives.filter((l) => l.publishedAt && now - new Date(l.publishedAt).getTime() < 30 * 864e5).length;
+    res.json({ total, avgAskingPrice, highReno, avgSqmPrice, newThisWeek, newThisMonth });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch market stats" });
+  }
+});
+
 // Sold data API with stats
 app.get("/api/sold/stats", async (req, res) => {
   try {

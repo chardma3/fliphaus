@@ -161,7 +161,7 @@
 
         <!-- Why these areas -->
         <div class="section">
-          <h3>Why these 15 areas?</h3>
+          <h3>Why these areas?</h3>
           <p>FlipHaus covers <span class="highlight" id="area-count">22 Stockholm areas</span>: <span id="area-list">Farsta, Kista, Bagarmossen, Skarpnäck, Johanneshov, Bromma, Alvik, Stora Mossen, Enskede, Solna, Årsta, Hägersten, Hökarängen, Kärrtorp, Högdalen, Lilla Essingen, Stora Essingen, Östermalm, Södermalm, Finntorp, Ektorp and Sickla</span>. They aren't picked at random — every one clears the same three filters that make a renovation flip work:</p>
           <p>
             <span class="highlight">1. On the tunnelbana.</span> Each sits on a metro line (not just commuter rail), so the commute to T-Centralen is short and predictable. Good transit keeps demand — and therefore resale liquidity — high.<br/>
@@ -410,6 +410,16 @@
             const h4 = card.querySelector("h4");
             if (h4) h4.appendChild(badge);
           });
+
+          // Order cards by resale liquidity (trailing-12m sold volume), highest
+          // first; areas with no sold data yet fall to the end.
+          const cards = [...document.querySelectorAll(".area-card[data-area]")];
+          const container = cards[0]?.parentElement;
+          if (container) {
+            cards
+              .sort((a, b) => (byArea[b.dataset.area]?.totalSold || -1) - (byArea[a.dataset.area]?.totalSold || -1))
+              .forEach((card) => container.appendChild(card));
+          }
         } catch (e) {
           console.error("Failed to load liquidity stats", e);
         }
@@ -484,39 +494,20 @@
           `;
         }
 
-        // Live stats from listings
+        // Live market snapshot — aggregates over ALL active listings via
+        // /api/market-stats (NOT /api/listings, which only returns the ~10 deals
+        // and made this read "10 active / 10 high reno").
         try {
-          const listRes = await fetch("/api/listings");
-          const listData = await listRes.json();
-          const listings = listData.listings || [];
-
-          document.getElementById("stat-total").textContent = listings.length;
-
-          const prices = listings.map(l => l.askingPriceNum).filter(Boolean);
-          const avgPrice = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : 0;
-          document.getElementById("stat-avg-price").textContent = avgPrice ? (avgPrice / 1000000).toFixed(1) + "M kr" : "—";
-
-          const highReno = listings.filter(l => l.renovationScore >= 7).length;
-          document.getElementById("stat-high-reno").textContent = highReno;
-
-          const sqmPrices = listings.map(l => {
-            if (!l.squareMeterPrice) return null;
-            const n = parseInt(l.squareMeterPrice.replace(/\D/g, ""), 10);
-            return n > 0 ? n : null;
-          }).filter(Boolean);
-          const avgSqm = sqmPrices.length ? Math.round(sqmPrices.reduce((a, b) => a + b, 0) / sqmPrices.length) : 0;
-          document.getElementById("stat-avg-sqm").textContent = avgSqm ? avgSqm.toLocaleString("sv-SE") + " kr" : "—";
-
-          // New listings frequency
-          const now = Date.now();
-          const week = 7 * 24 * 60 * 60 * 1000;
-          const month = 30 * 24 * 60 * 60 * 1000;
-          const newWeek = listings.filter(l => l.publishedAt && (now - new Date(l.publishedAt).getTime()) < week).length;
-          const newMonth = listings.filter(l => l.publishedAt && (now - new Date(l.publishedAt).getTime()) < month).length;
-          document.getElementById("stat-new-week").textContent = newWeek;
-          document.getElementById("stat-new-month").textContent = newMonth;
+          const statRes = await fetch("/api/market-stats");
+          const s = await statRes.json();
+          document.getElementById("stat-total").textContent = s.total ?? "—";
+          document.getElementById("stat-avg-price").textContent = s.avgAskingPrice ? (s.avgAskingPrice / 1000000).toFixed(1) + "M kr" : "—";
+          document.getElementById("stat-high-reno").textContent = s.highReno ?? "—";
+          document.getElementById("stat-avg-sqm").textContent = s.avgSqmPrice ? s.avgSqmPrice.toLocaleString("sv-SE") + " kr" : "—";
+          document.getElementById("stat-new-week").textContent = s.newThisWeek ?? "—";
+          document.getElementById("stat-new-month").textContent = s.newThisMonth ?? "—";
         } catch (e) {
-          console.error("Failed to load stats", e);
+          console.error("Failed to load market stats", e);
         }
 
         // Sold data
