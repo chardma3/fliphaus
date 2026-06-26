@@ -707,18 +707,35 @@ app.get("/api/daily-digest", async (req, res) => {
   try {
     const hours = Number(req.query.hours) > 0 ? Number(req.query.hours) : 24;
     const since = new Date(Date.now() - hours * 3600000);
-    const fresh = { firstSeenAt: { $gte: since } };
+    // "Found in the window" = newly inserted (firstSeenAt, the precise signal going
+    // forward) OR — for listings that predate the firstSeenAt field — newly
+    // published on Hemnet (publishedAt). The fallback makes the digest show real
+    // numbers immediately instead of all-zeros until firstSeenAt populates.
+    const freshClause = { $or: [
+      { firstSeenAt: { $gte: since } },
+      { firstSeenAt: null, publishedAt: { $gte: since } },
+      { firstSeenAt: { $exists: false }, publishedAt: { $gte: since } },
+    ] };
     const project = (l) => ({
       id: l.id, address: l.streetAddress, area: l.area, price: l.askingPrice,
       rooms: l.rooms, size: l.size, score: l.renovationScore, slug: l.slug, link: l.link,
     });
     const findFresh = (view) =>
-      Listing.find({ ...buildActiveFeedFilter({ view }), ...fresh }).sort({ firstSeenAt: -1 }).lean();
+      Listing.find({ $and: [buildActiveFeedFilter({ view }), freshClause] }).sort({ firstSeenAt: -1, publishedAt: -1 }).lean();
 
-    const [deals, moveInReady, newBuilds, disappeared] = await Promise.all([
+    // "Newly sitting" = crossed the SITTING_MIN_DAYS on-market threshold within the
+    // window (was not sitting `hours` ago, is now). Based on publishedAt, so it
+    // works immediately without firstSeenAt.
+    const sittingThreshold = new Date(Date.now() - SITTING_MIN_DAYS * 86400000);
+    const sittingWindowStart = new Date(sittingThreshold.getTime() - hours * 3600000);
+    const sittingFilter = buildActiveFeedFilter({ view: "sitting", sittingBefore: sittingThreshold });
+    sittingFilter.publishedAt = { $gt: sittingWindowStart, $lte: sittingThreshold, $ne: null };
+
+    const [deals, moveInReady, newBuilds, sitting, disappeared] = await Promise.all([
       findFresh("deals"),
       findFresh("moveinready"),
       findFresh("newbuild"),
+      Listing.find(sittingFilter).sort({ publishedAt: 1 }).lean(),
       Listing.find({ status: "disappeared", disappearedAt: { $gte: since } }).sort({ disappearedAt: -1 }).lean(),
     ]);
 
@@ -729,6 +746,7 @@ app.get("/api/daily-digest", async (req, res) => {
       deals: pack(deals),
       moveInReady: pack(moveInReady),
       newBuilds: pack(newBuilds),
+      sitting: pack(sitting),
       disappeared: pack(disappeared),
     });
   } catch (err) {
