@@ -403,6 +403,8 @@
 
       <div id="scrape-health" class="instructions" style="border-left:3px solid #ffd43b; background:#201a12; display:none;"></div>
 
+      <div id="daily-digest" class="instructions" style="border-left:3px solid #69db7c; background:#13201a; display:none;"></div>
+
       <div id="view-tabs" class="view-tabs">
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
@@ -1081,6 +1083,38 @@
         loadScrapeHealth();
         loadListings();
         setAreaCount();
+        loadDigest();
+      }
+
+      // Daily digest: new deals / move-in ready / new builds found, and listings
+      // that disappeared, in the last 24h. Data from /api/daily-digest.
+      async function loadDigest() {
+        const el = document.getElementById("daily-digest");
+        try {
+          const res = await fetch("/api/daily-digest");
+          if (!res.ok) return;
+          const d = await res.json();
+          const line = (l) => `${l.address || l.id}${l.area ? " · " + l.area : ""}${l.price ? " · " + l.price : ""}${l.score != null ? " · score " + l.score : ""}`;
+          const section = (label, items) => {
+            if (!items.length) return "";
+            const shown = items.slice(0, 10).map(line).join("<br/>");
+            const more = items.length > 10 ? `<br/><span style="color:#666;">…and ${items.length - 10} more</span>` : "";
+            return `<div style="margin-top:4px;"><strong style="color:#69db7c;">${label}</strong><br/><span style="color:#aaa;">${shown}${more}</span></div>`;
+          };
+          const total = d.deals.count + d.moveInReady.count + d.newBuilds.count + d.disappeared.count;
+          el.style.display = "flex";
+          if (total === 0) {
+            el.innerHTML = `<span><strong style="color:#69db7c;">Last 24h:</strong> no new listings or disappearances.</span>`;
+            return;
+          }
+          el.innerHTML = `
+            <span><strong style="color:#69db7c;">Last 24h —</strong> 💰 ${d.deals.count} new deals · 🛋 ${d.moveInReady.count} move-in ready · 🏗 ${d.newBuilds.count} new builds · 👋 ${d.disappeared.count} disappeared</span>
+            ${section("💰 New deals (7–10)", d.deals.listings)}
+            ${section("🛋 New move-in ready", d.moveInReady.listings)}
+            ${section("🏗 New builds", d.newBuilds.listings)}
+            ${section("👋 Disappeared", d.disappeared.listings)}
+          `;
+        } catch (e) { /* leave hidden on failure */ }
       }
 
       // Keep the "N Stockholm areas" labels in step with the live LOCATION_IDS.

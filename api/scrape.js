@@ -290,7 +290,11 @@ module.exports = async (options = {}) => {
     // images is owned by $setOnInsert alone.
     const scrapedImages = update.images;
     delete update.images;
-    await Listing.findOneAndUpdate({ id: l.id }, buildListingUpsert(update, scrapedImages), { upsert: true, new: true });
+    // Stamp firstSeenAt only on first insert (drives the daily digest's "new
+    // listings"); $setOnInsert leaves it untouched on later scrapes.
+    const upsert = buildListingUpsert(update, scrapedImages);
+    upsert.$setOnInsert.firstSeenAt = new Date();
+    await Listing.findOneAndUpdate({ id: l.id }, upsert, { upsert: true, new: true });
   }
 
   // Mark listings no longer present as disappeared — scoped to the areas that

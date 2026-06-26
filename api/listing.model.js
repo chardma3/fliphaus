@@ -35,6 +35,10 @@ const listingSchema = new mongoose.Schema({
   daysOnMarket: { type: Number, default: null },
   disappearedAt: { type: Date, default: null },
   lastSeenAt: { type: Date, default: null },
+  // When this listing was first inserted (set once, on upsert insert). Drives the
+  // daily digest's "new listings found" — scrapeDate/lastSeenAt can't, they update
+  // every scrape. Null on listings that predate this field.
+  firstSeenAt: { type: Date, default: null },
   soldStatusConfidence: { type: String, enum: ["confirmed", "unconfirmed", "unknown", null], default: null },
   soldListingId: { type: mongoose.Schema.Types.ObjectId, ref: "SoldListing", default: null },
   matchedSoldHemnetId: { type: String, default: null },

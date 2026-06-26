@@ -698,6 +698,44 @@ app.get("/api/areas", (req, res) => {
   res.json({ areas: AREA_NAMES });
 });
 
+// Daily digest: what changed in the last N hours (default 24) — new deals, new
+// move-in-ready, new builds (by firstSeenAt), and listings that disappeared (by
+// disappearedAt). Categories reuse buildActiveFeedFilter so they match the
+// dashboard's views exactly. No maxPrice cap here — the digest reports everything
+// found, not just in-budget listings.
+app.get("/api/daily-digest", async (req, res) => {
+  try {
+    const hours = Number(req.query.hours) > 0 ? Number(req.query.hours) : 24;
+    const since = new Date(Date.now() - hours * 3600000);
+    const fresh = { firstSeenAt: { $gte: since } };
+    const project = (l) => ({
+      id: l.id, address: l.streetAddress, area: l.area, price: l.askingPrice,
+      rooms: l.rooms, size: l.size, score: l.renovationScore, slug: l.slug, link: l.link,
+    });
+    const findFresh = (view) =>
+      Listing.find({ ...buildActiveFeedFilter({ view }), ...fresh }).sort({ firstSeenAt: -1 }).lean();
+
+    const [deals, moveInReady, newBuilds, disappeared] = await Promise.all([
+      findFresh("deals"),
+      findFresh("moveinready"),
+      findFresh("newbuild"),
+      Listing.find({ status: "disappeared", disappearedAt: { $gte: since } }).sort({ disappearedAt: -1 }).lean(),
+    ]);
+
+    const pack = (arr) => ({ count: arr.length, listings: arr.map(project) });
+    res.json({
+      since: since.toISOString(),
+      hours,
+      deals: pack(deals),
+      moveInReady: pack(moveInReady),
+      newBuilds: pack(newBuilds),
+      disappeared: pack(disappeared),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to build daily digest" });
+  }
+});
+
 // Market snapshot: aggregates over ALL active listings (not the deals feed). The
 // areas-page snapshot used to compute these from /api/listings, which defaults to
 // the ~10-listing deals view — so it reported "10 active / 10 high reno". This
