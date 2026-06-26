@@ -183,8 +183,26 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
     const gallery = galleries[listing.slug];
     const stored = listing.images || [];
     // Prefer the richer of {hydrated gallery, stored images}.
-    const images = gallery && gallery.length > stored.length ? gallery : stored;
+    const fetchedRicher = Array.isArray(gallery) && gallery.length > stored.length;
+    const images = fetchedRicher ? gallery : stored;
     if (!images.length) {
+      skipped++;
+      continue;
+    }
+
+    // Self-heal / coverage sweep: if we could NOT fetch a richer gallery than the
+    // photos already stored (Hemnet bot-blocked the detail page), re-scoring the
+    // same thumbnails just reproduces the same incomplete result — at full model
+    // cost. Skip the model call entirely (only the fetch was attempted) and count
+    // the attempt toward the give-up cap, so a permanently-blocked listing DRAINS
+    // out of the queue after MAX_HYDRATION_ATTEMPTS instead of being re-analysed
+    // every 5-minute sweep forever (the runaway-token bug). New/unscored listings
+    // are exempt — they still get a first score even from thumbnails.
+    if (hydrateGalleries && !fetchedRicher && listing.renovationScore != null) {
+      await Model.findByIdAndUpdate(listing._id, {
+        galleryHydrationAttemptedAt: new Date(),
+        galleryHydrationAttempts: (listing.galleryHydrationAttempts || 0) + 1,
+      });
       skipped++;
       continue;
     }
