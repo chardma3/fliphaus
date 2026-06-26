@@ -885,7 +885,8 @@
             const r = sweep.lastRun;
             const detail = r.error ? `error: ${r.error}`
               : r.deferred ? "deferred (a scrape was running)"
-              : `${r.analyzed || 0} listing(s) re-checked`;
+              : (r.queued || 0) === 0 ? "queue empty — nothing to heal"
+              : `${r.analyzed || 0} re-checked · ${r.queued} still queued`;
             sweepText = `Wetroom re-checks: every 5 min · last ${fmtWhen(r.at)} — ${detail}`;
           } else {
             sweepText = `Wetroom re-checks: every 5 min · waiting for first run…`;
