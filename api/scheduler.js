@@ -123,10 +123,20 @@ async function runCoverageSweepOnce({ analyze, log = console.log, limit = 8 } = 
     try {
       const result = await analyze({ dataset: "active", coverageOnly: true, limit });
       const a = (result && result.active) || {};
-      if (a.candidates) {
-        log(`⏰ Coverage sweep: ${a.analyzed}/${a.candidates} re-analysed, ${a.skipped} skipped.`);
+      const queued = a.queued || 0;
+      const candidates = a.candidates || 0;
+      // Log EVERY tick — empty or not — so the timer's behaviour is visible in the
+      // Render logs. `queued` is the full backlog; `candidates` is what this tick
+      // processed (<= limit). A non-zero backlog every 5 min = paid work, almost
+      // always bot-blocked wet rooms that re-queue indefinitely (see analyze-refresh
+      // nextHydrationAttempts).
+      if (queued > 0) {
+        const leftover = queued - candidates;
+        log(`⏰ Coverage sweep: ${queued} queued (listings missing a displayed wet room) — re-analysed ${a.analyzed || 0}/${candidates} this tick, ${a.skipped || 0} skipped${leftover > 0 ? `, ${leftover} left for next tick` : ""}.`);
+      } else {
+        log(`⏰ Coverage sweep: queue empty — nothing to heal, no analysis run.`);
       }
-      return record({ deferred: false, candidates: a.candidates || 0, analyzed: a.analyzed || 0, skipped: a.skipped || 0 });
+      return record({ deferred: false, queued, candidates, analyzed: a.analyzed || 0, skipped: a.skipped || 0 });
     } catch (err) {
       console.error(`⏰ Coverage sweep failed: ${err.message}`);
       return record({ deferred: false, error: err.message });

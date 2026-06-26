@@ -152,6 +152,11 @@ function conditionLabelFromScore(score) {
 
 async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate, hydrateGalleries = false }) {
   const { analyzeListingImages } = require("./analyze");
+  // Total listings matching the query (the full backlog), vs the <= limit we
+  // process this pass. `queued > limit` on the coverage sweep means a standing
+  // backlog (typically bot-blocked wet rooms that re-queue indefinitely) — the
+  // reason the 5-minute sweep keeps doing paid work instead of finding nothing.
+  const queued = await Model.countDocuments(query);
   const listings = await Model.find(query).sort({ lastSeenAt: -1, scrapedAt: -1, updatedAt: -1 }).limit(limit);
   let analyzed = 0;
   let skipped = 0;
@@ -228,6 +233,7 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
   }
 
   return {
+    queued,
     candidates: listings.length,
     analyzed,
     skipped,
