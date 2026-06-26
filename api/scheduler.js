@@ -157,7 +157,9 @@ async function runCoverageSweepOnce({ analyze, log = console.log, limit = 8 } = 
 // fires in local dev/tests; single-instance only (set on ONE instance if scaled).
 function startCoverageSweep({ analyze, env = process.env, log = console.log } = {}) {
   if (!isFlagOn(env.ENABLE_COVERAGE_SWEEP)) return null;
-  const minutes = Number(env.COVERAGE_SWEEP_MINUTES) > 0 ? Number(env.COVERAGE_SWEEP_MINUTES) : 5;
+  // Default hourly (was 5 min — that hammered bot-blocked listings; see the
+  // analyze-refresh coverage fix). Override with COVERAGE_SWEEP_MINUTES.
+  const minutes = Number(env.COVERAGE_SWEEP_MINUTES) > 0 ? Number(env.COVERAGE_SWEEP_MINUTES) : 60;
   const limit = Number(env.COVERAGE_SWEEP_LIMIT) > 0 ? Number(env.COVERAGE_SWEEP_LIMIT) : 8;
   const intervalMs = minutes * 60 * 1000;
   log(`⏰ Coverage self-heal sweep every ${minutes}m (limit ${limit}); defers while a scan runs.`);
