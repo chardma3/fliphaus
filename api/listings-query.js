@@ -115,6 +115,21 @@ function buildActiveFeedFilter({
     ? { $gte: 1, $lte: dealMinScore - 1 }
     : { $gte: dealMinScore };
 
+  // Mutual exclusion with the sitting view, MOVE-IN-READY ONLY: a renovated unit
+  // that's been on the market past the cutoff shows under Sitting, not in both.
+  // Deals are deliberately EXEMPT — a strong flip (score >= dealMinScore) that's
+  // been sitting 2+ weeks is a best-case lead (motivated seller + reno upside),
+  // so it stays in Deals as well as Sitting. A null/absent publishedAt isn't
+  // "sitting", so it stays visible here. (newbuild is already disjoint — sitting
+  // excludes projekt listings above.) Only applied when the caller supplies the
+  // cutoff, so the pure-shape unit tests are unaffected.
+  if (sittingBefore && view === "moveinready") {
+    filter.$or = [
+      { publishedAt: { $gt: sittingBefore } },
+      { publishedAt: null },
+    ];
+  }
+
   // NOTE: we deliberately DON'T hide deals whose bathroom wasn't pictured. A
   // score >= DEAL_MIN_SCORE scored blind to the bathroom is provisional, but the
   // dashboard already flags that on the card ("⚠ Bathroom not pictured — score

@@ -228,12 +228,14 @@ app.get("/api/listings", async (req, res) => {
     // available listings are returned; anything that left Hemnet is handled by
     // the sold view. See api/listings-query.js.
     const view = ["moveinready", "newbuild", "sitting"].includes(req.query.view) ? req.query.view : "deals";
-    // The "sitting" view needs a cutoff date: listings published at least
-    // SITTING_MIN_DAYS ago. Computed here (not in the pure query builder) so the
-    // builder stays deterministic/testable.
-    const sittingBefore = view === "sitting"
-      ? new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000)
-      : undefined;
+    // The SITTING_MIN_DAYS cutoff (listings published at least that long ago).
+    // Computed here (not in the pure query builder) so the builder stays
+    // deterministic/testable. The sitting view uses it to SELECT; move-in-ready
+    // uses it to EXCLUDE sitting listings (so a renovated unit isn't in both).
+    // Deals are exempt (an aged strong flip stays a deal) and newbuild ignores it.
+    const sittingBefore = view === "newbuild"
+      ? undefined
+      : new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000);
     const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
@@ -720,13 +722,18 @@ app.get("/api/daily-digest", async (req, res) => {
       id: l.id, address: l.streetAddress, area: l.area, price: l.askingPrice,
       rooms: l.rooms, size: l.size, score: l.renovationScore, slug: l.slug, link: l.link,
     });
-    const findFresh = (view) =>
-      Listing.find({ $and: [buildActiveFeedFilter({ view }), freshClause] }).sort({ firstSeenAt: -1, publishedAt: -1 }).lean();
-
     // "Newly sitting" = crossed the SITTING_MIN_DAYS on-market threshold within the
     // window (was not sitting `hours` ago, is now). Based on publishedAt, so it
     // works immediately without firstSeenAt.
     const sittingThreshold = new Date(Date.now() - SITTING_MIN_DAYS * 86400000);
+    // Pass the cutoff to the flip views too, so a freshly-seen listing that's
+    // already been on-market past the threshold is counted as sitting only.
+    const findFresh = (view) =>
+      Listing.find({ $and: [
+        buildActiveFeedFilter({ view, sittingBefore: view === "newbuild" ? undefined : sittingThreshold }),
+        freshClause,
+      ] }).sort({ firstSeenAt: -1, publishedAt: -1 }).lean();
+
     const sittingWindowStart = new Date(sittingThreshold.getTime() - hours * 3600000);
     const sittingFilter = buildActiveFeedFilter({ view: "sitting", sittingBefore: sittingThreshold });
     sittingFilter.publishedAt = { $gt: sittingWindowStart, $lte: sittingThreshold, $ne: null };
