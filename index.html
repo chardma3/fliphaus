@@ -638,7 +638,12 @@
               : listing.bathroomPictured === false ? "Bathroom"
               : listing.kitchenPictured === false ? "Kitchen" : null)
             : null;
-          const coverageWarnHtml = missingRoom
+          // Suppress the provisional-coverage warning for new builds: projekt
+          // listings show staged renders, not real wet-room photos, and a new
+          // build needs no bathroom reno — so "Bathroom not pictured" is noise
+          // there. (New builds only appear under the newbuild view; the flip
+          // views exclude projekt listings.) Mirrors the profit-badge guard above.
+          const coverageWarnHtml = (missingRoom && currentView !== "newbuild")
             ? `<div class="coverage-warn" title="A key room wasn't in the listing photos, so the renovation score is provisional.">⚠ ${missingRoom} not pictured — score provisional</div>`
             : "";
           const brfIntel = listing.brfIntelligence;
@@ -905,7 +910,11 @@
             : `<span style="color:#666;">No runs recorded yet.</span>`;
 
           // Wetroom re-checks = the coverage self-heal sweep (re-fetches photos for
-          // listings missing a kitchen/bathroom and re-scores them).
+          // listings missing a kitchen/bathroom and re-scores them). The cadence is
+          // the REAL configured interval (sweep.config.minutes), not a hardcoded
+          // guess — defaults to 60 min unless COVERAGE_SWEEP_MINUTES overrides it.
+          const sweepMins = sweep.config && sweep.config.minutes ? sweep.config.minutes : null;
+          const cadence = sweepMins ? `every ${sweepMins} min` : "self-heal";
           let sweepText;
           if (!sweep.enabled) {
             sweepText = `<span style="color:#ff8888;">Wetroom re-checks: off</span>`;
@@ -915,9 +924,9 @@
               : r.deferred ? "deferred (a scrape was running)"
               : (r.queued || 0) === 0 ? "queue empty — nothing to heal"
               : `${r.analyzed || 0} re-checked · ${r.queued} still queued`;
-            sweepText = `Wetroom re-checks: every 5 min · last ${fmtWhen(r.at)} — ${detail}`;
+            sweepText = `Wetroom re-checks: ${cadence} · last ${fmtWhen(r.at)} — ${detail}`;
           } else {
-            sweepText = `Wetroom re-checks: every 5 min · waiting for first run…`;
+            sweepText = `Wetroom re-checks: ${cadence} · waiting for first run…`;
           }
 
           healthEl.style.display = "flex";
