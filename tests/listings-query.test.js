@@ -69,6 +69,36 @@ test("SITTING_MIN_DAYS is exported and at least a week", () => {
   assert.ok(SITTING_MIN_DAYS >= 7);
 });
 
+test("move-in-ready excludes sitting listings when given the cutoff (mutual exclusion)", () => {
+  const cutoff = new Date("2026-06-12T00:00:00Z");
+  const f = buildActiveFeedFilter({ view: "moveinready", sittingBefore: cutoff, areaConstraints: [] });
+  // A listing on the market past the cutoff (publishedAt <= cutoff, non-null) is
+  // "sitting" and must be excluded here: keep only newer or undated ones.
+  assert.deepEqual(f.$or, [
+    { publishedAt: { $gt: cutoff } },
+    { publishedAt: null },
+  ]);
+});
+
+test("deals are EXEMPT from the sitting exclusion — an aged strong flip stays a deal", () => {
+  const cutoff = new Date("2026-06-12T00:00:00Z");
+  const f = buildActiveFeedFilter({ view: "deals", sittingBefore: cutoff, areaConstraints: [] });
+  assert.equal(f.$or, undefined);
+  assert.equal(f.publishedAt, undefined);
+});
+
+test("without a cutoff, move-in-ready adds no publishedAt clause (shape unchanged)", () => {
+  const f = buildActiveFeedFilter({ view: "moveinready", areaConstraints: [] });
+  assert.equal(f.$or, undefined);
+  assert.equal(f.publishedAt, undefined);
+});
+
+test("new-build view ignores the sitting cutoff (projekt listings never sit)", () => {
+  const f = buildActiveFeedFilter({ view: "newbuild", sittingBefore: new Date("2026-06-12T00:00:00Z"), areaConstraints: [] });
+  assert.equal(f.$or, undefined);
+  assert.equal(f.publishedAt, undefined);
+});
+
 // --- per-area filters (api/area-priority.js) wired into the feed ---
 
 test("with no active area constraints, no $nor clause is added (additive wiring)", () => {
