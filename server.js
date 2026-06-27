@@ -10,7 +10,7 @@ const path = require("path");
 const scrape = require("./api/scrape");
 const scrapeSold = require("./api/scrape-sold");
 const { analyzeListingImagesRefresh } = require("./api/analyze-refresh");
-const { startScheduler, startCoverageSweep, getCoverageSweepStatus } = require("./api/scheduler");
+const { startScheduler, startCoverageSweep, getCoverageSweepStatus, getCoverageSweepConfig } = require("./api/scheduler");
 const jobLock = require("./api/job-lock");
 const SoldListing = require("./models/sold.model");
 const Listing = require("./api/listing.model");
@@ -685,6 +685,7 @@ app.get("/api/scrape-health", async (req, res) => {
       recentRuns,
       coverageSweep: {
         enabled: process.env.ENABLE_COVERAGE_SWEEP === "true" || process.env.ENABLE_COVERAGE_SWEEP === "1",
+        config: getCoverageSweepConfig(),
         lastRun: getCoverageSweepStatus(),
       },
     });

@@ -26,6 +26,12 @@ let lastCoverageSweep = null;
 function getCoverageSweepStatus() {
   return lastCoverageSweep;
 }
+// The live cadence/limit, captured when the sweep starts so the dashboard can
+// report the REAL interval instead of a hardcoded guess. null until started.
+let coverageSweepConfig = null;
+function getCoverageSweepConfig() {
+  return coverageSweepConfig;
+}
 
 function isFlagOn(value) {
   return value === "true" || value === "1";
@@ -162,6 +168,7 @@ function startCoverageSweep({ analyze, env = process.env, log = console.log } = 
   const minutes = Number(env.COVERAGE_SWEEP_MINUTES) > 0 ? Number(env.COVERAGE_SWEEP_MINUTES) : 60;
   const limit = Number(env.COVERAGE_SWEEP_LIMIT) > 0 ? Number(env.COVERAGE_SWEEP_LIMIT) : 8;
   const intervalMs = minutes * 60 * 1000;
+  coverageSweepConfig = { minutes, limit };
   log(`⏰ Coverage self-heal sweep every ${minutes}m (limit ${limit}); defers while a scan runs.`);
 
   const tick = async () => {
@@ -174,4 +181,4 @@ function startCoverageSweep({ analyze, env = process.env, log = console.log } = 
   return { runOnce: () => runCoverageSweepOnce({ analyze, log, limit }) };
 }
 
-module.exports = { startScheduler, startCoverageSweep, runCoverageSweepOnce, getCoverageSweepStatus, msUntilNextRun };
+module.exports = { startScheduler, startCoverageSweep, runCoverageSweepOnce, getCoverageSweepStatus, getCoverageSweepConfig, msUntilNextRun };
