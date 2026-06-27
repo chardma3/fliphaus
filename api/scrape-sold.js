@@ -27,6 +27,15 @@ const SOLD_MAX_PAGES = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PAGES) || 
 // exit gets blocked — so retrying (each request rotates to a fresh exit) usually
 // lands a residential IP.
 const SOLD_MAX_PAGE_ATTEMPTS = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PAGE_ATTEMPTS) || 4);
+// Sold results are ordered newest-first, so once we reach a full page where every
+// listing is already in the DB with an unchanged final price, everything below it
+// is older and also already stored — there's nothing new to capture. The deep
+// 12-month history that powers trends/liquidity/comps persists across runs (upsert
+// by unique hemnetId), so the daily run only needs the fresh top-of-list sales.
+// This is what keeps Farsta (deepest history) from re-walking all 20 pages every
+// day. Set SOLD_SCRAPE_FULL_WALK=true to force the old full-depth walk (use for an
+// occasional deep refresh, e.g. to backfill price corrections on older sales).
+const SOLD_FULL_WALK = String(process.env.SOLD_SCRAPE_FULL_WALK || "").toLowerCase() === "true";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function parsePrice(str) {
@@ -147,7 +156,7 @@ async function scrapeSoldPage(page, areaName, locationId, pageNum) {
   });
 }
 
-async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PAGES) {
+async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PAGES, knownPrices = null) {
   const collected = [];
   const seen = new Set();
 
@@ -172,16 +181,30 @@ async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PA
     if (!pageListings.length) break; // past the last page of results
 
     let added = 0;
+    let newOrChanged = 0;
     for (const l of pageListings) {
       if (l.hemnetId && !seen.has(l.hemnetId)) {
         seen.add(l.hemnetId);
         collected.push(l);
         added += 1;
+        // "Known-unchanged" = already in the DB with the same final price. A
+        // re-sale or a Hemnet price correction changes the price, so it counts
+        // as changed and we keep walking to capture it.
+        const knownPrice = knownPrices ? knownPrices.get(l.hemnetId) : undefined;
+        if (!(knownPrices && knownPrice != null && parsePrice(l.finalPrice) === knownPrice)) {
+          newOrChanged += 1;
+        }
       }
     }
-    console.log(`  ${areaName} sold page ${pageNum}: +${added} new (total ${collected.length})`);
+    console.log(`  ${areaName} sold page ${pageNum}: +${added} new (${newOrChanged} new/changed, total ${collected.length})`);
     // No new ids on a full page means we've looped back to known results — stop.
     if (added === 0) break;
+    // Reached the already-stored tail: this whole page is in the DB unchanged, so
+    // everything older (below) is too. Stop unless a full-depth walk is forced.
+    if (!SOLD_FULL_WALK && knownPrices && newOrChanged === 0) {
+      console.log(`  ${areaName}: reached stored tail at page ${pageNum} — stopping (DB-aware early exit)`);
+      break;
+    }
   }
 
   return collected.map((l) => ({ ...l, area: areaName }));
@@ -205,7 +228,11 @@ module.exports = async (options = {}) => {
   for (const { area, locationId } of targets) {
     try {
       console.log(`Scraping sold in ${area}...`);
-      const listings = await scrapeSoldArea(page, area, locationId);
+      // Map of hemnetId → stored soldPrice for this area, so scrapeSoldArea can
+      // stop once it reaches the already-stored tail (see SOLD_FULL_WALK note).
+      const knownDocs = await SoldListing.find({ area }, { hemnetId: 1, soldPrice: 1 }).lean();
+      const knownPrices = new Map(knownDocs.map((d) => [d.hemnetId, d.soldPrice]));
+      const listings = await scrapeSoldArea(page, area, locationId, SOLD_MAX_PAGES, knownPrices);
       allSold.push(...listings);
       console.log(`  → ${listings.length} sold listings`);
     } catch (err) {
