@@ -23,6 +23,12 @@ Listing photos are analysed by Anthropic Claude (vision) in a two-stage pipeline
 
 Both model ids are environment-overridable, so the worker (triage) and architect (scoring) can be retuned independently — cheaper (Haiku) or stronger (Sonnet → Opus) — without a code change.
 
+**Manual re-score.** Each Deals / Move-in ready card has an admin-only **Reanalyze (Opus)** button (`POST /api/admin/reanalyze/:id`, session-auth + admin role) that re-scores a single listing with `claude-opus-4-8` — bypassing the triage gate and re-fetching the full gallery — to correct a listing the default Sonnet pass scored or classified wrong. The override is per-request and allowlisted, so Sonnet stays the everyday default with no env change.
+
+## Profit estimate
+
+Each scored listing's ROI is estimated from **real sold comparables**, not a hardcoded benchmark. `api/brf-intelligence.js` takes the trailing-12-month sold `kr/m²` for the same BRF (or the same area if there's no BRF match) and uses the **75th percentile** as the renovated-resale level — renovated flips sell near the top of the local range, so this needs no per-comp renovated/unrenovated tagging. Confidence scales with the number of comparables (same-BRF ≥ 4, or area ≥ 12 → high); `profitability.js` only falls back to the per-area benchmark (flagged "preliminary") when too few comps exist. Sub-area labels like "Södermalm - Sofo" are mapped to their parent scraped area, and comps are matched on each sale's real `locationDescription` rather than the broad search catchment it was scraped under. `scripts/diagnose-estimate-backing.js` (read-only) reports, per area, how many listings are sold-comp-backed vs still on the benchmark.
+
 ## Financial model (base case)
 
 | Item | Amount |
