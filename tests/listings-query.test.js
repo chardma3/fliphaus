@@ -99,6 +99,26 @@ test("new-build view ignores the sitting cutoff (projekt listings never sit)", (
   assert.equal(f.publishedAt, undefined);
 });
 
+test("status override keeps the buyability gates but targets a different status (disappeared digest)", () => {
+  const f = buildActiveFeedFilter({
+    view: "sitting",
+    status: "disappeared",
+    areaConstraints: [{ name: "Östermalm", filters: { maxPriceSEK: 6_000_000, compsOnly: false } }],
+  });
+  assert.equal(f.status, "disappeared");
+  // The per-area cap still applies, so an over-cap Östermalm unit is excluded
+  // from Disappeared exactly as it was from every active section.
+  assert.deepEqual(f.$nor, [
+    { locationDescription: /Östermalm/i, askingPriceNum: { $gt: 6_000_000 } },
+  ]);
+  assert.deepEqual(f.streetAddress, { $not: /^[^0-9]+$/ }); // real apartments only
+  assert.equal(f.renovationScore, undefined); // any score
+});
+
+test("status defaults to active (unchanged behaviour)", () => {
+  assert.equal(buildActiveFeedFilter({ areaConstraints: [] }).status, "active");
+});
+
 // --- per-area filters (api/area-priority.js) wired into the feed ---
 
 test("with no active area constraints, no $nor clause is added (additive wiring)", () => {

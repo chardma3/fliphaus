@@ -739,12 +739,21 @@ app.get("/api/daily-digest", async (req, res) => {
     const sittingFilter = buildActiveFeedFilter({ view: "sitting", sittingBefore: sittingThreshold });
     sittingFilter.publishedAt = { $gt: sittingWindowStart, $lte: sittingThreshold, $ne: null };
 
+    // Disappeared reuses the same buyability gates as the feed (area exclusions +
+    // per-area price caps), just with status "disappeared" — so a listing that
+    // was never buyable (e.g. an over-cap 18M Östermalm unit) doesn't surface
+    // here when it leaves Hemnet, matching that it never showed in any section.
+    // view "sitting" = real apartments, any score (the union of the buyable
+    // views); no sittingBefore, so no publishedAt bound is added.
+    const disappearedFilter = buildActiveFeedFilter({ view: "sitting", status: "disappeared" });
+    disappearedFilter.disappearedAt = { $gte: since };
+
     const [deals, moveInReady, newBuilds, sitting, disappeared] = await Promise.all([
       findFresh("deals"),
       findFresh("moveinready"),
       findFresh("newbuild"),
       Listing.find(sittingFilter).sort({ publishedAt: 1 }).lean(),
-      Listing.find({ status: "disappeared", disappearedAt: { $gte: since } }).sort({ disappearedAt: -1 }).lean(),
+      Listing.find(disappearedFilter).sort({ disappearedAt: -1 }).lean(),
     ]);
 
     const pack = (arr) => ({ count: arr.length, listings: arr.map(project) });
