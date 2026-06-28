@@ -47,6 +47,26 @@ function average(values) {
   return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
 }
 
+// Linear-interpolated percentile of a value set (p in 0..100). Used to read a
+// "renovated resale" level straight off the real local sold-price distribution:
+// renovated / well-presented flats cluster at the top, so the 75th percentile of
+// actual sales is a data-driven resale estimate that needs NO per-comp condition
+// classification. Auto-updates as new comps land.
+function percentile(values, p) {
+  const valid = values.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  if (!valid.length) return null;
+  if (valid.length === 1) return Math.round(valid[0]);
+  const idx = (p / 100) * (valid.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return Math.round(valid[lo]);
+  return Math.round(valid[lo] + (valid[hi] - valid[lo]) * (idx - lo));
+}
+
+// The percentile of the local sold-price distribution we treat as the
+// renovated-resale benchmark. 75th = "sells near the top of the local range".
+const RENOVATED_RESALE_PERCENTILE = 75;
+
 function avgiftRisk(debtPerSqm) {
   const debt = parseNumber(debtPerSqm);
   if (debt == null) return "unknown";
@@ -78,13 +98,21 @@ function buildComparableSet(listing, soldListings = []) {
   return { scope: sameArea.length ? "area" : "none", sales: sameArea };
 }
 
-function calculateConfidence(scope, renovatedSales, unrenovatedSales) {
-  if (!renovatedSales || !unrenovatedSales) return "low";
+// Confidence in the resale estimate is about how much real local evidence backs
+// the percentile — i.e. how many comparable sales we have — NOT whether each one
+// was tagged renovated vs unrenovated. A year of scraped sold data usually yields
+// plenty of area comps, so the estimate reads as confident instead of being
+// thrown away as "not enough similar sales".
+function calculateConfidence(scope, comparableCount) {
+  if (scope === "none" || !comparableCount) return "low";
   if (scope === "same_brf") {
-    if (renovatedSales >= 2 && unrenovatedSales >= 2) return "high";
-    return "medium";
+    if (comparableCount >= 4) return "high";
+    if (comparableCount >= 2) return "medium";
+    return "low";
   }
-  if (renovatedSales >= 1 && unrenovatedSales >= 1) return "medium";
+  // area scope
+  if (comparableCount >= 12) return "high";
+  if (comparableCount >= 5) return "medium";
   return "low";
 }
 
@@ -107,15 +135,27 @@ function buildBrfIntelligence(listing, soldListings = []) {
     else unknown.push(price);
   }
 
+  // Resale benchmark from ALL real comps in scope (classification-free): the 75th
+  // percentile of actual sold kr/m². This is the primary estimate the ROI calc
+  // uses, so we no longer need every comp tagged renovated/unrenovated.
+  const allSqm = sales.map((sale) => parseNumber(sale.soldPriceSqm)).filter((p) => p > 0);
+  const comparableCount = allSqm.length;
+  const estimatedRenovatedSqm = percentile(allSqm, RENOVATED_RESALE_PERCENTILE);
+  const medianSqm = percentile(allSqm, 50);
+
+  // The renovated-vs-unrenovated split is still computed when comps happen to be
+  // tagged (e.g. sold units we'd already scored as active listings), to surface a
+  // richer per-flat uplift line — but it's no longer required for a confident
+  // estimate.
   const avgRenovatedSqm = average(renovated);
   const avgUnrenovatedSqm = average(unrenovated);
-  const estimatedUpliftPerSqm = avgRenovatedSqm != null && avgUnrenovatedSqm != null
+  const classifiedUpliftPerSqm = avgRenovatedSqm != null && avgUnrenovatedSqm != null
     ? Math.max(0, avgRenovatedSqm - avgUnrenovatedSqm)
     : null;
-  const estimatedUpliftTotal = estimatedUpliftPerSqm != null && sizeSqm
-    ? Math.round(estimatedUpliftPerSqm * sizeSqm)
+  const estimatedUpliftTotal = classifiedUpliftPerSqm != null && sizeSqm
+    ? Math.round(classifiedUpliftPerSqm * sizeSqm)
     : null;
-  const confidence = calculateConfidence(scope, renovated.length, unrenovated.length);
+  const confidence = calculateConfidence(scope, comparableCount);
 
   const basis = scope === "same_brf"
     ? "same BRF sales"
@@ -123,9 +163,9 @@ function buildBrfIntelligence(listing, soldListings = []) {
       ? "area-level sales"
       : "insufficient sold-listing evidence";
 
-  const summary = estimatedUpliftPerSqm != null
-    ? `${basis}: renovated comparables average ${avgRenovatedSqm.toLocaleString("sv-SE")} kr/m² vs unrenovated ${avgUnrenovatedSqm.toLocaleString("sv-SE")} kr/m², implying about +${estimatedUpliftPerSqm.toLocaleString("sv-SE")} kr/m² before renovation costs.`
-    : `${basis}: not enough renovated and unrenovated sold comparables yet.`;
+  const summary = estimatedRenovatedSqm != null
+    ? `${basis}: ${comparableCount} sold comparable${comparableCount === 1 ? "" : "s"} in the last year, renovated-level resale around ${estimatedRenovatedSqm.toLocaleString("sv-SE")} kr/m² (75th percentile of local sales).`
+    : `${basis}: no sold comparables collected yet.`;
 
   return {
     brf: {
@@ -144,14 +184,16 @@ function buildBrfIntelligence(listing, soldListings = []) {
       scope,
       basis,
       confidence,
-      totalComparableSales: sales.length,
+      totalComparableSales: comparableCount,
+      estimatedRenovatedSqm,
+      medianSqm,
       renovatedSales: renovated.length,
       unrenovatedSales: unrenovated.length,
       partlyRenovatedSales: partlyRenovated.length,
       unknownConditionSales: unknown.length,
       avgRenovatedSqm,
       avgUnrenovatedSqm,
-      estimatedUpliftPerSqm,
+      estimatedUpliftPerSqm: classifiedUpliftPerSqm,
       estimatedUpliftTotal,
       summary,
     },

@@ -120,9 +120,12 @@
   // (benchmark only).
   function resolveRenovatedSqmPrice(listing) {
     const arb = listing?.brfIntelligence?.renovationArbitrage;
-    const soldAvg = arb ? parseNumber(arb.avgRenovatedSqm) : 0;
-    if (soldAvg > 0 && ["medium", "high"].includes(arb.confidence)) {
-      return { sqmPrice: soldAvg, source: "sold-comparables", confident: true };
+    // Prefer the percentile resale estimate (classification-free, backed by the
+    // count of real local comps); fall back to the older classified avg if that's
+    // all a stored record carries.
+    const soldEstimate = arb ? (parseNumber(arb.estimatedRenovatedSqm) || parseNumber(arb.avgRenovatedSqm)) : 0;
+    if (soldEstimate > 0 && ["medium", "high"].includes(arb.confidence)) {
+      return { sqmPrice: soldEstimate, source: "sold-comparables", confident: true };
     }
     return {
       sqmPrice: getAreaSqmPrice(listing?.locationDescription || listing?.area),

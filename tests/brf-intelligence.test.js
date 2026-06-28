@@ -48,16 +48,39 @@ test("calculates high-confidence same-BRF renovation uplift", () => {
   assert.equal(intelligence.brf.stambyte.status, "done");
   assert.equal(intelligence.brf.avgiftRisk, "medium");
   assert.equal(intelligence.renovationArbitrage.scope, "same_brf");
-  assert.equal(intelligence.renovationArbitrage.confidence, "high");
+  assert.equal(intelligence.renovationArbitrage.confidence, "high"); // 4 same-BRF comps
+  assert.equal(intelligence.renovationArbitrage.totalComparableSales, 4);
+  // Primary estimate: 75th percentile of the four sold kr/m² (52/54/66/68k).
+  assert.equal(intelligence.renovationArbitrage.estimatedRenovatedSqm, 66500);
+  // Classified split still surfaced as a richer per-flat uplift when tagged.
   assert.equal(intelligence.renovationArbitrage.renovatedSales, 2);
   assert.equal(intelligence.renovationArbitrage.unrenovatedSales, 2);
-  assert.equal(intelligence.renovationArbitrage.avgRenovatedSqm, 67000);
-  assert.equal(intelligence.renovationArbitrage.avgUnrenovatedSqm, 53000);
   assert.equal(intelligence.renovationArbitrage.estimatedUpliftPerSqm, 14000);
   assert.equal(intelligence.renovationArbitrage.estimatedUpliftTotal, 588000);
 });
 
-test("falls back to area-level evidence with lower confidence", () => {
+test("a year of UNCLASSIFIED area comps still yields a confident resale estimate", () => {
+  // The whole point: none of these sales carries a condition label or score, yet
+  // we have plenty of them — so the estimate is real and confident, no longer
+  // thrown away as "not enough similar sales".
+  const listing = { brfName: "BRF Whatever", size: "50 m²", locationDescription: "Farsta, Stockholm" };
+  const soldListings = Array.from({ length: 14 }, (_, i) => ({
+    area: "Farsta",
+    locationDescription: "Farsta, Stockholm",
+    soldPriceSqm: 48000 + i * 1000, // 48k..61k, no conditionLabel / renovationScore
+    sizeNum: 50,
+  }));
+
+  const arb = buildBrfIntelligence(listing, soldListings).renovationArbitrage;
+  assert.equal(arb.scope, "area");
+  assert.equal(arb.confidence, "high"); // 14 area comps >= 12
+  assert.equal(arb.totalComparableSales, 14);
+  assert.ok(arb.estimatedRenovatedSqm > 0, "resale estimate computed without any classification");
+  assert.equal(arb.renovatedSales, 0); // nothing was tagged
+  assert.equal(arb.estimatedUpliftPerSqm, null); // classified uplift unavailable, but estimate still confident
+});
+
+test("falls back to area-level evidence with low confidence when comps are sparse", () => {
   const listing = {
     brfName: "BRF Unknown",
     size: "50 m²",
@@ -72,7 +95,7 @@ test("falls back to area-level evidence with lower confidence", () => {
   const intelligence = buildBrfIntelligence(listing, soldListings);
 
   assert.equal(intelligence.renovationArbitrage.scope, "area");
-  assert.equal(intelligence.renovationArbitrage.confidence, "medium");
+  assert.equal(intelligence.renovationArbitrage.confidence, "low"); // only 2 area comps
+  assert.equal(intelligence.renovationArbitrage.estimatedRenovatedSqm, 59000); // p75 of 50k/62k
   assert.equal(intelligence.renovationArbitrage.estimatedUpliftPerSqm, 12000);
-  assert.equal(intelligence.renovationArbitrage.estimatedUpliftTotal, 600000);
 });

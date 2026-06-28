@@ -271,7 +271,8 @@
             // Prefer the real sold-comparable average when we have medium/high
             // confidence evidence; otherwise fall back to the per-area benchmark.
             const arb = l.brfIntelligence?.renovationArbitrage;
-            const soldAvg = arb && arb.avgRenovatedSqm > 0 && ["medium","high"].includes(arb.confidence) ? arb.avgRenovatedSqm : null;
+            const soldEstimate = arb && ["medium","high"].includes(arb.confidence) ? (arb.estimatedRenovatedSqm || arb.avgRenovatedSqm) : null;
+            const soldAvg = soldEstimate > 0 ? soldEstimate : null;
             const RENO_SQM = soldAvg || Object.entries(RENO_SQM_MAP).find(([a]) => locLower.includes(a.toLowerCase()))?.[1] || 45000;
             const RENO_SQM_LABEL = soldAvg ? "sold comparables" : "area benchmark";
             const sizeNum = parseFloat((l.size || "").replace(",", ".")) || 0;
