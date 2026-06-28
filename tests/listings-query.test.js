@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { buildActiveFeedFilter, DEAL_MIN_SCORE, SITTING_MIN_DAYS } = require("../api/listings-query");
 
-test("deals view shows scored strong flips (>=7) only — unscored and new-builds excluded", () => {
+test("deals view shows scored strong flips (>=6) only — unscored and new-builds excluded", () => {
   // areaConstraints: [] isolates the view/score shape from the live per-area caps
   // (Östermalm/Södermalm), which are covered by their own tests below.
   assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
@@ -11,7 +11,7 @@ test("deals view shows scored strong flips (>=7) only — unscored and new-build
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     askingPriceNum: { $lte: 4000000 },
     streetAddress: { $not: /^[^0-9]+$/ },
-    renovationScore: { $gte: 7 },
+    renovationScore: { $gte: 6 },
   });
 });
 
@@ -24,9 +24,9 @@ test("deals are NOT hidden when a wet room wasn't pictured — they show flagged
   assert.equal(f.kitchenPictured, undefined);
 });
 
-test("move-in-ready view shows scored-but-not-strong listings (1..6) and excludes unscored", () => {
+test("move-in-ready view shows scored-but-not-strong listings (1..5) and excludes unscored", () => {
   const f = buildActiveFeedFilter({ view: "moveinready", maxPrice: 4000000 });
-  assert.deepEqual(f.renovationScore, { $gte: 1, $lte: 6 });
+  assert.deepEqual(f.renovationScore, { $gte: 1, $lte: 5 });
   assert.deepEqual(f.streetAddress, { $not: /^[^0-9]+$/ });
 });
 
@@ -42,7 +42,7 @@ test("new-build view shows only projekt listings (name-only address), no score f
 });
 
 test("defaults to the deals view", () => {
-  assert.deepEqual(buildActiveFeedFilter({ maxPrice: 4000000 }).renovationScore, { $gte: 7 });
+  assert.deepEqual(buildActiveFeedFilter({ maxPrice: 4000000 }).renovationScore, { $gte: 6 });
 });
 
 test("the deal threshold is the single source of truth for the cut", () => {
@@ -127,7 +127,7 @@ test("with no active area constraints, no $nor clause is added (additive wiring)
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     askingPriceNum: { $lte: 4000000 },
     streetAddress: { $not: /^[^0-9]+$/ },
-    renovationScore: { $gte: 7 },
+    renovationScore: { $gte: 6 },
   });
 });
 

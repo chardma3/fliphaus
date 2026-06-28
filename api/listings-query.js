@@ -4,7 +4,7 @@
 const { PROJECT_ADDRESS } = require("./project-listing");
 const { AREA_PRIORITY } = require("./area-priority");
 
-const DEAL_MIN_SCORE = 7;
+const DEAL_MIN_SCORE = 6;
 // Husby/Rinkeby/Vällingby/Akalla: thin-liquidity / weak-exit areas. Rissne and
 // Hallonbergen (northern Sundbyberg) added 2026-06-19 — dropped as a scraped
 // area for the same reason; excluded here too so they can't leak in via an
@@ -19,7 +19,7 @@ const SITTING_MIN_DAYS = 14;
 // The active dashboard splits into these views:
 //   deals       — strong renovation flips (score >= DEAL_MIN_SCORE).
 //   moveinready — everything else that's been scored (1..DEAL_MIN_SCORE-1):
-//                 already-renovated 1-3 plus partial-reno 4-6, for browsing.
+//                 already-renovated 1-3 plus partial-reno 4-5, for browsing.
 //   newbuild    — new-build / projekt listings (addressed by development name,
 //                 no street number). Market data, not flips — no score filter.
 //   sitting     — real apartments on the market a while (any score), where a
