@@ -225,13 +225,22 @@ module.exports = async (options = {}) => {
 
   const allSold = [];
 
+  // GLOBAL map of hemnetId → stored soldPrice, built once for the whole run so
+  // scrapeSoldArea can stop at the already-stored tail (see SOLD_FULL_WALK note).
+  // Deliberately NOT scoped per-area: a Hemnet location_id is a broad catchment
+  // (e.g. Skarpnäck 941046 returns listings in Björkhagen/Johanneshov/Bagarmossen),
+  // so the same sale is returned by several area targets and, with last-writer-wins
+  // tagging, ends up stored under whichever area scraped it last. A per-area
+  // find({ area }) therefore missed most of a broad area's own listings, so its
+  // early-exit never tripped and it re-walked all 20 pages every run. hemnetId is
+  // globally unique, so an area-agnostic map is the correct key — and one query
+  // beats one-per-area.
+  const knownDocs = await SoldListing.find({}, { hemnetId: 1, soldPrice: 1 }).lean();
+  const knownPrices = new Map(knownDocs.map((d) => [d.hemnetId, d.soldPrice]));
+
   for (const { area, locationId } of targets) {
     try {
       console.log(`Scraping sold in ${area}...`);
-      // Map of hemnetId → stored soldPrice for this area, so scrapeSoldArea can
-      // stop once it reaches the already-stored tail (see SOLD_FULL_WALK note).
-      const knownDocs = await SoldListing.find({ area }, { hemnetId: 1, soldPrice: 1 }).lean();
-      const knownPrices = new Map(knownDocs.map((d) => [d.hemnetId, d.soldPrice]));
       const listings = await scrapeSoldArea(page, area, locationId, SOLD_MAX_PAGES, knownPrices);
       allSold.push(...listings);
       console.log(`  → ${listings.length} sold listings`);
