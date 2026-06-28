@@ -25,6 +25,31 @@ function firstAreaToken(value) {
   return String(value).split(",")[0].trim().toLowerCase() || null;
 }
 
+const { AREA_NAMES } = require("./hemnet-refresh-safety");
+// Canonical scraped-area names, lowercased, longest token-sequence first so a
+// multi-word name ("stora essingen") is preferred over a bare token.
+const CANONICAL_AREAS = (AREA_NAMES || [])
+  .map((name) => name.toLowerCase())
+  .sort((a, b) => b.split(/\s+/).length - a.split(/\s+/).length || b.length - a.length);
+
+// Map a raw area/location string to the scraped area it belongs to, so a
+// sub-label ("Södermalm - Sofo", "Gamla Enskede", "Bromma - Traneberg") matches
+// the sold comps stored under its parent area ("Södermalm", "Enskede", "Bromma").
+// Hemnet uses commas, slashes and dashes between the area and its sub-label, so
+// exact first-token equality threw away hundreds of real comps over formatting.
+// Whole-token match only (no substrings), falling back to the first token when
+// no scraped area is recognised — so unscraped areas honestly stay unmatched.
+function canonicalArea(value) {
+  if (!value) return null;
+  const tokens = String(value).toLowerCase().split(/[^a-zåäöé0-9]+/).filter(Boolean);
+  if (!tokens.length) return null;
+  const joined = ` ${tokens.join(" ")} `;
+  for (const name of CANONICAL_AREAS) {
+    if (joined.includes(` ${name} `)) return name;
+  }
+  return tokens[0];
+}
+
 function classifySoldCondition(sold) {
   const label = sold?.conditionLabel || sold?.condition;
   if (label) {
@@ -77,13 +102,13 @@ function avgiftRisk(debtPerSqm) {
 
 function saleMatchesListingArea(sale, listingArea) {
   if (!listingArea) return false;
-  const saleArea = firstAreaToken(sale.area) || firstAreaToken(sale.locationDescription);
+  const saleArea = canonicalArea(sale.area) || canonicalArea(sale.locationDescription);
   return saleArea === listingArea;
 }
 
 function buildComparableSet(listing, soldListings = []) {
   const listingBrf = normalizeBrfName(listing.brfName);
-  const listingArea = firstAreaToken(listing.locationDescription) || firstAreaToken(listing.area);
+  const listingArea = canonicalArea(listing.locationDescription) || canonicalArea(listing.area);
 
   const validSales = soldListings.filter((sale) => parseNumber(sale.soldPriceSqm) > 0);
   const sameBrf = listingBrf
@@ -204,4 +229,5 @@ module.exports = {
   buildBrfIntelligence,
   classifySoldCondition,
   normalizeBrfName,
+  canonicalArea,
 };

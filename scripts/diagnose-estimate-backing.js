@@ -18,13 +18,13 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const Listing = require("../api/listing.model");
 const SoldListing = require("../models/sold.model");
-const { buildBrfIntelligence } = require("../api/brf-intelligence");
+const { buildBrfIntelligence, canonicalArea } = require("../api/brf-intelligence");
 const { calcInvestment } = require("../profitability.js");
 
-// Same first-token area key the matcher uses (api/brf-intelligence.js).
+// Group by the SAME canonical area the matcher uses, so sub-labels collapse into
+// their parent scraped area and the comp counts line up with what backs a verdict.
 function areaKey(value) {
-  if (!value) return "(unknown)";
-  return String(value).split(",")[0].trim().toLowerCase() || "(unknown)";
+  return canonicalArea(value) || "(unknown)";
 }
 
 const pad = (s, n) => String(s).padEnd(n);

@@ -59,6 +59,25 @@ test("calculates high-confidence same-BRF renovation uplift", () => {
   assert.equal(intelligence.renovationArbitrage.estimatedUpliftTotal, 588000);
 });
 
+test("sub-area labels match their parent scraped area's sold comps", () => {
+  // "Södermalm - Sofo" must use the comps stored under "Södermalm" — a comma /
+  // dash / slash sub-label used to break the exact-token match and throw the data
+  // away. Bromma sub-labels and dash-joined names match too; truly unscraped
+  // areas (Kungsholmen) honestly stay unmatched.
+  const sodermalmSub = { brfName: "BRF X", size: "50 m²", locationDescription: "Södermalm - Sofo, Stockholm" };
+  const comps = Array.from({ length: 12 }, (_, i) => ({
+    area: "Södermalm", locationDescription: "Södermalm, Stockholm", soldPriceSqm: 100000 + i * 1000, sizeNum: 50,
+  }));
+  const arb = buildBrfIntelligence(sodermalmSub, comps).renovationArbitrage;
+  assert.equal(arb.scope, "area");
+  assert.equal(arb.confidence, "high");
+  assert.equal(arb.totalComparableSales, 12);
+
+  // Unscraped area stays unmatched (no false positive against Södermalm comps).
+  const kungsholmen = { brfName: "BRF Y", size: "50 m²", locationDescription: "Kungsholmen - Fredhäll, Stockholm" };
+  assert.equal(buildBrfIntelligence(kungsholmen, comps).renovationArbitrage.scope, "none");
+});
+
 test("a year of UNCLASSIFIED area comps still yields a confident resale estimate", () => {
   // The whole point: none of these sales carries a condition label or score, yet
   // we have plenty of them — so the estimate is real and confident, no longer
