@@ -71,6 +71,12 @@ function buildActiveFeedFilter({
   maxPrice,
   dealMinScore = DEAL_MIN_SCORE,
   sittingBefore,
+  // Override the listing status the filter targets. Defaults to "active" (the
+  // live feed). The disappeared digest passes "disappeared" so it reuses the
+  // SAME buyability gates (area exclusions + per-area price caps) — a listing
+  // that was never buyable (e.g. an over-cap Östermalm unit) must not surface in
+  // Disappeared either, exactly as it never showed in any active section.
+  status = "active",
   areaConstraints = activeAreaConstraints(),
 } = {}) {
   const compsOnlyNames = areaConstraints
@@ -79,7 +85,7 @@ function buildActiveFeedFilter({
   const capped = areaConstraints.filter((a) => a.filters.maxPriceSEK != null);
 
   const filter = {
-    status: "active",
+    status,
     locationDescription: { $not: exclusionRegex(compsOnlyNames) },
   };
   if (maxPrice != null) filter.askingPriceNum = { $lte: maxPrice };
