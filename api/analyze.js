@@ -223,10 +223,15 @@ function buildGatedAnalysis(images) {
   };
 }
 
-async function analyzeListingImages(images, listingInfo = {}) {
+async function analyzeListingImages(images, listingInfo = {}, options = {}) {
   if (!images || images.length === 0) {
     return null;
   }
+  // Per-call overrides used by the manual "reanalyze" button: force a specific
+  // scoring model (e.g. claude-opus-4-8) and skip the triage gate so a listing
+  // mis-gated as "already renovated" still gets a full fresh score.
+  const scoringModel = options.analysisModel || ANALYSIS_MODEL;
+  const forceScore = !!options.forceScore;
 
   // Stage 1 — cheap triage. On failure, fall through and score without a gate
   // (never drop a listing because the cheap pass errored).
@@ -250,7 +255,9 @@ async function analyzeListingImages(images, listingInfo = {}) {
   const displayCoverage = coverageFromDisplaySet(images, displayImages, classified);
 
   // Gate: skip the expensive score when both wet rooms are already modern.
-  if (classified && triageGated(classified)) {
+  // A forced (manual) reanalyze bypasses the gate — its whole purpose is to
+  // re-judge a listing the cheap pass may have mis-gated.
+  if (!forceScore && classified && triageGated(classified)) {
     return { ...buildGatedAnalysis(images), displayImages, displayCoverage };
   }
 
@@ -283,7 +290,7 @@ async function analyzeListingImages(images, listingInfo = {}) {
 
   try {
     const response = await client.messages.create({
-      model: ANALYSIS_MODEL,
+      model: scoringModel,
       max_tokens: 1400,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content }],

@@ -150,7 +150,7 @@ function conditionLabelFromScore(score) {
   return "partly_renovated";
 }
 
-async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate, hydrateGalleries = false }) {
+async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate, hydrateGalleries = false, analysisModel = null }) {
   const { analyzeListingImages } = require("./analyze");
   // Total listings matching the query (the full backlog), vs the <= limit we
   // process this pass. `queued > limit` on the coverage sweep means a standing
@@ -198,7 +198,10 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
     // out of the queue after MAX_HYDRATION_ATTEMPTS instead of being re-analysed
     // every 5-minute sweep forever (the runaway-token bug). New/unscored listings
     // are exempt — they still get a first score even from thumbnails.
-    if (hydrateGalleries && !fetchedRicher && listing.renovationScore != null) {
+    // A forced model override (the manual reanalyze button) always re-scores,
+    // even on the same thumbnails — the point is a stronger model re-reading the
+    // photos — so it bypasses this token-saving skip.
+    if (!analysisModel && hydrateGalleries && !fetchedRicher && listing.renovationScore != null) {
       await Model.findByIdAndUpdate(listing._id, {
         galleryHydrationAttemptedAt: new Date(),
         galleryHydrationAttempts: (listing.galleryHydrationAttempts || 0) + 1,
@@ -208,7 +211,7 @@ async function analyzeBatch({ Model, query, limit, describeListing, buildUpdate,
     }
 
     try {
-      const analysis = await analyzeListingImages(images, describeListing(listing));
+      const analysis = await analyzeListingImages(images, describeListing(listing), { analysisModel, forceScore: !!analysisModel });
       if (!analysis) {
         skipped++;
         continue;
@@ -283,6 +286,7 @@ async function analyzeActiveListings(options = {}) {
     }),
     buildUpdate: applyActiveAnalysisUpdate,
     hydrateGalleries: true,
+    analysisModel: options.analysisModel || null,
   });
 }
 
@@ -298,6 +302,7 @@ async function analyzeSoldListings(options = {}) {
       askingPrice: listing.askingPrice,
     }),
     buildUpdate: applySoldAnalysisUpdate,
+    analysisModel: options.analysisModel || null,
   });
 }
 
@@ -310,11 +315,11 @@ async function analyzeListingImagesRefresh(options = {}) {
   const result = { dataset, limit, target, active: null, sold: null };
 
   if (dataset === "active" || dataset === "all") {
-    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target, coverageOnly: options.coverageOnly });
+    result.active = await analyzeActiveListings({ limit, onlyMissing: options.onlyMissing, reanalyzeBefore: options.reanalyzeBefore, reanalyzeMinScore: options.reanalyzeMinScore, target, coverageOnly: options.coverageOnly, analysisModel: options.analysisModel });
   }
 
   if (dataset === "sold" || dataset === "all") {
-    result.sold = await analyzeSoldListings({ limit, onlyMissing: options.onlyMissing, target });
+    result.sold = await analyzeSoldListings({ limit, onlyMissing: options.onlyMissing, target, analysisModel: options.analysisModel });
   }
 
   return result;

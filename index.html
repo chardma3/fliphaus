@@ -744,6 +744,7 @@
               <div class="listing-actions">
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
                 ${currentUser ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
+                ${currentUser && currentUser.role === "admin" && (currentView === "deals" || currentView === "moveinready") ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
               </div>
             </div>
           `;
@@ -804,6 +805,33 @@
                 this.textContent = "Sent!";
                 this.style.color = "#69db7c";
                 this.style.background = "#1a3a1a";
+              }
+            });
+          }
+
+          const reanalyzeBtn = div.querySelector(".reanalyze-btn");
+          if (reanalyzeBtn) {
+            reanalyzeBtn.addEventListener("click", async function() {
+              if (this.disabled) return;
+              const orig = this.textContent;
+              this.disabled = true;
+              this.style.opacity = "0.7";
+              this.textContent = "↻ Reanalyzing with Opus… (~20s)";
+              try {
+                const res = await fetch(`/api/admin/reanalyze/${listing.id}`, { method: "POST" });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  alert(data.detail || data.error || "Reanalysis failed");
+                  this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
+                  return;
+                }
+                // Re-score may move the listing between Deals/Move-in ready — reload
+                // the current view so the corrected score, badge and photos show.
+                this.textContent = "Updated ✓"; this.style.color = "#69db7c";
+                await loadListings();
+              } catch (err) {
+                alert("Reanalysis failed: " + err.message);
+                this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
               }
             });
           }

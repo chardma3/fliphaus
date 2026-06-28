@@ -77,6 +77,7 @@ test("image analysis refresh defaults to a small post-scrape batch", () => {
     target: null,
     reanalyzeBefore: null,
     reanalyzeMinScore: null,
+    analysisModel: null,
   });
 });
 
@@ -88,6 +89,7 @@ test("image analysis refresh validates dataset and caps batch size", () => {
     target: null,
     reanalyzeBefore: null,
     reanalyzeMinScore: null,
+    analysisModel: null,
   });
   assert.deepEqual(buildImageAnalysisOptions({ dataset: "bad", limit: "0" }), {
     dataset: "all",
@@ -96,6 +98,7 @@ test("image analysis refresh validates dataset and caps batch size", () => {
     target: null,
     reanalyzeBefore: null,
     reanalyzeMinScore: null,
+    analysisModel: null,
   });
 });
 
@@ -112,4 +115,12 @@ test("image analysis refresh accepts a single-listing target by id, slug or list
   assert.equal(buildImageAnalysisOptions({ id: "999" }).target, "999");
   assert.equal(buildImageAnalysisOptions({ slug: "lagenhet-3rum-farsta" }).target, "lagenhet-3rum-farsta");
   assert.equal(buildImageAnalysisOptions({}).target, null);
+});
+
+test("image analysis refresh allowlists the per-call model override", () => {
+  assert.equal(buildImageAnalysisOptions({ analysisModel: "claude-opus-4-8" }).analysisModel, "claude-opus-4-8");
+  assert.equal(buildImageAnalysisOptions({ analysisModel: "claude-sonnet-4-6" }).analysisModel, "claude-sonnet-4-6");
+  // Unknown / injected model strings are rejected (fall back to the env default).
+  assert.equal(buildImageAnalysisOptions({ analysisModel: "evil-model" }).analysisModel, null);
+  assert.equal(buildImageAnalysisOptions({}).analysisModel, null);
 });

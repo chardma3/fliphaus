@@ -669,6 +669,37 @@ app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
   }
 });
 
+// Manual single-listing reanalysis with a stronger model — the dashboard
+// "Reanalyze (Opus)" button. Session-authenticated + admin only (no refresh
+// token in the browser). Forces claude-opus-4-8 and a full re-score (bypassing
+// the cheap triage gate and the same-thumbnail skip) to correct a listing the
+// default Sonnet pass scored or classified wrong. Shares the one-job lock.
+app.post("/api/admin/reanalyze/:id", requireAuth, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const id = String(req.params.id || "").trim();
+  if (!id) return res.status(400).json({ error: "Missing listing id" });
+  if (!jobLock.acquire("http-reanalyze")) {
+    return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
+  }
+  const startedAt = new Date();
+  try {
+    const result = await analyzeListingImagesRefresh({ dataset: "active", target: id, analysisModel: "claude-opus-4-8", limit: 1 });
+    await recordScrapeRun({ job: "image-analysis", label: `Opus reanalyze ${id}`, status: "success", startedAt, result });
+    const fresh = await Listing.findOne({ $or: [{ id }, { slug: id }] }, { __v: 0 }).lean();
+    if (!fresh) return res.status(404).json({ error: "Listing not found after reanalysis" });
+    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    const pref = await Preference.findOne({ userId: req.user.id, listingId: fresh.id });
+    const listing = presentListingForFeed(listingWithBrfIntelligence(fresh, soldListings), pref?.status || null);
+    res.json({ ok: true, analyzed: result.active?.analyzed || 0, listing });
+  } catch (err) {
+    console.error("❌ Manual reanalyze error:", err);
+    await recordScrapeRun({ job: "image-analysis", label: `Opus reanalyze ${id}`, status: "failed", startedAt, error: err.message });
+    res.status(500).json({ error: "Reanalysis failed", detail: err.message });
+  } finally {
+    jobLock.release("http-reanalyze");
+  }
+});
+
 // Build/version marker — confirm which commit is live after a deploy. No auth: non-secret.
 app.get("/api/version", (req, res) => {
   res.json(buildVersionInfo(process.env, { startedAt: STARTED_AT, uptimeSeconds: process.uptime() }));

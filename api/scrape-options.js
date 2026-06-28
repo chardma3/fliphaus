@@ -1,3 +1,7 @@
+// Scoring models a caller may force per request via ?analysisModel=. Allowlisted
+// so a query param can never inject an arbitrary model string.
+const ALLOWED_ANALYSIS_MODELS = ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"];
+
 function shouldFetchActiveDetails(options = {}) {
   return options.includeDetails !== false && options.includeDetails !== "false";
 }
@@ -44,6 +48,10 @@ function buildImageAnalysisOptions(query = {}) {
   const rawMinScore = Number(query.reanalyzeMinScore);
   const reanalyzeMinScore = Number.isFinite(rawMinScore) ? rawMinScore : null;
 
+  // Optional per-call scoring-model override (?analysisModel=). Null = use the
+  // env/default (ANALYSIS_MODEL). The manual "reanalyze" button passes Opus.
+  const analysisModel = ALLOWED_ANALYSIS_MODELS.includes(query.analysisModel) ? query.analysisModel : null;
+
   return {
     dataset,
     limit,
@@ -51,6 +59,7 @@ function buildImageAnalysisOptions(query = {}) {
     target,
     reanalyzeBefore,
     reanalyzeMinScore,
+    analysisModel,
   };
 }
 
@@ -73,4 +82,5 @@ module.exports = {
   buildListingUpsert,
   buildSoldScrapeOptions,
   shouldFetchActiveDetails,
+  ALLOWED_ANALYSIS_MODELS,
 };
