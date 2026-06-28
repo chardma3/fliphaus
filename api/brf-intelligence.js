@@ -102,7 +102,13 @@ function avgiftRisk(debtPerSqm) {
 
 function saleMatchesListingArea(sale, listingArea) {
   if (!listingArea) return false;
-  const saleArea = canonicalArea(sale.area) || canonicalArea(sale.locationDescription);
+  // Match on the sold comp's REAL location (locationDescription), not its `area`,
+  // which is only the broad search catchment it was scraped under. A Kungsholmen
+  // flat caught by the Stora-Essingen search has area="Stora Essingen" but
+  // locationDescription="Kungsholmen …" — so it must pair with a Kungsholmen
+  // listing, not a Stora-Essingen one. Fall back to `area` only when the real
+  // location is missing.
+  const saleArea = canonicalArea(sale.locationDescription) || canonicalArea(sale.area);
   return saleArea === listingArea;
 }
 

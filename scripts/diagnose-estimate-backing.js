@@ -49,7 +49,8 @@ const padL = (s, n) => String(s).padStart(n);
   const soldByArea = {};
   for (const s of soldListings) {
     if (!(Number(s.soldPriceSqm) > 0)) continue;
-    const k = areaKey(s.area || s.locationDescription);
+    // Real location first (matches the engine); `area` is only the search catchment.
+    const k = areaKey(s.locationDescription || s.area);
     soldByArea[k] = (soldByArea[k] || 0) + 1;
   }
 

@@ -78,6 +78,23 @@ test("sub-area labels match their parent scraped area's sold comps", () => {
   assert.equal(buildBrfIntelligence(kungsholmen, comps).renovationArbitrage.scope, "none");
 });
 
+test("comps match on real location, not the search catchment they were scraped under", () => {
+  // A Kungsholmen flat caught by the Stora-Essingen search: area is the catchment
+  // ("Stora Essingen"), locationDescription is the real area. It must back a
+  // Kungsholmen listing, not a Stora-Essingen one.
+  const listing = { brfName: "BRF Z", size: "50 m²", locationDescription: "Kungsholmen - Fredhäll, Stockholm" };
+  const comps = Array.from({ length: 8 }, (_, i) => ({
+    area: "Stora Essingen", // broad search catchment label
+    locationDescription: "Kungsholmen, Stockholm", // real area
+    soldPriceSqm: 95000 + i * 1000,
+    sizeNum: 50,
+  }));
+  const arb = buildBrfIntelligence(listing, comps).renovationArbitrage;
+  assert.equal(arb.scope, "area");
+  assert.equal(arb.totalComparableSales, 8);
+  assert.equal(arb.confidence, "medium"); // 8 area comps
+});
+
 test("a year of UNCLASSIFIED area comps still yields a confident resale estimate", () => {
   // The whole point: none of these sales carries a condition label or score, yet
   // we have plenty of them — so the estimate is real and confident, no longer
