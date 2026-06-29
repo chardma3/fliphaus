@@ -22,8 +22,11 @@ const SITTING_MIN_DAYS = 14;
 //                 already-renovated 1-3 plus partial-reno 4-5, for browsing.
 //   newbuild    — new-build / projekt listings (addressed by development name,
 //                 no street number). Market data, not flips — no score filter.
-//   sitting     — real apartments on the market a while (any score), where a
-//                 motivated seller may take an offer below asking.
+//   sitting     — real apartments on the market a while (any score, incl.
+//                 unscored), where a motivated seller may take an offer below
+//                 asking. Sitting takes precedence: a listing that's been
+//                 sitting shows here only, dropped from deals and move-in ready
+//                 (Sitting > Deals > Move-in ready; each surfaces in exactly one).
 // Unscored/pending flips appear in NEITHER deals nor moveinready — they show up
 // once analysed, so a backlog of freshly-scraped listings can't flood the feed.
 // Per-area feed constraints (api/area-priority.js). Two declarative filters are
@@ -112,7 +115,10 @@ function buildActiveFeedFilter({
   if (view === "sitting") {
     // The signal here is time on market, not condition — so any renovation
     // score (incl. unscored). Bound by publishedAt so only listings up long
-    // enough to be worth an offer appear.
+    // enough to be worth an offer appear. Sitting is the highest-priority
+    // surface: a listing that's been on the market past the cutoff shows here
+    // and is excluded from Deals and Move-in ready (the exclusion lives in the
+    // flip branch below), so the views never overlap.
     if (sittingBefore) filter.publishedAt = { $lte: sittingBefore, $ne: null };
     return filter;
   }
@@ -121,15 +127,16 @@ function buildActiveFeedFilter({
     ? { $gte: 1, $lte: dealMinScore - 1 }
     : { $gte: dealMinScore };
 
-  // Mutual exclusion with the sitting view, MOVE-IN-READY ONLY: a renovated unit
-  // that's been on the market past the cutoff shows under Sitting, not in both.
-  // Deals are deliberately EXEMPT — a strong flip (score >= dealMinScore) that's
-  // been sitting 2+ weeks is a best-case lead (motivated seller + reno upside),
-  // so it stays in Deals as well as Sitting. A null/absent publishedAt isn't
-  // "sitting", so it stays visible here. (newbuild is already disjoint — sitting
-  // excludes projekt listings above.) Only applied when the caller supplies the
-  // cutoff, so the pure-shape unit tests are unaffected.
-  if (sittingBefore && view === "moveinready") {
+  // Mutual exclusion with the sitting view, for BOTH flip views (deals and
+  // move-in ready): a listing that's been on the market past the cutoff shows
+  // under Sitting only, never here too. Sitting wins outright — a strong flip
+  // that's been sitting 2+ weeks surfaces in Sitting, not Deals. Priority order
+  // across the active feed is Sitting > Deals > Move-in ready; each listing
+  // appears in exactly one. A null/absent publishedAt isn't "sitting", so it
+  // stays visible here. (newbuild is already disjoint — sitting excludes projekt
+  // listings above.) Only applied when the caller supplies the cutoff, so the
+  // pure-shape unit tests are unaffected.
+  if (sittingBefore) {
     filter.$or = [
       { publishedAt: { $gt: sittingBefore } },
       { publishedAt: null },
