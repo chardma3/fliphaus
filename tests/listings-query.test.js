@@ -65,6 +65,19 @@ test("sitting view without a cutoff omits the publishedAt bound", () => {
   assert.equal(f.renovationScore, undefined);
 });
 
+test("sitting and deals are disjoint — a strong aged flip is in sitting, not deals", () => {
+  const cutoff = new Date("2026-06-12T00:00:00Z");
+  const deals = buildActiveFeedFilter({ view: "deals", sittingBefore: cutoff, areaConstraints: [] });
+  const sitting = buildActiveFeedFilter({ view: "sitting", sittingBefore: cutoff, areaConstraints: [] });
+  // Deals exclude anything past the cutoff (keep only newer/undated), so an aged
+  // strong flip drops out of Deals and shows under Sitting only.
+  assert.deepEqual(deals.$or, [
+    { publishedAt: { $gt: cutoff } },
+    { publishedAt: null },
+  ]);
+  assert.equal(sitting.$or, undefined); // Sitting keeps the aged listing
+});
+
 test("SITTING_MIN_DAYS is exported and at least a week", () => {
   assert.ok(SITTING_MIN_DAYS >= 7);
 });
@@ -80,11 +93,15 @@ test("move-in-ready excludes sitting listings when given the cutoff (mutual excl
   ]);
 });
 
-test("deals are EXEMPT from the sitting exclusion — an aged strong flip stays a deal", () => {
+test("sitting wins over deals — an aged strong flip is excluded from deals", () => {
   const cutoff = new Date("2026-06-12T00:00:00Z");
   const f = buildActiveFeedFilter({ view: "deals", sittingBefore: cutoff, areaConstraints: [] });
-  assert.equal(f.$or, undefined);
-  assert.equal(f.publishedAt, undefined);
+  // A strong flip on the market past the cutoff is "sitting" and must be dropped
+  // from Deals: keep only newer or undated ones (mirrors the move-in-ready gate).
+  assert.deepEqual(f.$or, [
+    { publishedAt: { $gt: cutoff } },
+    { publishedAt: null },
+  ]);
 });
 
 test("without a cutoff, move-in-ready adds no publishedAt clause (shape unchanged)", () => {
