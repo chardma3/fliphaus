@@ -20,7 +20,7 @@ const Builder = require("./models/builder.model");
 const Assignment = require("./models/assignment.model");
 const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
-const { buildBrfIntelligence } = require("./api/brf-intelligence");
+const { buildBrfIntelligence, buildSoldIndex } = require("./api/brf-intelligence");
 const { buildAreaTrends } = require("./api/sold-trends");
 const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
@@ -29,6 +29,8 @@ const { recordScrapeRun, getRecentScrapeRuns } = require("./api/scrape-run.model
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
+const { resolveRole, syncUserRole } = require("./api/roles");
+const { getSekToAud } = require("./api/fx");
 const { buildActiveFeedFilter, SITTING_MIN_DAYS } = require("./api/listings-query");
 const { AREA_NAMES } = require("./api/hemnet-refresh-safety");
 
@@ -67,14 +69,19 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        const email = profile.emails[0].value;
         let user = await User.findOne({ googleId: profile.id });
         if (!user) {
           user = await User.create({
             googleId: profile.id,
-            email: profile.emails[0].value,
+            email,
             name: profile.displayName,
             avatar: profile.photos[0].value,
+            role: resolveRole(email, null),
           });
+        } else {
+          // Promote/demote against the current friend allowlist on each login.
+          await syncUserRole(user);
         }
         return done(null, user);
       } catch (err) {
@@ -96,6 +103,16 @@ app.use(express.static(path.join(__dirname)));
 const requireAuth = (req, res, next) =>
   req.user ? next() : res.status(401).json({ error: "Not authenticated" });
 
+// Admin-only gate for Claire-facing actions (reanalyse, builder invites,
+// assignments). These sit under /api/admin/* but previously only checked
+// requireAuth, so any logged-in investor/friend could call them — this closes
+// that hole. 401 when unauthenticated, 403 when authenticated but not admin.
+const requireAdmin = (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  next();
+};
+
 function requireRefreshToken(req, res, next) {
   if (!process.env.REFRESH_TOKEN) {
     return res.status(503).json({ error: "Refresh token is not configured" });
@@ -105,21 +122,22 @@ function requireRefreshToken(req, res, next) {
   next();
 }
 
-function listingWithBrfIntelligence(listing, soldListings) {
-  // buildBrfIntelligence only reads fields off each sold listing, so there's no
-  // need to clone the (shared) sold array on every call — that was O(listings ×
-  // sold) deep-clones per request and made the move-in-ready feed time out.
-  // Callers pass .lean() results, so `listing` is already a plain object.
+function listingWithBrfIntelligence(listing, soldData) {
+  // soldData is either a raw sold array or a prebuilt sold index (buildSoldIndex).
+  // Feed callers pass the shared index built once per request; single-listing
+  // callers can pass the array. buildBrfIntelligence handles both. Callers pass
+  // .lean() results, so `listing` is already a plain object.
   const lo = typeof listing.toObject === "function" ? listing.toObject() : listing;
   return {
     ...lo,
-    brfIntelligence: buildBrfIntelligence(lo, soldListings),
+    brfIntelligence: buildBrfIntelligence(lo, soldData),
   };
 }
 
 // Auth
 function roleRedirect(user) {
   if (user.role === "admin") return "/";
+  if (user.role === "friend") return "/friends";
   return "/invest";
 }
 
@@ -145,7 +163,7 @@ app.post("/auth/signup", async (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: "Email already registered" });
-    const user = await User.create({ name, email, password, role: "investor" });
+    const user = await User.create({ name, email, password, role: resolveRole(email, null) });
     req.login(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
       res.json({ ok: true, redirect: roleRedirect(user) });
@@ -163,6 +181,7 @@ app.post("/auth/login", async (req, res) => {
     if (!user || !user.password) return res.status(401).json({ error: "Invalid email or password" });
     const valid = await user.comparePassword(password);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+    await syncUserRole(user); // pick up friend-allowlist changes on login
     req.login(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
       res.json({ ok: true, redirect: roleRedirect(user) });
@@ -176,6 +195,15 @@ app.post("/auth/login", async (req, res) => {
 app.get("/api/me", (req, res) => {
   if (!req.user) return res.json({ user: null });
   res.json({ user: { name: req.user.name, email: req.user.email, avatar: req.user.avatar, role: req.user.role, settings: req.user.settings } });
+});
+
+// SEK → AUD rate for the friends dashboard (daily-cached, fixed fallback).
+app.get("/api/fx/sek-aud", async (req, res) => {
+  try {
+    res.json(await getSekToAud());
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch FX rate" });
+  }
 });
 
 // Update settings
@@ -230,9 +258,9 @@ app.get("/api/listings", async (req, res) => {
     const view = ["moveinready", "newbuild", "sitting"].includes(req.query.view) ? req.query.view : "deals";
     // The SITTING_MIN_DAYS cutoff (listings published at least that long ago).
     // Computed here (not in the pure query builder) so the builder stays
-    // deterministic/testable. The sitting view uses it to SELECT; move-in-ready
-    // uses it to EXCLUDE sitting listings (so a renovated unit isn't in both).
-    // Deals are exempt (an aged strong flip stays a deal) and newbuild ignores it.
+    // deterministic/testable. The sitting view uses it to SELECT; deals and
+    // move-in-ready both use it to EXCLUDE sitting listings, so an aged listing
+    // shows under Sitting only (Sitting > Deals > Move-in ready). newbuild ignores it.
     const sittingBefore = view === "newbuild"
       ? undefined
       : new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000);
@@ -240,6 +268,9 @@ app.get("/api/listings", async (req, res) => {
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    // Index the sold set ONCE per request; each listing then does O(1) lookups
+    // instead of re-scanning/re-parsing the whole array (was the ~1min feed hang).
+    const soldIndex = buildSoldIndex(soldListings);
 
     const preferences = req.user ? await Preference.find({ userId: req.user.id }) : [];
     const prefMap = {};
@@ -247,7 +278,7 @@ app.get("/api/listings", async (req, res) => {
 
     res.json({
       total: listings.length,
-      listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldListings), prefMap[l.id] || null)),
+      listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldIndex), prefMap[l.id] || null)),
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch listings" });
@@ -292,7 +323,8 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
     const ids = prefs.map((p) => p.listingId);
     const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 }).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
-    res.json({ total: listings.length, listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldListings), "saved")) });
+    const soldIndex = buildSoldIndex(soldListings);
+    res.json({ total: listings.length, listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldIndex), "saved")) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch favorites" });
   }
@@ -389,7 +421,7 @@ app.post("/api/builder/proposal", requireBuilder, async (req, res) => {
 });
 
 // ── Admin API (Claire-facing) ──
-app.get("/api/admin/builders", requireAuth, async (req, res) => {
+app.get("/api/admin/builders", requireAdmin, async (req, res) => {
   try {
     const builders = await Builder.find({}, { token: 0, __v: 0 }).sort({ invitedAt: -1 });
     res.json({ builders });
@@ -398,7 +430,7 @@ app.get("/api/admin/builders", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin/builders", requireAuth, async (req, res) => {
+app.post("/api/admin/builders", requireAdmin, async (req, res) => {
   try {
     const { name, email, company, phone } = req.body;
     const builder = await Builder.create({ name, email, company, phone });
@@ -410,7 +442,7 @@ app.post("/api/admin/builders", requireAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/admin/builders/:id", requireAuth, async (req, res) => {
+app.delete("/api/admin/builders/:id", requireAdmin, async (req, res) => {
   try {
     await Assignment.deleteMany({ builderId: req.params.id });
     await Proposal.deleteMany({ builderId: req.params.id });
@@ -421,7 +453,7 @@ app.delete("/api/admin/builders/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin/assign", requireAuth, async (req, res) => {
+app.post("/api/admin/assign", requireAdmin, async (req, res) => {
   try {
     const { listingId, builderIds, note } = req.body;
     const results = [];
@@ -439,7 +471,7 @@ app.post("/api/admin/assign", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin/proposals", requireAuth, async (req, res) => {
+app.get("/api/admin/proposals", requireAdmin, async (req, res) => {
   try {
     const { listingId } = req.query;
     const filter = listingId ? { listingId } : {};
@@ -450,7 +482,7 @@ app.get("/api/admin/proposals", requireAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/admin/assignments/:id", requireAuth, async (req, res) => {
+app.patch("/api/admin/assignments/:id", requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     if (!["accepted", "declined"].includes(status)) return res.status(400).json({ error: "Invalid status" });
@@ -461,7 +493,7 @@ app.patch("/api/admin/assignments/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin/assignments", requireAuth, async (req, res) => {
+app.get("/api/admin/assignments", requireAdmin, async (req, res) => {
   try {
     const assignments = await Assignment.find().populate("builderId", "name email company").sort({ assignedAt: -1 });
     const listingIds = [...new Set(assignments.map((a) => a.listingId))];
@@ -496,6 +528,7 @@ app.get("/api/invest/listings", async (req, res) => {
 
     const listings = await Listing.find({ id: { $in: listingIds } }, { __v: 0 }).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    const soldIndex = buildSoldIndex(soldListings);
     const proposals = await Proposal.find({ listingId: { $in: listingIds } });
     const proposalMap = {};
     for (const p of proposals) {
@@ -512,7 +545,7 @@ app.get("/api/invest/listings", async (req, res) => {
     });
 
     const result = listings.map((l) => {
-      const lo = listingWithBrfIntelligence(l, soldListings);
+      const lo = listingWithBrfIntelligence(l, soldIndex);
       const proposal = proposalMap[l.id];
       const deposit = Math.round((lo.askingPriceNum || 0) * 0.1);
       const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
@@ -674,7 +707,7 @@ app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
 // token in the browser). Forces claude-opus-4-8 and a full re-score (bypassing
 // the cheap triage gate and the same-thumbnail skip) to correct a listing the
 // default Sonnet pass scored or classified wrong. Shares the one-job lock.
-app.post("/api/admin/reanalyze/:id", requireAuth, async (req, res) => {
+app.post("/api/admin/reanalyze/:id", requireAdmin, async (req, res) => {
   if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
   const id = String(req.params.id || "").trim();
   if (!id) return res.status(400).json({ error: "Missing listing id" });
@@ -896,6 +929,7 @@ app.get("/api/sold/area-intel", async (req, res) => {
 
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
 app.get("/invest", (req, res) => res.sendFile(path.join(__dirname, "investor.html")));
+app.get("/friends", (req, res) => res.sendFile(path.join(__dirname, "friends.html")));
 app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "listing-detail.html")));
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
