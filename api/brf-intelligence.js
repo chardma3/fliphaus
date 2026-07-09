@@ -100,32 +100,44 @@ function avgiftRisk(debtPerSqm) {
   return "low";
 }
 
-function saleMatchesListingArea(sale, listingArea) {
-  if (!listingArea) return false;
-  // Match on the sold comp's REAL location (locationDescription), not its `area`,
-  // which is only the broad search catchment it was scraped under. A Kungsholmen
-  // flat caught by the Stora-Essingen search has area="Stora Essingen" but
-  // locationDescription="Kungsholmen …" — so it must pair with a Kungsholmen
-  // listing, not a Stora-Essingen one. Fall back to `area` only when the real
-  // location is missing.
-  const saleArea = canonicalArea(sale.locationDescription) || canonicalArea(sale.area);
-  return saleArea === listingArea;
+// Precompute the per-sale groupings ONCE for a batch of listings. Without this,
+// buildComparableSet re-ran normalizeBrfName + canonicalArea (regex-heavy, and
+// canonicalArea scans every canonical area name) for every (listing, sale) pair
+// — O(listings × sold) expensive string ops, which is what made the feed take
+// ~a minute. Here each sale is classified a single time and bucketed by its
+// normalized BRF and its canonical area; buildComparableSet then does O(1) Map
+// lookups. Keying/eligibility mirror the old filters EXACTLY (soldPriceSqm > 0;
+// area from the sale's real locationDescription, falling back to its scraped
+// `area`) so the produced comparable sets are byte-identical to the old path.
+function buildSoldIndex(soldListings = []) {
+  const byBrf = new Map();
+  const byArea = new Map();
+  for (const sale of soldListings) {
+    if (!(parseNumber(sale.soldPriceSqm) > 0)) continue;
+    const brfKey = normalizeBrfName(sale.brfName);
+    if (brfKey) {
+      if (!byBrf.has(brfKey)) byBrf.set(brfKey, []);
+      byBrf.get(brfKey).push(sale);
+    }
+    const areaKey = canonicalArea(sale.locationDescription) || canonicalArea(sale.area);
+    if (areaKey) {
+      if (!byArea.has(areaKey)) byArea.set(areaKey, []);
+      byArea.get(areaKey).push(sale);
+    }
+  }
+  return { byBrf, byArea };
 }
 
-function buildComparableSet(listing, soldListings = []) {
+function buildComparableSet(listing, soldIndex) {
   const listingBrf = normalizeBrfName(listing.brfName);
   const listingArea = canonicalArea(listing.locationDescription) || canonicalArea(listing.area);
 
-  const validSales = soldListings.filter((sale) => parseNumber(sale.soldPriceSqm) > 0);
-  const sameBrf = listingBrf
-    ? validSales.filter((sale) => normalizeBrfName(sale.brfName) === listingBrf)
-    : [];
-
+  const sameBrf = listingBrf ? soldIndex.byBrf.get(listingBrf) || [] : [];
   if (sameBrf.length) {
     return { scope: "same_brf", sales: sameBrf };
   }
 
-  const sameArea = validSales.filter((sale) => saleMatchesListingArea(sale, listingArea));
+  const sameArea = listingArea ? soldIndex.byArea.get(listingArea) || [] : [];
   return { scope: sameArea.length ? "area" : "none", sales: sameArea };
 }
 
@@ -147,8 +159,15 @@ function calculateConfidence(scope, comparableCount) {
   return "low";
 }
 
-function buildBrfIntelligence(listing, soldListings = []) {
-  const { scope, sales } = buildComparableSet(listing, soldListings);
+function buildBrfIntelligence(listing, soldListingsOrIndex = []) {
+  // Accept either a raw sold array (single-listing callers, tests, scripts) or a
+  // prebuilt index (the feed, which builds it once for the whole batch). An array
+  // is indexed here so one-off calls stay correct; the feed skips this by passing
+  // the shared index, which is the whole point of the optimization.
+  const soldIndex = Array.isArray(soldListingsOrIndex)
+    ? buildSoldIndex(soldListingsOrIndex)
+    : soldListingsOrIndex;
+  const { scope, sales } = buildComparableSet(listing, soldIndex);
   const sizeSqm = parseNumber(listing.size) || parseNumber(listing.sizeNum);
 
   const renovated = [];
@@ -233,6 +252,7 @@ function buildBrfIntelligence(listing, soldListings = []) {
 
 module.exports = {
   buildBrfIntelligence,
+  buildSoldIndex,
   classifySoldCondition,
   normalizeBrfName,
   canonicalArea,

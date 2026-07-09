@@ -352,6 +352,28 @@
       .dismiss:hover { color: #888; }
           /* FLEX-WRAP-MOBILE-NAV: wrap the menu instead of overflowing right on narrow screens */
       .nav-menu { flex-wrap: wrap; }
+      /* Loading state — the feed can take up to ~a minute on a cold sold-comp
+         index, so show an explicit on-page spinner+message, not just the
+         browser tab spinner (which reads as "stuck / unresponsive"). */
+      .feed-loading {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 16px; padding: 64px 20px; color: #888; text-align: center;
+      }
+      .feed-spinner {
+        width: 36px; height: 36px; border-radius: 50%;
+        border: 3px solid #333; border-top-color: #69db7c;
+        animation: feed-spin 0.8s linear infinite;
+      }
+      @keyframes feed-spin { to { transform: rotate(360deg); } }
+      .feed-loading .sub { font-size: 0.82rem; color: #666; }
+      .feed-error {
+        padding: 32px 20px; text-align: center; color: #ff8787;
+      }
+      .feed-error button {
+        margin-top: 12px; background: #2a2a2a; color: #fff; border: 1px solid #444;
+        border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 0.85rem;
+      }
+      .feed-error button:hover { background: #333; }
     </style>
   </head>
   <body>
@@ -743,8 +765,8 @@
               ${floorPlanHtml}
               <div class="listing-actions">
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
-                ${currentUser ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
-                ${currentUser && currentUser.role === "admin" && (currentView === "deals" || currentView === "moveinready") ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
+                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
+                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
               </div>
             </div>
           `;
@@ -1011,9 +1033,32 @@
       }
 
       async function loadListings() {
-        document.getElementById("stats").textContent = "Loading listings…";
-        const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
-        const data = await res.json();
+        const statsEl = document.getElementById("stats");
+        const feedEl = document.getElementById("feed");
+        statsEl.textContent = "Loading listings…";
+        // Explicit in-feed spinner: the first load after a scrape can take up to
+        // ~a minute, and without this the page looks frozen (only the browser
+        // tab spins). Cleared by renderListings, which replaces feed contents.
+        feedEl.innerHTML = `
+          <div class="feed-loading">
+            <div class="feed-spinner"></div>
+            <div>Loading listings…</div>
+            <div class="sub">Crunching sold comps for this view — this can take a moment.</div>
+          </div>`;
+        let data;
+        try {
+          const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          data = await res.json();
+        } catch (err) {
+          statsEl.textContent = "";
+          feedEl.innerHTML = `
+            <div class="feed-error">
+              <div>Couldn't load listings (${err.message}).</div>
+              <button onclick="loadListings()">Try again</button>
+            </div>`;
+          return;
+        }
         // Deals is for profitable flips, so drop anything our investment math
         // shows losing money — BOTH the confident "unprofitable" and the
         // benchmark-based "preliminary-unprofitable" (those were showing scary
@@ -1099,6 +1144,15 @@
         const res = await fetch("/api/me");
         const data = await res.json();
         currentUser = data.user;
+
+        // This is the admin (Claire-facing) dashboard: scraping activity log,
+        // reanalyse and send-to-builders all live here and nowhere else. A
+        // logged-in non-admin who lands on "/" is bounced to their own view so
+        // they never see the internal controls (the backend also 403s them).
+        if (currentUser && currentUser.role !== "admin") {
+          window.location.replace(currentUser.role === "friend" ? "/friends" : "/invest");
+          return;
+        }
 
         const headerRight = document.getElementById("header-right");
         if (currentUser) {

@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildBrfIntelligence,
+  buildSoldIndex,
   classifySoldCondition,
   normalizeBrfName,
 } = require("../api/brf-intelligence");
@@ -43,6 +44,14 @@ test("calculates high-confidence same-BRF renovation uplift", () => {
   ];
 
   const intelligence = buildBrfIntelligence(listing, soldListings);
+
+  // A prebuilt index (what the feed passes, built once for the whole batch) must
+  // yield byte-identical intelligence to passing the raw array — this is the
+  // invariant the O(sold+listings) optimization rests on.
+  assert.deepEqual(
+    buildBrfIntelligence(listing, buildSoldIndex(soldListings)),
+    intelligence
+  );
 
   assert.equal(intelligence.brf.name, "BRF Solgläntan 1");
   assert.equal(intelligence.brf.stambyte.status, "done");
