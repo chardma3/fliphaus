@@ -57,7 +57,7 @@ Each scored listing's ROI is estimated from **real sold comparables**, not a har
 - **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku 4.5 triage (worker) + Sonnet 4.6 renovation scoring (architect); model ids env-overridable.
 - **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
 - **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the hourly coverage self-heal.
-- **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / builder).
+- **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / friend / builder), enforced server-side (`requireAdmin` on every `/api/admin/*` route).
 - **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps.
 - **Tests:** Node's built-in `node --test`; pure-function unit tests (no DB/network), run with `npm test`.
 
@@ -75,7 +75,24 @@ Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting 
 `api/analyze.js` (the two-stage Claude pipeline above) + `api/analyze-refresh.js`, which selects which listings to (re)analyse: new/unscored listings, a bounded **self-heal** retry for listings missing a wet-room photo, a targeted single-listing re-score, and a one-shot deals re-score for prompt rollouts. `api/image-selection.js` curates the persisted photo set; `api/brf-intelligence.js` / `api/area-intelligence.js` add BRF debt + renovated-vs-unrenovated sold-comp signal.
 
 ### 3. Feed
-`api/listings-query.js` builds the active-feed Mongo query, split into views — **deals** (score ≥ 7), **move-in ready** (1–6), **sitting** (long on market), **new builds** (projekt listings) — and applies the active per-area filters (price cap, comps-only). `api/listing-presenter.js` / `api/profitability.js` shape the investment maths per listing.
+`api/listings-query.js` builds the active-feed Mongo query, split into views — **deals** (score ≥ `DEAL_MIN_SCORE`, currently 6), **move-in ready** (1 .. `DEAL_MIN_SCORE`-1), **sitting** (on the market ≥ `SITTING_MIN_DAYS`, currently 14), **new builds** (projekt listings) — and applies the active per-area filters (price cap, comps-only). The views are **mutually exclusive** with a strict precedence — **Sitting > Deals > Move-in ready** — so a listing surfaces in exactly one tab: an aged listing shows under Sitting only (both flip views exclude anything past the sitting cutoff), and non-sitting flips split by score. `api/listing-presenter.js` / `api/profitability.js` shape the investment maths per listing.
+
+The feed indexes the sold-comp set **once per request** (`buildSoldIndex` in `api/brf-intelligence.js`) and each listing does O(1) BRF/area lookups against it — previously every listing re-scanned and re-parsed the whole sold array (O(listings × sold)), which made the feed take ~a minute to load.
+
+### Dashboard tiers (who sees what)
+
+Three role-scoped surfaces sit on top of the same data, plus the builder portal:
+
+| Role | Lands on | Sees | Can do |
+|------|----------|------|--------|
+| **admin** (Claire) | `/` (`index.html`) | Everything: all sections, the *Completed scrapes* activity log, BRF/area intelligence | Reanalyse (Opus) on **every** listing in every section, Send to builders, invite/assign builders |
+| **investor** | `/invest` (`investor.html`) | Builder-accepted listings with funding maths | Invest / fund |
+| **friend** (family) | `/friends` (`friends.html`) | **Read-only** browse of all four sections, prices shown in **AUD** as well as SEK | Nothing — view only |
+| **builder** | `/builder` (magic-link) | Listings assigned to them | Submit renovation proposals |
+
+- **Admin-only actions are enforced server-side.** `requireAdmin` (`server.js`) gates every `/api/admin/*` route (reanalyse, builder invite/assign) — previously they were only `requireAuth`, so any logged-in user could have called them. The scraping activity log and the Reanalyse / Send-to-builders buttons live on the admin dashboard only; a logged-in non-admin who hits `/` is redirected to their own view.
+- **Friend access is an email allowlist.** `api/roles.js` grants the read-only `friend` role to any email in the `FRIEND_EMAILS` env var (comma-separated), applied on every login (`resolveRole` / `syncUserRole`): admin is never downgraded, an allowlisted email becomes a friend, everyone else is an investor — so adding/removing an email promotes/demotes on next login. No repo changes needed to add someone.
+- **SEK → AUD** for the friends view comes from `api/fx.js` (`/api/fx/sek-aud`): a daily rate from Frankfurter (free, no key), cached in-process for 24h, degrading to the last good rate and then a fixed fallback (`FALLBACK_SEK_AUD`) so the page never shows a broken figure.
 
 ### Scheduling & concurrency
 - **GitHub Actions** runs the daily heavy work: three staggered active-scrape batches + a sold/analysis/reconcile refresh (see *Data refresh pipeline* below).
@@ -258,6 +275,7 @@ If data is stale and GitHub Actions failed:
 - `/api/areas` → `{ areas: [...] }` — the live area names from `LOCATION_IDS`. The account-page area picker and the areas-page cards/intro read this, so they never drift from what's actually scraped.
 - `/api/market-stats` — aggregates over ALL active listings (count, avg price, high-reno count, avg kr/m², new this week/month). Powers the areas-page "Market snapshot" (don't compute it from `/api/listings`, which returns only the ~10 deals).
 - `/api/daily-digest?hours=24` — what changed in the window: new deals / move-in-ready / new builds (by `firstSeenAt`, falling back to `publishedAt` for older rows), **newly sitting** (crossed `SITTING_MIN_DAYS`), and **disappeared** (by `disappearedAt`). Powers the homepage "Last 24h" panel.
+- `/api/fx/sek-aud` → `{ rate, asOf, source }` — daily-cached SEK→AUD rate (`source`: `live` | `cached` | `fallback`) used by the friends dashboard to show Australian-dollar figures.
 
 ## Setup
 
@@ -266,3 +284,6 @@ npm install
 cp .env.example .env  # fill in MONGO_URI, Google OAuth creds, SESSION_SECRET, REFRESH_TOKEN
 npm start
 ```
+
+Optional env:
+- `FRIEND_EMAILS` — comma-separated emails granted the read-only friends dashboard (`/friends`). Set in the Render environment; applied on next login.
