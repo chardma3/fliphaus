@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
   password: String,
   name: String,
   avatar: String,
-  role: { type: String, enum: ["admin", "investor"], default: "investor" },
+  role: { type: String, enum: ["admin", "investor", "friend"], default: "investor" },
   settings: {
     maxPrice: { type: Number, default: 4000000 },
     areas: {

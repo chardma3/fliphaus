@@ -29,6 +29,8 @@ const { recordScrapeRun, getRecentScrapeRuns } = require("./api/scrape-run.model
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
 const { buildVersionInfo } = require("./api/version");
+const { resolveRole, syncUserRole } = require("./api/roles");
+const { getSekToAud } = require("./api/fx");
 const { buildActiveFeedFilter, SITTING_MIN_DAYS } = require("./api/listings-query");
 const { AREA_NAMES } = require("./api/hemnet-refresh-safety");
 
@@ -67,14 +69,19 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        const email = profile.emails[0].value;
         let user = await User.findOne({ googleId: profile.id });
         if (!user) {
           user = await User.create({
             googleId: profile.id,
-            email: profile.emails[0].value,
+            email,
             name: profile.displayName,
             avatar: profile.photos[0].value,
+            role: resolveRole(email, null),
           });
+        } else {
+          // Promote/demote against the current friend allowlist on each login.
+          await syncUserRole(user);
         }
         return done(null, user);
       } catch (err) {
@@ -130,6 +137,7 @@ function listingWithBrfIntelligence(listing, soldData) {
 // Auth
 function roleRedirect(user) {
   if (user.role === "admin") return "/";
+  if (user.role === "friend") return "/friends";
   return "/invest";
 }
 
@@ -155,7 +163,7 @@ app.post("/auth/signup", async (req, res) => {
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: "Email already registered" });
-    const user = await User.create({ name, email, password, role: "investor" });
+    const user = await User.create({ name, email, password, role: resolveRole(email, null) });
     req.login(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
       res.json({ ok: true, redirect: roleRedirect(user) });
@@ -173,6 +181,7 @@ app.post("/auth/login", async (req, res) => {
     if (!user || !user.password) return res.status(401).json({ error: "Invalid email or password" });
     const valid = await user.comparePassword(password);
     if (!valid) return res.status(401).json({ error: "Invalid email or password" });
+    await syncUserRole(user); // pick up friend-allowlist changes on login
     req.login(user, (err) => {
       if (err) return res.status(500).json({ error: "Login failed" });
       res.json({ ok: true, redirect: roleRedirect(user) });
@@ -186,6 +195,15 @@ app.post("/auth/login", async (req, res) => {
 app.get("/api/me", (req, res) => {
   if (!req.user) return res.json({ user: null });
   res.json({ user: { name: req.user.name, email: req.user.email, avatar: req.user.avatar, role: req.user.role, settings: req.user.settings } });
+});
+
+// SEK → AUD rate for the friends dashboard (daily-cached, fixed fallback).
+app.get("/api/fx/sek-aud", async (req, res) => {
+  try {
+    res.json(await getSekToAud());
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch FX rate" });
+  }
 });
 
 // Update settings
@@ -911,6 +929,7 @@ app.get("/api/sold/area-intel", async (req, res) => {
 
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
 app.get("/invest", (req, res) => res.sendFile(path.join(__dirname, "investor.html")));
+app.get("/friends", (req, res) => res.sendFile(path.join(__dirname, "friends.html")));
 app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "listing-detail.html")));
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
