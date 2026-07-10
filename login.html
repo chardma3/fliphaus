@@ -142,7 +142,7 @@
         const res = await fetch("/auth/signup", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name, email, password}) });
         const data = await res.json();
         if (res.ok) window.location.href = data.redirect;
-        else showError(data.error);
+        else showError(data.detail ? `${data.error}: ${data.detail}` : data.error);
       });
 
       // Enter key submits

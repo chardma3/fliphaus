@@ -169,7 +169,15 @@ app.post("/auth/signup", async (req, res) => {
       res.json({ ok: true, redirect: roleRedirect(user) });
     });
   } catch (err) {
-    res.status(500).json({ error: "Signup failed" });
+    // Surface the real cause instead of a generic 500 — the previous handler
+    // swallowed err entirely, so signup failures were undiagnosable. A Mongo
+    // duplicate-key (11000) means the email (or a null googleId) already exists.
+    console.error("❌ Signup error:", err);
+    if (err && err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || "account";
+      return res.status(400).json({ error: `That ${field === "email" ? "email" : field} is already registered.` });
+    }
+    res.status(500).json({ error: "Signup failed", detail: err?.message });
   }
 });
 
