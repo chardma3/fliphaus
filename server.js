@@ -264,7 +264,10 @@ app.get("/api/listings", async (req, res) => {
     const sittingBefore = view === "newbuild"
       ? undefined
       : new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000);
-    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore });
+    // Friends see only listings the admin has explicitly shared; every other
+    // caller (admin, investor, anonymous) sees the full feed as before.
+    const sharedOnly = req.user?.role === "friend";
+    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore, sharedOnly });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
@@ -733,6 +736,60 @@ app.post("/api/admin/reanalyze/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// Toggle whether a listing is shared with friends. Admin curates which listings
+// the friends dashboard shows (see the friends `/api/listings` sharedOnly path)
+// instead of exposing the whole feed. Body: { shared: true|false }; omit to flip
+// the current value. Stamps sharedAt when turning sharing on.
+app.post("/api/admin/listings/:id/share", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing listing id" });
+    const listing = await Listing.findOne({ $or: [{ id }, { slug: id }] });
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    const shared = typeof req.body?.shared === "boolean" ? req.body.shared : !listing.sharedWithFriends;
+    listing.sharedWithFriends = shared;
+    listing.sharedAt = shared ? new Date() : null;
+    await listing.save();
+    res.json({ ok: true, shared });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update sharing" });
+  }
+});
+
+// Signed-up users, for the admin "Friends access" page. Admins are listed but
+// can't be re-roled from the UI (see the role route). Newest first.
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}, { name: 1, email: 1, role: 1, avatar: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json({ users });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// Promote/demote a signed-up user between investor and friend — how the admin
+// grants friends-dashboard access now (replaces editing FRIEND_EMAILS in Render).
+// Only friend<->investor is settable; admins can't be re-roled here (guard against
+// locking yourself out), and the target must not already be an admin.
+app.post("/api/admin/users/:id/role", requireAdmin, async (req, res) => {
+  try {
+    const role = req.body?.role;
+    if (role !== "friend" && role !== "investor") {
+      return res.status(400).json({ error: "Role must be 'friend' or 'investor'" });
+    }
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.role === "admin") return res.status(403).json({ error: "Can't change an admin's role" });
+    user.role = role;
+    await user.save();
+    res.json({ ok: true, role });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update role" });
+  }
+});
+
 // Build/version marker — confirm which commit is live after a deploy. No auth: non-secret.
 app.get("/api/version", (req, res) => {
   res.json(buildVersionInfo(process.env, { startedAt: STARTED_AT, uptimeSeconds: process.uptime() }));
@@ -940,6 +997,7 @@ app.get("/account", (req, res) => res.sendFile(path.join(__dirname, "account.htm
 app.get("/market", (req, res) => res.sendFile(path.join(__dirname, "market.html")));
 app.get("/market-sales", (req, res) => res.sendFile(path.join(__dirname, "market-sales.html")));
 app.get("/builders", (req, res) => res.sendFile(path.join(__dirname, "builders.html")));
+app.get("/manage-friends", (req, res) => res.sendFile(path.join(__dirname, "manage-friends.html")));
 app.get("/builder/login", (req, res) => res.sendFile(path.join(__dirname, "builder-login.html")));
 app.get("/builder", (req, res) => res.sendFile(path.join(__dirname, "builder-portal.html")));
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));

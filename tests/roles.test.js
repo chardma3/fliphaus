@@ -63,3 +63,24 @@ test("syncUserRole saves only when the role actually changes", async () => {
     else process.env.FRIEND_EMAILS = prev;
   }
 });
+
+test("syncUserRole is promote-only: a manually-set friend is NOT demoted when off the allowlist", async () => {
+  // The admin promotes people in-app now (not via env). An email that's not in
+  // FRIEND_EMAILS must keep its manually-granted friend role across logins.
+  const prev = process.env.FRIEND_EMAILS;
+  process.env.FRIEND_EMAILS = ""; // empty allowlist — the Render-env path retired
+  try {
+    let saves = 0;
+    const friend = { email: "hand-picked@example.com", role: "friend", save: async () => { saves++; } };
+    await syncUserRole(friend);
+    assert.equal(friend.role, "friend"); // stays friend
+    assert.equal(saves, 0); // no write
+    const admin = { email: "claire@example.com", role: "admin", save: async () => { saves++; } };
+    await syncUserRole(admin);
+    assert.equal(admin.role, "admin"); // admin untouched
+    assert.equal(saves, 0);
+  } finally {
+    if (prev === undefined) delete process.env.FRIEND_EMAILS;
+    else process.env.FRIEND_EMAILS = prev;
+  }
+});

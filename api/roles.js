@@ -20,14 +20,19 @@ function resolveRole(email, currentRole) {
   return friendEmails().includes(normalized) ? "friend" : "investor";
 }
 
-// Sync a persisted user's role against the current allowlist, saving only if it
-// changed (so adding someone to FRIEND_EMAILS promotes them on their next login,
-// and removing them demotes back to investor). Returns the (possibly updated) user.
+// Sync a persisted user's role on login. PROMOTE-ONLY: an env-allowlisted email
+// is lifted from investor to friend as a convenience, but this never demotes.
+// Friend/investor is managed by the admin in-app (POST /api/admin/users/:id/role
+// via the "Friends access" page), and a manual promotion must survive the user's
+// next login — so we no longer re-derive the role from the env allowlist (which
+// would clobber it back to investor). Admin is always left untouched. Saves only
+// when the role actually changes. Returns the (possibly updated) user.
 async function syncUserRole(user) {
   if (!user) return user;
-  const next = resolveRole(user.email, user.role);
-  if (next !== user.role) {
-    user.role = next;
+  if (user.role !== "investor") return user; // admin + friend are left as-is
+  const allowlisted = friendEmails().includes(String(user.email || "").toLowerCase());
+  if (allowlisted) {
+    user.role = "friend";
     await user.save();
   }
   return user;

@@ -41,6 +41,21 @@ test("new-build view shows only projekt listings (name-only address), no score f
   assert.equal(f.renovationScore, undefined);
 });
 
+test("sharedOnly restricts every view to admin-shared listings", () => {
+  // Friends see only the curated shared set — the flag lands on the base filter
+  // so it carries into the early-returning newbuild and sitting branches too.
+  const deals = buildActiveFeedFilter({ view: "deals", sharedOnly: true, areaConstraints: [] });
+  assert.equal(deals.sharedWithFriends, true);
+  const newbuild = buildActiveFeedFilter({ view: "newbuild", sharedOnly: true, areaConstraints: [] });
+  assert.equal(newbuild.sharedWithFriends, true);
+  const sitting = buildActiveFeedFilter({ view: "sitting", sharedOnly: true, sittingBefore: new Date("2026-06-12T00:00:00Z"), areaConstraints: [] });
+  assert.equal(sitting.sharedWithFriends, true);
+});
+
+test("sharedOnly defaults off — the admin/public feed is unrestricted", () => {
+  assert.equal(buildActiveFeedFilter({ view: "deals", areaConstraints: [] }).sharedWithFriends, undefined);
+});
+
 test("defaults to the deals view", () => {
   assert.deepEqual(buildActiveFeedFilter({ maxPrice: 4000000 }).renovationScore, { $gte: 6 });
 });

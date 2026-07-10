@@ -80,6 +80,11 @@ function buildActiveFeedFilter({
   // that was never buyable (e.g. an over-cap Östermalm unit) must not surface in
   // Disappeared either, exactly as it never showed in any active section.
   status = "active",
+  // When true, restrict the whole feed to listings the admin has explicitly
+  // shared with friends (sharedWithFriends: true). The friends dashboard passes
+  // this so friends see a curated set, not the entire feed; every view (deals,
+  // move-in ready, sitting, new builds) is intersected with the shared set.
+  sharedOnly = false,
   areaConstraints = activeAreaConstraints(),
 } = {}) {
   const compsOnlyNames = areaConstraints
@@ -91,6 +96,9 @@ function buildActiveFeedFilter({
     status,
     locationDescription: { $not: exclusionRegex(compsOnlyNames) },
   };
+  // Applied on the base filter so it carries into every view, including the
+  // newbuild and sitting branches that return early below.
+  if (sharedOnly) filter.sharedWithFriends = true;
   if (maxPrice != null) filter.askingPriceNum = { $lte: maxPrice };
 
   // Each capped area adds a "NOT (in this area AND over its cap)" clause, so a

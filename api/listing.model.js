@@ -83,6 +83,13 @@ const listingSchema = new mongoose.Schema({
   // How many times we've attempted to hydrate the full gallery. Caps the
   // self-heal retry loop so we don't re-analyse an un-hydratable listing forever.
   galleryHydrationAttempts: { type: Number, default: 0 },
+  // Curated sharing: the admin hand-picks which listings friends see, rather than
+  // exposing the whole feed. sharedWithFriends gates the friends dashboard; the
+  // friends `/api/listings` intersects its view with sharedWithFriends: true.
+  // sharedAt records when it was shared (for future "recently shared" ordering).
+  // Phase 1 is a single global shared set; per-recipient targeting comes later.
+  sharedWithFriends: { type: Boolean, default: false, index: true },
+  sharedAt: { type: Date, default: null },
 });
 
 module.exports = mongoose.model("Listing", listingSchema);
