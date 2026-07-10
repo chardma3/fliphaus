@@ -126,8 +126,8 @@
       const statsEl = document.getElementById("stats");
       const feedEl = document.getElementById("feed");
       feedEl.innerHTML = "";
-      if (!listings.length) { statsEl.textContent = `No ${VIEW_LABELS[currentView]} listings right now.`; return; }
-      statsEl.innerHTML = `<strong>${listings.length}</strong> ${VIEW_LABELS[currentView]} ${listings.length === 1 ? "property" : "properties"}`;
+      if (!listings.length) { statsEl.textContent = `Nothing shared in ${VIEW_LABELS[currentView]} yet — check back soon.`; return; }
+      statsEl.innerHTML = `<strong>${listings.length}</strong> shared ${VIEW_LABELS[currentView]} ${listings.length === 1 ? "property" : "properties"}`;
 
       for (const l of listings) {
         const imgs = l.images && l.images.length ? l.images : (l.thumbnail ? [l.thumbnail] : []);

@@ -508,6 +508,17 @@
         return Math.round(n / 1000) + "K kr";
       }
 
+      // Friends-share button: label + styling reflect whether the listing is
+      // currently shared to the friends dashboard.
+      function shareBtnLabel(shared) {
+        return shared ? "★ Shared with friends" : "☆ Share with friends";
+      }
+      function styleShareBtn(btn, shared) {
+        btn.textContent = shareBtnLabel(shared);
+        btn.style.background = shared ? "#1a3a1a" : "#2a2a2a";
+        btn.style.color = shared ? "#69db7c" : "#bbb";
+      }
+
       // A listing was gated by the cheap triage pass if the flag says so (set on
       // listings analysed after the flag shipped) or, for older scores, if its
       // summary carries the triage-gate stand-in text.
@@ -767,6 +778,7 @@
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
                 ${currentUser && currentUser.role === "admin" ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
                 ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
+                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
               </div>
             </div>
           `;
@@ -827,6 +839,31 @@
                 this.textContent = "Sent!";
                 this.style.color = "#69db7c";
                 this.style.background = "#1a3a1a";
+              }
+            });
+          }
+
+          const shareBtn = div.querySelector(".share-friends-btn");
+          if (shareBtn) {
+            styleShareBtn(shareBtn, shareBtn.dataset.shared === "1");
+            shareBtn.addEventListener("click", async function () {
+              if (this.disabled) return;
+              const next = this.dataset.shared !== "1"; // toggle
+              this.disabled = true;
+              this.style.opacity = "0.7";
+              try {
+                const res = await fetch(`/api/admin/listings/${listing.id}/share`, {
+                  method: "POST", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ shared: next }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) { alert(data.error || "Failed to update sharing"); return; }
+                this.dataset.shared = data.shared ? "1" : "0";
+                styleShareBtn(this, data.shared);
+              } catch (err) {
+                alert("Failed to update sharing: " + err.message);
+              } finally {
+                this.disabled = false; this.style.opacity = "1";
               }
             });
           }

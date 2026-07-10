@@ -264,7 +264,10 @@ app.get("/api/listings", async (req, res) => {
     const sittingBefore = view === "newbuild"
       ? undefined
       : new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000);
-    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore });
+    // Friends see only listings the admin has explicitly shared; every other
+    // caller (admin, investor, anonymous) sees the full feed as before.
+    const sharedOnly = req.user?.role === "friend";
+    const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore, sharedOnly });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
     const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
@@ -730,6 +733,26 @@ app.post("/api/admin/reanalyze/:id", requireAdmin, async (req, res) => {
     res.status(500).json({ error: "Reanalysis failed", detail: err.message });
   } finally {
     jobLock.release("http-reanalyze");
+  }
+});
+
+// Toggle whether a listing is shared with friends. Admin curates which listings
+// the friends dashboard shows (see the friends `/api/listings` sharedOnly path)
+// instead of exposing the whole feed. Body: { shared: true|false }; omit to flip
+// the current value. Stamps sharedAt when turning sharing on.
+app.post("/api/admin/listings/:id/share", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing listing id" });
+    const listing = await Listing.findOne({ $or: [{ id }, { slug: id }] });
+    if (!listing) return res.status(404).json({ error: "Listing not found" });
+    const shared = typeof req.body?.shared === "boolean" ? req.body.shared : !listing.sharedWithFriends;
+    listing.sharedWithFriends = shared;
+    listing.sharedAt = shared ? new Date() : null;
+    await listing.save();
+    res.json({ ok: true, shared });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update sharing" });
   }
 });
 
