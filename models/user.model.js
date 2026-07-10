@@ -19,10 +19,12 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password") || !this.password) return next();
+// Mongoose 9 does not pass a `next` callback to async middleware — completion is
+// signalled by the returned promise resolving. Taking `next` and calling it threw
+// "next is not a function", which broke every email/password signup. Just return.
+userSchema.pre("save", async function () {
+  if (!this.isModified("password") || !this.password) return;
   this.password = await bcrypt.hash(this.password, 10);
-  next();
 });
 
 userSchema.methods.comparePassword = function (candidate) {
