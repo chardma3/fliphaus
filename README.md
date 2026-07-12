@@ -85,13 +85,14 @@ Three role-scoped surfaces sit on top of the same data, plus the builder portal:
 
 | Role | Lands on | Sees | Can do |
 |------|----------|------|--------|
-| **admin** (Claire) | `/` (`index.html`) | Everything: all sections, the *Completed scrapes* activity log, BRF/area intelligence | Reanalyse (Opus) on **every** listing in every section, Send to builders, invite/assign builders |
+| **admin** (Claire) | `/` (`index.html`) | Everything: all sections, the *Completed scrapes* activity log, BRF/area intelligence | Reanalyse (Opus) on **every** listing, Send to builders, invite/assign builders, **share listings with friends**, **manage friend access** |
 | **investor** | `/invest` (`investor.html`) | Builder-accepted listings with funding maths | Invest / fund |
-| **friend** (family) | `/friends` (`friends.html`) | **Read-only** browse of all four sections, prices shown in **AUD** as well as SEK | Nothing — view only |
+| **friend** (family) | `/friends` (`friends.html`) | **Read-only** view of only the listings the admin has **shared**, across all four sections; prices in **AUD** as well as SEK; a slim cross-page nav to Areas / How it works / Market / Glossary | Nothing — view only |
 | **builder** | `/builder` (magic-link) | Listings assigned to them | Submit renovation proposals |
 
-- **Admin-only actions are enforced server-side.** `requireAdmin` (`server.js`) gates every `/api/admin/*` route (reanalyse, builder invite/assign) — previously they were only `requireAuth`, so any logged-in user could have called them. The scraping activity log and the Reanalyse / Send-to-builders buttons live on the admin dashboard only; a logged-in non-admin who hits `/` is redirected to their own view.
-- **Friend access is an email allowlist.** `api/roles.js` grants the read-only `friend` role to any email in the `FRIEND_EMAILS` env var (comma-separated), applied on every login (`resolveRole` / `syncUserRole`): admin is never downgraded, an allowlisted email becomes a friend, everyone else is an investor — so adding/removing an email promotes/demotes on next login. No repo changes needed to add someone.
+- **Admin-only actions are enforced server-side.** `requireAdmin` (`server.js`) gates every `/api/admin/*` route (reanalyse, builder invite/assign, listing share, user-role changes) — previously they were only `requireAuth`, so any logged-in user could have called them. The scraping activity log and the admin action buttons live on the admin dashboard only; a logged-in non-admin who hits `/` is redirected to their own view.
+- **Friends see a curated set, not the whole feed.** The admin picks which listings friends see with a ☆ **Share with friends** toggle on each card (`POST /api/admin/listings/:id/share` sets a `sharedWithFriends` flag). The friends `/api/listings` path passes `sharedOnly` so **every** view (deals / move-in ready / sitting / new builds) is intersected with the shared set — friends browse the same sections, but only the properties the admin hand-picked. (Phase 2, later: choose *which* friend each listing goes to.)
+- **Friend access is managed in-app, not in env.** The admin promotes signed-up users on the **Friends access** page (`/manage-friends`, admin-only): `GET /api/admin/users` lists everyone, `POST /api/admin/users/:id/role` flips a user between `investor` and `friend` (admins can't be re-roled → no lockout). `api/roles.js` `syncUserRole` is **promote-only** — the legacy `FRIEND_EMAILS` env allowlist can still lift an investor to friend on login as a convenience, but login **never demotes**, so a manual promotion sticks. Flow: a friend signs up (lands as investor) → admin flips them to friend → they get `/friends`. Friend-appropriate pages (Areas / How it works / Market / Glossary) swap their admin nav for the slim friend nav when the logged-in user is a friend.
 - **SEK → AUD** for the friends view comes from `api/fx.js` (`/api/fx/sek-aud`): a daily rate from Frankfurter (free, no key), cached in-process for 24h, degrading to the last good rate and then a fixed fallback (`FALLBACK_SEK_AUD`) so the page never shows a broken figure.
 
 ### Scheduling & concurrency
@@ -112,12 +113,14 @@ FlipHaus depends on fresh Hemnet data for property selection, renovation analysi
 
 The active scrape is split across **three staggered GitHub Actions workflows** (`scrape-batch-{1,2,3}.yml`) so a single `/api/scrape?batch=N` request stays well under Hemnet's ~100s Cloudflare edge timeout as areas grow. Each batch also reconciles its own areas' disappearances, so withdrawals are caught same-day. The batches are spaced **40 min apart** so each one's scrape (up to 6 proxy retries per area) finishes and releases the single-instance job lock before the next fires — otherwise the later batch gets `409 Busy` and fails (the lock only allows one Puppeteer job at a time).
 
+All four run **Monday–Friday only** (cron day-of-week `1-5`): Hemnet agents don't publish new listings on weekends, so a Sat/Sun run adds nothing and just ties up the single Render instance with Chromium (a long scrape starves the web app — logins/pages hang while it runs). The scrape is in-process on the one web service, so its run window is also its unresponsive window; keeping it to weekdays avoids weekend collisions. (The durable fix, if daytime hangs recur, is a separate background worker for the browser scraping — see the architecture note below.)
+
 | Workflow | Cron (UTC) | Stockholm (CEST) | Does |
 |----------|-----------|------------------|------|
-| `scrape-batch-1.yml` | `0 11`  | 13:00 | Active listings, batch 1/3 |
-| `scrape-batch-2.yml` | `40 11` | 13:40 | Active listings, batch 2/3 |
-| `scrape-batch-3.yml` | `20 12` | 14:20 | Active listings, batch 3/3 |
-| `refresh-fliphaus.yml` | `0 13` | 15:00 | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
+| `scrape-batch-1.yml` | `0 11 * * 1-5`  | 13:00 Mon–Fri | Active listings, batch 1/3 |
+| `scrape-batch-2.yml` | `40 11 * * 1-5` | 13:40 Mon–Fri | Active listings, batch 2/3 |
+| `scrape-batch-3.yml` | `20 12 * * 1-5` | 14:20 Mon–Fri | Active listings, batch 3/3 |
+| `refresh-fliphaus.yml` | `0 13 * * 1-5` | 15:00 Mon–Fri | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
 
 > Keep these times in sync with `DAILY_SCRAPES` in `api/scrape-health.js` (the dashboard schedule panel) — same UTC values.
 
@@ -286,4 +289,4 @@ npm start
 ```
 
 Optional env:
-- `FRIEND_EMAILS` — comma-separated emails granted the read-only friends dashboard (`/friends`). Set in the Render environment; applied on next login.
+- `FRIEND_EMAILS` — **legacy/optional.** Comma-separated emails that are auto-promoted to the read-only `friend` role on login. Friend access is now managed in-app on `/manage-friends` (admin promotes signed-up users), so this env var is no longer required — it only pre-authorises an email before it signs up. Because `syncUserRole` is promote-only, removing an email here no longer demotes anyone; demote from the Friends access page instead.
