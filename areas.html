@@ -555,5 +555,29 @@
       loadLiquidity();
       loadTrends();
     </script>
+    <script>
+      // Friend-aware nav: a friend gets a slim, admin-free cross-page nav
+      // (Listings/Areas/How it works/Market/Glossary) instead of the admin menu,
+      // so they aren't stranded among links they can't use. Non-friends unaffected.
+      (async () => {
+        try {
+          const me = await (await fetch("/api/me")).json();
+          if (!me.user || me.user.role !== "friend") return;
+          const nav = document.querySelector(".nav-menu");
+          if (!nav) return;
+          const path = location.pathname;
+          const items = [
+            ["/friends", "Listings"],
+            ["/areas", "Areas"],
+            ["/methodology", "How it works"],
+            ["/market", "Market"],
+            ["/glossary", "Glossary"],
+          ];
+          nav.innerHTML = items.map(([href, label]) =>
+            `<a href="${href}" class="nav-item${path === href ? " active" : ""}">${label}</a>`
+          ).join("");
+        } catch (e) {}
+      })();
+    </script>
   </body>
 </html>

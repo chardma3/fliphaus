@@ -19,6 +19,10 @@
     .signout-link { color: #888; text-decoration: none; }
     .signout-link:hover { color: #ccc; }
     .fx-note { color: #666; font-size: 0.75rem; }
+    .top-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #2a2a2a; }
+    .top-nav a { color: #888; text-decoration: none; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; }
+    .top-nav a:hover { color: #ccc; background: #1e1e1e; }
+    .top-nav a.active { color: #fff; background: #242424; }
     #view-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
     .view-tab { background: #1e1e1e; border: 1px solid #333; color: #bbb; border-radius: 999px; padding: 7px 16px; cursor: pointer; font-size: 0.85rem; }
     .view-tab.active { background: #69db7c; border-color: #69db7c; color: #06210f; font-weight: 600; }
@@ -56,6 +60,14 @@
       </a>
       <div id="header-right"></div>
     </header>
+
+    <nav class="top-nav">
+      <a href="/friends" class="active">Listings</a>
+      <a href="/areas">Areas</a>
+      <a href="/methodology">How it works</a>
+      <a href="/market">Market</a>
+      <a href="/glossary">Glossary</a>
+    </nav>
 
     <div id="view-tabs">
       <button class="view-tab active" data-view="deals">Deals</button>
