@@ -3,11 +3,13 @@
 # stays well under Hemnet's ~100s Cloudflare edge timeout, and reconciles
 # disappearances for its own areas (per-area, not all-or-nothing) so withdrawals
 # are caught same-day. Cron is UTC; 11:00 UTC ≈ 13:00 Europe/Stockholm (summer).
+# Mon–Fri only (day-of-week 1-5): agents don't publish new listings on weekends,
+# so a Sat/Sun scrape just burns proxy budget and pins the single instance.
 name: Scrape batch 1
 
 on:
   schedule:
-    - cron: "0 11 * * *"
+    - cron: "0 11 * * 1-5"
   workflow_dispatch:
 
 jobs:

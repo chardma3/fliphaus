@@ -472,7 +472,7 @@ app.post("/api/admin/assign", requireAdmin, async (req, res) => {
       const assignment = await Assignment.findOneAndUpdate(
         { listingId, builderId },
         { note, assignedAt: new Date(), status: "pending" },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: "after" }
       );
       results.push(assignment);
     }

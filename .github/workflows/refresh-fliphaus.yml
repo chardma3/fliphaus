@@ -4,11 +4,13 @@
 # batches so reconcile-sold matches freshly-disappeared listings against the
 # latest slutpriser. Cron is UTC; 13:00 UTC ≈ 15:00 Europe/Stockholm (summer) —
 # 40 min after batch 3 so its scrape has finished and freed the job lock.
+# Mon–Fri only (day-of-week 1-5): weekends add no new listings/sales, and this is
+# the long (~1–2h) job — no reason to run it Sat/Sun. See scrape-batch-1.yml.
 name: Refresh FlipHaus sold data
 
 on:
   schedule:
-    - cron: "0 13 * * *"
+    - cron: "0 13 * * 1-5"
   workflow_dispatch:
 
 jobs:
