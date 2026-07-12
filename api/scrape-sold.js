@@ -327,7 +327,7 @@ module.exports = async (options = {}) => {
     const result = await SoldListing.findOneAndUpdate(
       { hemnetId: l.hemnetId },
       update,
-      { upsert: true, new: true, rawResult: true }
+      { upsert: true, returnDocument: "after", rawResult: true }
     );
     if (result.lastErrorObject?.upserted) newCount++;
   }

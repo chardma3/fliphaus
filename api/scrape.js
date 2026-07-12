@@ -294,7 +294,7 @@ module.exports = async (options = {}) => {
     // listings"); $setOnInsert leaves it untouched on later scrapes.
     const upsert = buildListingUpsert(update, scrapedImages);
     upsert.$setOnInsert.firstSeenAt = new Date();
-    await Listing.findOneAndUpdate({ id: l.id }, upsert, { upsert: true, new: true });
+    await Listing.findOneAndUpdate({ id: l.id }, upsert, { upsert: true, returnDocument: "after" });
   }
 
   // Mark listings no longer present as disappeared — scoped to the areas that
