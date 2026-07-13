@@ -429,7 +429,7 @@
         if (currentUser) {
           headerRight.innerHTML = `
             <a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
-              <img src="${currentUser.avatar}" alt="" />
+              ${currentUser.avatar ? `<img src="${currentUser.avatar}" alt="" />` : ""}
               <span>${currentUser.name.split(" ")[0]}</span>
             </a>
             <a href="/auth/logout" class="signout-link">Sign out</a>

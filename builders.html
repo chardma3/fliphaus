@@ -235,7 +235,7 @@
         const data = await res.json();
         const headerRight = document.getElementById("header-right");
         if (data.user) {
-          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;"><img src="${data.user.avatar}" alt="" /><span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
+          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">${data.user.avatar ? `<img src="${data.user.avatar}" alt="" />` : ""}<span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
           loadBuilders();
           loadAssignments();
         } else {

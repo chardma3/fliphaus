@@ -218,7 +218,7 @@
         const data = await res.json();
         const headerRight = document.getElementById("header-right");
         if (data.user) {
-          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;"><img src="${data.user.avatar}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;" /><span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
+          headerRight.innerHTML = `<a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">${data.user.avatar ? `<img src="${data.user.avatar}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;" />` : ""}<span>${data.user.name.split(" ")[0]}</span></a><a href="/auth/logout" class="signout-link">Sign out</a>`;
         } else {
           headerRight.innerHTML = '<a href="/auth/google" style="padding:6px 14px;border-radius:6px;background:#fff;color:#333;font-size:0.82rem;text-decoration:none;font-family:Poppins,sans-serif;">Sign in</a>';
         }

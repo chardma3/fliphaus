@@ -64,6 +64,13 @@
         width: 56px; height: 56px; border-radius: 50%;
         object-fit: cover; border: 2px solid #333;
       }
+      /* Fallback shown when the account has no photo (e.g. email/password
+         signup, which — unlike Google — provides no avatar). */
+      .avatar-fallback {
+        display: flex; align-items: center; justify-content: center;
+        background: #2a2a2a; color: #9ec5ff; font-weight: 600;
+      }
+      .profile-avatar.avatar-fallback { font-size: 1.4rem; }
       .profile-info h4 { font-size: 1rem; color: #fff; margin-bottom: 2px; }
       .profile-info p { font-size: 0.82rem; color: #888; }
 
@@ -219,13 +226,15 @@
           <div class="section">
             <h3>Profile</h3>
             <div class="profile-row">
-              <img class="profile-avatar" src="${user.avatar}" alt="" />
+              ${user.avatar
+                ? `<img class="profile-avatar" src="${user.avatar}" alt="" />`
+                : `<div class="profile-avatar avatar-fallback">${(user.name || user.email || "?").trim().charAt(0).toUpperCase()}</div>`}
               <div class="profile-info">
                 <h4>${user.name}</h4>
                 <p>${user.email}</p>
               </div>
             </div>
-            <p style="font-size:0.78rem;color:#555;">Profile details are managed through your Google account.</p>
+            <p style="font-size:0.78rem;color:#555;">Your name and photo come from your sign-in method (a Google account supplies a photo; email/password accounts show your initial).</p>
           </div>
 
           <div class="section">
@@ -328,7 +337,7 @@
         if (currentUser) {
           headerRight.innerHTML = `
             <a href="/account" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
-              <img src="${currentUser.avatar}" alt="" />
+              ${currentUser.avatar ? `<img src="${currentUser.avatar}" alt="" />` : ""}
               <span>${currentUser.name.split(" ")[0]}</span>
             </a>
             <a href="/auth/logout" class="signout-link">Sign out</a>
