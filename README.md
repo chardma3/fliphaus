@@ -77,7 +77,9 @@ Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting 
 ### 3. Feed
 `api/listings-query.js` builds the active-feed Mongo query, split into views — **deals** (score ≥ `DEAL_MIN_SCORE`, currently 6), **move-in ready** (1 .. `DEAL_MIN_SCORE`-1), **sitting** (on the market ≥ `SITTING_MIN_DAYS`, currently 14), **new builds** (projekt listings) — and applies the active per-area filters (price cap, comps-only). The views are **mutually exclusive** with a strict precedence — **Sitting > Deals > Move-in ready** — so a listing surfaces in exactly one tab: an aged listing shows under Sitting only (both flip views exclude anything past the sitting cutoff), and non-sitting flips split by score. `api/listing-presenter.js` / `api/profitability.js` shape the investment maths per listing.
 
-The feed indexes the sold-comp set **once per request** (`buildSoldIndex` in `api/brf-intelligence.js`) and each listing does O(1) BRF/area lookups against it — previously every listing re-scanned and re-parsed the whole sold array (O(listings × sold)), which made the feed take ~a minute to load.
+**Estimates are precomputed, not crunched per request.** Each listing's sold-comp estimate (`brfIntelligence`) is computed **once** — at the end of the daily refresh and on manual reanalyse (`api/precompute-estimates.js`) — and stored on the listing with a `brfIntelligenceAt` stamp. The feed serves that stored value and only falls back to a live crunch when a listing hasn't been precomputed yet (new/just-scored), so in steady state the feed **never loads the sold collection at all**. Previously it loaded and re-indexed the entire ~9,500-row sold set (`SoldListing.find({})` + `buildSoldIndex`) on *every* request; that per-request memory spike is what collided with the daily scrape and hung the app. Freshness is guaranteed because the recompute runs immediately after the sold data updates — see *Data refresh pipeline*. `/api/scrape-health` reports precomputed-estimate freshness; `scripts/diagnose-precomputed-estimates.js` is the read-only check.
+
+**Bounded sold collection.** Every consumer of sold data uses at most ~12 months of history, so `api/prune-sold.js` (via the manual *Prune old sold comps* workflow, dry-run by default) drops rows older than `SOLD_RETENTION_MONTHS` (default 15) to keep the collection from growing without limit. Sold reads for comps also project away the large unused `images[]` arrays (`SOLD_COMP_FIELDS`).
 
 ### Dashboard tiers (who sees what)
 
@@ -132,6 +134,7 @@ All workflows use the `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub
 2. A looped step refreshes sold comparables for every other live area (Kista, Bagarmossen, …, Östermalm, Södermalm, Finntorp, Ektorp, Sickla), tolerating per-area blocks. The loop is the single source — add an area to `LOCATION_IDS` *and* to this loop.
 3. `/api/analyze-images?dataset=all&limit=10` scores newly-scraped photos and runs the bounded self-heal (separate post-scrape step, see below).
 4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
+5. `/api/precompute-estimates` runs **last** — recomputes and stores every active listing's sold-comp estimate from the now-fresh sold data, so the feed serves it without crunching. (Can also be triggered on its own via the *Precompute resale estimates* workflow.)
 
 The sold scrape is intentionally split by area and capped at a low `detailLimit` per request to keep each HTTP request short and avoid Render/GitHub/Cloudflare timeouts. (Rissne was dropped as an area — thin owner-occupier resale; it must not be scraped.)
 

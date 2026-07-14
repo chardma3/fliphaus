@@ -22,6 +22,7 @@ const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence, buildSoldIndex } = require("./api/brf-intelligence");
 const { precomputeEstimates, SOLD_COMP_FIELDS } = require("./api/precompute-estimates");
+const { pruneOldSold } = require("./api/prune-sold");
 const { buildAreaTrends } = require("./api/sold-trends");
 const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
@@ -354,8 +355,12 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
     const prefs = await Preference.find({ userId: req.user.id, status: "saved" });
     const ids = prefs.map((p) => p.listingId);
     const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 }).lean();
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
-    const soldIndex = buildSoldIndex(soldListings);
+    // Serve stored precomputed estimates; only load the sold set (projected, no
+    // images[]) if a saved listing hasn't been precomputed yet.
+    let soldIndex = null;
+    if (listings.some((l) => !l.brfIntelligence)) {
+      soldIndex = buildSoldIndex(await SoldListing.find({}, SOLD_COMP_FIELDS).sort({ soldDate: -1 }).lean());
+    }
     res.json({ total: listings.length, listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldIndex), "saved")) });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch favorites" });
@@ -559,8 +564,11 @@ app.get("/api/invest/listings", async (req, res) => {
     if (!listingIds.length) return res.json({ listings: [] });
 
     const listings = await Listing.find({ id: { $in: listingIds } }, { __v: 0 }).lean();
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
-    const soldIndex = buildSoldIndex(soldListings);
+    // Serve stored precomputed estimates; only load sold (projected) as a fallback.
+    let soldIndex = null;
+    if (listings.some((l) => !l.brfIntelligence)) {
+      soldIndex = buildSoldIndex(await SoldListing.find({}, SOLD_COMP_FIELDS).sort({ soldDate: -1 }).lean());
+    }
     const proposals = await Proposal.find({ listingId: { $in: listingIds } });
     const proposalMap = {};
     for (const p of proposals) {
@@ -613,8 +621,9 @@ app.get("/api/invest/listing/:listingId", async (req, res) => {
     const builder = assignment ? await Builder.findById(assignment.builderId, "name company") : null;
 
     const investments = await Investment.find({ listingId: req.params.listingId }).populate("userId", "name");
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
-    const lo = listingWithBrfIntelligence(listing, soldListings);
+    // Only load sold comps if this listing lacks a precomputed estimate.
+    const soldFallback = listing.brfIntelligence ? [] : await SoldListing.find({}, SOLD_COMP_FIELDS).sort({ soldDate: -1 }).lean();
+    const lo = listingWithBrfIntelligence(listing, soldFallback);
     const deposit = Math.round((lo.askingPriceNum || 0) * 0.1);
     const renoCost = proposal?.estimatedCostSEK || lo.totalEstimatedCostSEK || 0;
     const fee = lo.fee ? parseInt(lo.fee.replace(/\D/g, ""), 10) || 0 : 0;
@@ -712,6 +721,26 @@ app.all("/api/precompute-estimates", requireRefreshToken, async (req, res) => {
     console.error("❌ Precompute estimates error:", err);
     await recordScrapeRun({ job: "precompute-estimates", label: "Precompute resale estimates", status: "failed", startedAt, error: err.message });
     res.status(500).json({ error: "Precompute failed", detail: err.message });
+  }
+});
+
+// Prune sold comparables older than the retention window so the collection stays
+// bounded (issue 2 — stop collecting/keeping data nothing reads). Pass ?dryRun=true
+// to see how many WOULD be deleted without deleting; ?months=N overrides the window
+// (default SOLD_RETENTION_MONTHS=15). Deletes only re-scrapeable sold reference
+// rows — never our scored listings. Not a Puppeteer job.
+app.all("/api/prune-sold", requireRefreshToken, async (req, res) => {
+  const startedAt = new Date();
+  const dryRun = req.query.dryRun === "true" || req.query.dryRun === "1";
+  const months = Number(req.query.months) > 0 ? Number(req.query.months) : undefined;
+  try {
+    const result = await pruneOldSold({ SoldListing, months, dryRun });
+    await recordScrapeRun({ job: "prune-sold", label: dryRun ? "Prune sold (dry run)" : "Prune old sold comps", status: "success", startedAt, result });
+    res.json({ message: dryRun ? "Prune dry run — nothing deleted" : "Old sold comps pruned", ...result });
+  } catch (err) {
+    console.error("❌ Prune sold error:", err);
+    await recordScrapeRun({ job: "prune-sold", label: "Prune old sold comps", status: "failed", startedAt, error: err.message });
+    res.status(500).json({ error: "Prune failed", detail: err.message });
   }
 });
 
