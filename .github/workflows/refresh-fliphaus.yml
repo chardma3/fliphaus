@@ -86,3 +86,18 @@ jobs:
         env:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
+
+      - name: Precompute resale estimates
+        # Runs LAST — after all sold comps are scraped + reconciled — so each active
+        # listing's stored sold-comp estimate is built from the freshest data. The
+        # feed then serves this stored value instead of crunching the whole sold set
+        # on every page load (fast pages, no memory spike). Not a Puppeteer job.
+        continue-on-error: true
+        run: |
+          curl --fail-with-body -sS --max-time 300 --retry 2 --retry-delay 20 \
+            -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+            "$FLIPHAUS_REFRESH_URL/api/precompute-estimates" \
+            || echo "  ✗ precompute-estimates failed (feed falls back to live crunch until next run)"
+        env:
+          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
+          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
