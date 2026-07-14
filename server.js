@@ -21,6 +21,7 @@ const Assignment = require("./models/assignment.model");
 const Proposal = require("./models/proposal.model");
 const Investment = require("./models/investment.model");
 const { buildBrfIntelligence, buildSoldIndex } = require("./api/brf-intelligence");
+const { precomputeEstimates, SOLD_COMP_FIELDS } = require("./api/precompute-estimates");
 const { buildAreaTrends } = require("./api/sold-trends");
 const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
@@ -128,6 +129,9 @@ function listingWithBrfIntelligence(listing, soldData) {
   // callers can pass the array. buildBrfIntelligence handles both. Callers pass
   // .lean() results, so `listing` is already a plain object.
   const lo = typeof listing.toObject === "function" ? listing.toObject() : listing;
+  // Prefer the precomputed stored value (built after the daily refresh / on
+  // reanalyse); only crunch live from the passed sold data when it's missing.
+  if (lo.brfIntelligence) return lo;
   return {
     ...lo,
     brfIntelligence: buildBrfIntelligence(lo, soldData),
@@ -278,18 +282,32 @@ app.get("/api/listings", async (req, res) => {
     const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore, sharedOnly });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
-    // Index the sold set ONCE per request; each listing then does O(1) lookups
-    // instead of re-scanning/re-parsing the whole array (was the ~1min feed hang).
-    const soldIndex = buildSoldIndex(soldListings);
+
+    // Prefer the PRECOMPUTED brfIntelligence stored on each listing (built after
+    // the daily sold refresh / on reanalyse — see api/precompute-estimates.js), so
+    // the common case does NO sold load or per-request crunching. Only if some
+    // listing is missing it (e.g. scored since the last precompute) do we load the
+    // sold set ONCE and compute just those live, so the feed self-heals. In steady
+    // state this branch never runs and the feed never touches the sold collection.
+    const needLive = listings.some((l) => !l.brfIntelligence);
+    let soldIndex = null;
+    if (needLive) {
+      const soldListings = await SoldListing.find({}, SOLD_COMP_FIELDS).sort({ soldDate: -1 }).lean();
+      soldIndex = buildSoldIndex(soldListings);
+    }
+    const withIntel = listings.map((l) =>
+      l.brfIntelligence
+        ? l
+        : { ...l, brfIntelligence: soldIndex ? buildBrfIntelligence(l, soldIndex) : null }
+    );
 
     const preferences = req.user ? await Preference.find({ userId: req.user.id }) : [];
     const prefMap = {};
     preferences.forEach((p) => (prefMap[p.listingId] = p.status));
 
     res.json({
-      total: listings.length,
-      listings: listings.map((l) => presentListingForFeed(listingWithBrfIntelligence(l, soldIndex), prefMap[l.id] || null)),
+      total: withIntel.length,
+      listings: withIntel.map((l) => presentListingForFeed(l, prefMap[l.id] || null)),
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch listings" });
@@ -301,7 +319,10 @@ app.get("/api/listings/:listingId/brf-intelligence", async (req, res) => {
   try {
     const listing = await Listing.findOne({ id: req.params.listingId }, { __v: 0 }).lean();
     if (!listing) return res.status(404).json({ error: "Listing not found" });
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    // Prefer the stored precomputed value; only load the sold set (projected, no
+    // images) if this listing hasn't been precomputed yet.
+    if (listing.brfIntelligence) return res.json({ brfIntelligence: listing.brfIntelligence });
+    const soldListings = await SoldListing.find({}, SOLD_COMP_FIELDS).sort({ soldDate: -1 }).lean();
     res.json({ brfIntelligence: buildBrfIntelligence(listing, soldListings) });
   } catch (err) {
     res.status(500).json({ error: "Failed to build BRF intelligence" });
@@ -676,6 +697,24 @@ app.all("/api/reconcile-sold", requireRefreshToken, async (req, res) => {
   }
 });
 
+// Precompute + store each active listing's sold-comp intelligence, so the feed
+// serves a stored value instead of loading and crunching the whole sold set on
+// every request. Runs at the END of the daily refresh (after the sold scrape /
+// reconcile) so the estimate is as fresh as its inputs. Not a Puppeteer job, so
+// it doesn't take the browser lock — just a projected sold read + one bulk write.
+app.all("/api/precompute-estimates", requireRefreshToken, async (req, res) => {
+  const startedAt = new Date();
+  try {
+    const result = await precomputeEstimates({ Listing, SoldListing });
+    await recordScrapeRun({ job: "precompute-estimates", label: "Precompute resale estimates", status: "success", startedAt, result });
+    res.json({ message: "Estimates precomputed", ...result });
+  } catch (err) {
+    console.error("❌ Precompute estimates error:", err);
+    await recordScrapeRun({ job: "precompute-estimates", label: "Precompute resale estimates", status: "failed", startedAt, error: err.message });
+    res.status(500).json({ error: "Precompute failed", detail: err.message });
+  }
+});
+
 // Scrape sold (slutpriser)
 app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
   const startedAt = new Date();
@@ -731,9 +770,12 @@ app.post("/api/admin/reanalyze/:id", requireAdmin, async (req, res) => {
     await recordScrapeRun({ job: "image-analysis", label: `Opus reanalyze ${id}`, status: "success", startedAt, result });
     const fresh = await Listing.findOne({ $or: [{ id }, { slug: id }] }, { __v: 0 }).lean();
     if (!fresh) return res.status(404).json({ error: "Listing not found after reanalysis" });
-    const soldListings = await SoldListing.find({}, { __v: 0 }).sort({ soldDate: -1 }).lean();
+    // Recompute + persist this listing's estimate now (so the store stays correct
+    // and the returned card shows the fresh figures), then present the stored value.
+    await precomputeEstimates({ Listing, SoldListing, ids: [fresh.id] });
+    const updated = await Listing.findOne({ id: fresh.id }, { __v: 0 }).lean();
     const pref = await Preference.findOne({ userId: req.user.id, listingId: fresh.id });
-    const listing = presentListingForFeed(listingWithBrfIntelligence(fresh, soldListings), pref?.status || null);
+    const listing = presentListingForFeed(updated, pref?.status || null);
     res.json({ ok: true, analyzed: result.active?.analyzed || 0, listing });
   } catch (err) {
     console.error("❌ Manual reanalyze error:", err);
@@ -806,11 +848,26 @@ app.get("/api/version", (req, res) => {
 // Scrape health: tells the UI/operator whether active listings and market sales are stale.
 app.get("/api/scrape-health", async (req, res) => {
   try {
-    const activeListings = await Listing.find({}, { scrapeDate: 1, lastSeenAt: 1 }).lean();
+    const activeListings = await Listing.find({}, { scrapeDate: 1, lastSeenAt: 1, status: 1, brfIntelligenceAt: 1 }).lean();
     const soldListings = await SoldListing.find({}, { scrapedAt: 1, soldDate: 1 }).lean();
     const recentRuns = await getRecentScrapeRuns(20);
+
+    // Precomputed-estimate freshness: of the ACTIVE listings, how many have a
+    // stored estimate (brfIntelligenceAt is stamped when precomputed), and the
+    // OLDEST timestamp — so a stalled daily recompute is visible at a glance.
+    const active = activeListings.filter((l) => l.status === "active");
+    const stamps = active.map((l) => l.brfIntelligenceAt).filter(Boolean).map((d) => new Date(d).getTime());
+    const estimates = {
+      activeTotal: active.length,
+      precomputed: stamps.length,
+      missing: active.length - stamps.length,
+      oldestAt: stamps.length ? new Date(Math.min(...stamps)).toISOString() : null,
+      newestAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null,
+    };
+
     res.json({
       ...buildScrapeHealth({ activeListings, soldListings }),
+      estimates,
       recentRuns,
       coverageSweep: {
         enabled: process.env.ENABLE_COVERAGE_SWEEP === "true" || process.env.ENABLE_COVERAGE_SWEEP === "1",

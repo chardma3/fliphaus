@@ -72,7 +72,13 @@ const listingSchema = new mongoose.Schema({
   renovationRooms: { type: mongoose.Schema.Types.Mixed, default: null },
   totalEstimatedCostSEK: { type: Number, default: null },
   investmentPotential: { type: String, enum: ["high", "medium", "low", null], default: null },
+  // Renovation/resale intelligence (sold-comp analysis) is PRECOMPUTED after each
+  // daily sold refresh and on manual reanalyse, then stored here — so the feed
+  // reads it instead of re-crunching the whole sold set on every request. See
+  // api/precompute-estimates.js. brfIntelligenceAt stamps when it was last built,
+  // for the freshness check on /api/scrape-health and the diagnostic script.
   brfIntelligence: { type: mongoose.Schema.Types.Mixed, default: null },
+  brfIntelligenceAt: { type: Date, default: null },
   analyzedAt: { type: Date, default: null },
   // Set whenever an analysis run attempts to hydrate this listing's full
   // detail-page gallery — success OR failure. Used with galleryHydrationAttempts
