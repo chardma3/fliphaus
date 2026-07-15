@@ -267,6 +267,7 @@ Use `/api/scrape-health` to inspect:
 - sold comparable-property count and latest sold scrape date
 - stale flags for each dataset separately
 - `recentRuns` — the last 20 scrape/analysis runs that actually executed, with per-run status and result counts (see *Run history* above)
+- `estimates` — precomputed-estimate freshness: `precomputed` / `missing` counts over active listings and the `oldestAt` stamp. If `missing` climbs or `oldestAt` ages past a day, the daily precompute isn't running (`scripts/diagnose-precomputed-estimates.js` breaks it down per area). See *Backend architecture → Feed*.
 
 If data is stale and GitHub Actions failed:
 
@@ -292,4 +293,5 @@ npm start
 ```
 
 Optional env:
+- `SOLD_RETENTION_MONTHS` — how many months of sold comparables to keep (default **15**). The *Prune old sold comps* workflow (dry-run by default) deletes sold rows older than this; every consumer uses ≤12 months, so 15 leaves a safe margin. Lower it to shrink the collection now, raise it to keep more history.
 - `FRIEND_EMAILS` — **legacy/optional.** Comma-separated emails that are auto-promoted to the read-only `friend` role on login. Friend access is now managed in-app on `/manage-friends` (admin promotes signed-up users), so this env var is no longer required — it only pre-authorises an email before it signs up. Because `syncUserRole` is promote-only, removing an email here no longer demotes anyone; demote from the Friends access page instead.
