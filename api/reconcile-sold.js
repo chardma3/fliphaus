@@ -118,6 +118,10 @@ async function reconcileSoldListings({ Listing, SoldListing, threshold = 80 } = 
       soldListingId: match.sold._id || null,
       matchedSoldHemnetId: match.sold.hemnetId || null,
       soldMatchScore: match.score,
+      // Pull it out of the friends' curated set once it's off the market — the
+      // active feed already hides sold listings, but clearing the flag keeps the
+      // shared set (and the admin's ★ share toggle) honest.
+      sharedWithFriends: false,
     });
     confirmed += 1;
   }

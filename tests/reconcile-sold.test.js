@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { findBestSoldMatch, scoreSoldMatch } = require("../api/reconcile-sold");
+const { findBestSoldMatch, scoreSoldMatch, reconcileSoldListings } = require("../api/reconcile-sold");
 
 test("sold reconciliation confirms strong address, size, room, and area matches", () => {
   const listing = {
@@ -62,4 +62,47 @@ test("disappeared active listing is not automatically confirmed sold without sol
   const match = findBestSoldMatch(listing, []);
 
   assert.equal(match, null);
+});
+
+test("confirming a sold listing clears its friends-shared flag", async () => {
+  const updates = [];
+  const listing = {
+    _id: "listing-1",
+    status: "disappeared",
+    streetAddress: "Skrakgränd 3",
+    size: "76 m²",
+    rooms: "4 rum",
+    locationDescription: "Farsta, Stockholms kommun",
+    brfName: "Brf Test",
+    sharedWithFriends: true,
+    toObject() {
+      return this;
+    },
+  };
+  const sold = {
+    _id: "sold-1",
+    hemnetId: "sold-1",
+    streetAddress: "Skrakgränd 3",
+    size: "75.5 m²",
+    rooms: "4 rum",
+    locationDescription: "Farsta, Stockholms kommun",
+    brfName: "BRF Test",
+    soldPrice: 2600000,
+    toObject() {
+      return this;
+    },
+  };
+
+  const Listing = {
+    find: async () => [listing],
+    findByIdAndUpdate: async (id, update) => updates.push({ id, update }),
+  };
+  const SoldListing = { find: async () => [sold] };
+
+  const result = await reconcileSoldListings({ Listing, SoldListing });
+
+  assert.equal(result.confirmed, 1);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].update.status, "confirmed_sold");
+  assert.equal(updates[0].update.sharedWithFriends, false);
 });
