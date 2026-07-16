@@ -354,7 +354,14 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
   try {
     const prefs = await Preference.find({ userId: req.user.id, status: "saved" });
     const ids = prefs.map((p) => p.listingId);
-    const listings = await Listing.find({ id: { $in: ids } }, { __v: 0 }).lean();
+    // Drop favorites that have since sold — a saved listing that's off the market
+    // is no longer actionable, so it shouldn't clutter the saved view. The sold
+    // record still lives in /api/sold and the Preference row is left intact, so
+    // this is a display filter, not a destructive un-save.
+    const listings = await Listing.find(
+      { id: { $in: ids }, status: { $nin: ["confirmed_sold", "sold"] } },
+      { __v: 0 }
+    ).lean();
     // Serve stored precomputed estimates; only load the sold set (projected, no
     // images[]) if a saved listing hasn't been precomputed yet.
     let soldIndex = null;
