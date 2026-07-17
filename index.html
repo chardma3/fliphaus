@@ -786,6 +786,7 @@
                 ${currentUser && currentUser.role === "admin" ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
                 ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
                 ${currentUser && currentUser.role === "admin" ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
+                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
               </div>
             </div>
           `;
@@ -871,6 +872,32 @@
                 alert("Failed to update sharing: " + err.message);
               } finally {
                 this.disabled = false; this.style.opacity = "1";
+              }
+            });
+          }
+
+          const shareLinkBtn = div.querySelector(".share-link-btn");
+          if (shareLinkBtn) {
+            shareLinkBtn.addEventListener("click", async function() {
+              const url = `${location.origin}/l/${listing.id}`;
+              const price = listing.askingPrice ? ` — ${listing.askingPrice}` : "";
+              const defaultMsg = `Have a look at this Stockholm flip: ${listing.streetAddress}${price}`;
+              // Let the sender customise the message before it goes out.
+              const msg = prompt("Edit the message to send with the link:", defaultMsg);
+              if (msg === null) return; // cancelled
+              const text = `${msg}\n${url}`;
+              // Native share sheet on mobile (Messenger/WhatsApp/etc.); clipboard fallback on desktop.
+              if (navigator.share) {
+                try { await navigator.share({ title: "FlipHaus listing", text: msg, url }); return; }
+                catch (e) { if (e && e.name === "AbortError") return; }
+              }
+              try {
+                await navigator.clipboard.writeText(text);
+                const orig = this.textContent;
+                this.textContent = "Copied ✓"; this.style.color = "#69db7c";
+                setTimeout(() => { this.textContent = orig; this.style.color = "#8fd15a"; }, 2000);
+              } catch (e) {
+                prompt("Copy this to send:", text);
               }
             });
           }
