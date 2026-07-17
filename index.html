@@ -350,6 +350,15 @@
       .login-box p  { color: #888; font-size: 0.88rem; margin-bottom: 20px; }
       .dismiss { margin-top: 12px; background: none; border: none; color: #555; font-size: 0.85rem; cursor: pointer; }
       .dismiss:hover { color: #888; }
+      /* Share-link modal — a clear "copy this, then paste it" flow (no OS prompt / share sheet) */
+      .share-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+      .share-modal.visible { display: flex; }
+      .share-box { background: #1e1e1e; border-radius: 12px; padding: 24px; max-width: 440px; width: 100%; box-sizing: border-box; }
+      .share-box h3 { color: #fff; margin-bottom: 6px; font-size: 1.1rem; }
+      .share-box p { color: #888; font-size: 0.85rem; margin-bottom: 14px; line-height: 1.45; }
+      .share-box textarea { width: 100%; box-sizing: border-box; background: #141414; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 11px; font-size: 0.9rem; font-family: inherit; line-height: 1.4; resize: vertical; }
+      .share-copy-btn { display: block; width: 100%; margin-top: 14px; background: #69db7c; color: #06210f; border: none; border-radius: 9px; padding: 13px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
+      .share-copy-btn.copied { background: #2a7d43; color: #fff; }
           /* FLEX-WRAP-MOBILE-NAV: wrap the menu instead of overflowing right on narrow screens */
       .nav-menu { flex-wrap: wrap; }
       /* Loading state — the feed can take up to ~a minute on a cold sold-comp
@@ -386,6 +395,16 @@
         </a>
         <br/>
         <button class="dismiss" onclick="document.getElementById('login-prompt').classList.remove('visible')">Maybe later</button>
+      </div>
+    </div>
+
+    <div class="share-modal" id="share-modal" onclick="if(event.target===this)this.classList.remove('visible')">
+      <div class="share-box">
+        <h3>Send this listing</h3>
+        <p>Edit the message if you like, then tap Copy and paste it into Messenger, WhatsApp or a text.</p>
+        <textarea id="share-text" rows="4" aria-label="Message to send"></textarea>
+        <button class="share-copy-btn" id="share-copy-btn">Copy message &amp; link</button>
+        <button class="dismiss" onclick="document.getElementById('share-modal').classList.remove('visible')">Close</button>
       </div>
     </div>
 
@@ -460,6 +479,30 @@
       function showLoginPrompt() {
         document.getElementById("login-prompt").classList.add("visible");
       }
+
+      // Share-link modal: populate the editable message + link and open it.
+      function openShareModal(text) {
+        const modal = document.getElementById("share-modal");
+        const ta = document.getElementById("share-text");
+        const btn = document.getElementById("share-copy-btn");
+        ta.value = text;
+        btn.textContent = "Copy message & link";
+        btn.classList.remove("copied");
+        modal.classList.add("visible");
+        setTimeout(() => { ta.focus(); ta.select(); }, 50);
+      }
+      // Wire the Copy button once (the modal is static markup).
+      document.getElementById("share-copy-btn").addEventListener("click", async function() {
+        const ta = document.getElementById("share-text");
+        ta.select();
+        try {
+          await navigator.clipboard.writeText(ta.value);
+        } catch (e) {
+          try { document.execCommand("copy"); } catch (e2) {}
+        }
+        this.textContent = "Copied ✓ — now paste it in your message";
+        this.classList.add("copied");
+      });
 
       function renoClass(score) {
         if (score >= 7) return "high";
@@ -878,27 +921,10 @@
 
           const shareLinkBtn = div.querySelector(".share-link-btn");
           if (shareLinkBtn) {
-            shareLinkBtn.addEventListener("click", async function() {
+            shareLinkBtn.addEventListener("click", function() {
               const url = `${location.origin}/l/${listing.id}`;
               const price = listing.askingPrice ? ` — ${listing.askingPrice}` : "";
-              const defaultMsg = `Have a look at this Stockholm flip: ${listing.streetAddress}${price}`;
-              // Let the sender customise the message before it goes out.
-              const msg = prompt("Edit the message to send with the link:", defaultMsg);
-              if (msg === null) return; // cancelled
-              const text = `${msg}\n${url}`;
-              // Native share sheet on mobile (Messenger/WhatsApp/etc.); clipboard fallback on desktop.
-              if (navigator.share) {
-                try { await navigator.share({ title: "FlipHaus listing", text: msg, url }); return; }
-                catch (e) { if (e && e.name === "AbortError") return; }
-              }
-              try {
-                await navigator.clipboard.writeText(text);
-                const orig = this.textContent;
-                this.textContent = "Copied ✓"; this.style.color = "#69db7c";
-                setTimeout(() => { this.textContent = orig; this.style.color = "#8fd15a"; }, 2000);
-              } catch (e) {
-                prompt("Copy this to send:", text);
-              }
+              openShareModal(`Have a look at this Stockholm flip: ${listing.streetAddress}${price}\n${url}`);
             });
           }
 

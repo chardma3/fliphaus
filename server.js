@@ -278,9 +278,13 @@ app.get("/api/listings", async (req, res) => {
     const sittingBefore = view === "newbuild"
       ? undefined
       : new Date(Date.now() - SITTING_MIN_DAYS * 24 * 60 * 60 * 1000);
-    // Friends see only listings the admin has explicitly shared; every other
-    // caller (admin, investor, anonymous) sees the full feed as before.
-    const sharedOnly = req.user?.role === "friend";
+    // Friends see only listings the admin has explicitly shared. The friends
+    // dashboard also passes ?shared=1 so that an ADMIN previewing /friends sees
+    // the SAME curated set a friend would (not the whole feed) — otherwise the
+    // page looked like it showed unshared listings. The main admin dashboard
+    // never sends the flag, so it's unaffected; every other caller (investor,
+    // anonymous) sees the full feed as before.
+    const sharedOnly = req.user?.role === "friend" || req.query.shared === "1" || req.query.shared === "true";
     const filter = buildActiveFeedFilter({ view, maxPrice: settings.maxPrice, sittingBefore, sharedOnly });
 
     const listings = await Listing.find(filter, { __v: 0 }).sort(sortOrder).lean();

@@ -12,7 +12,7 @@
     header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 8px 0 16px; }
     /* Heading links back to the default (Deals) view — headings are clickable app-wide. */
     .brand { text-decoration: none; }
-    .brand h1 { color: #fff; font-size: 1.4rem; }
+    .brand h1 { color: #fff; font-size: 1.8rem; }
     .brand .tag { color: #69db7c; font-size: 0.78rem; letter-spacing: 0.5px; text-transform: uppercase; }
     #header-right { display: flex; align-items: center; gap: 14px; font-size: 0.85rem; }
     #header-right img { width: 26px; height: 26px; border-radius: 50%; }
@@ -27,8 +27,9 @@
     .view-tab { background: #1e1e1e; border: 1px solid #333; color: #bbb; border-radius: 999px; padding: 7px 16px; cursor: pointer; font-size: 0.85rem; }
     .view-tab.active { background: #69db7c; border-color: #69db7c; color: #06210f; font-weight: 600; }
     #stats { color: #999; font-size: 0.85rem; margin-bottom: 12px; }
-    #feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
-    .card { background: #1b1b1b; border: 1px solid #2a2a2a; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+    /* One column, centred — matches the admin dashboard (was a busy 3-wide grid). */
+    #feed { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+    .card { width: 100%; max-width: 700px; background: #1b1b1b; border: 1px solid #2a2a2a; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
     .card .photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #222; display: block; }
     .card .no-photo { width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; color: #555; background: #222; font-size: 0.8rem; }
     .card .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
@@ -69,10 +70,10 @@
     </nav>
 
     <div id="view-tabs">
-      <button class="view-tab active" data-view="deals">Deals</button>
-      <button class="view-tab" data-view="moveinready">Move-in ready</button>
-      <button class="view-tab" data-view="sitting">On market 14d+</button>
-      <button class="view-tab" data-view="newbuild">New builds</button>
+      <button class="view-tab active" data-view="deals">💎 Deals</button>
+      <button class="view-tab" data-view="moveinready">🛋️ Move-in ready</button>
+      <button class="view-tab" data-view="sitting">⏳ Sitting</button>
+      <button class="view-tab" data-view="newbuild">🏗️ New builds</button>
     </div>
 
     <div id="stats"></div>
@@ -84,7 +85,7 @@
     let currentView = "deals";
     let fx = null; // { rate, asOf, source }
 
-    const VIEW_LABELS = { deals: "Deals", moveinready: "Move-in ready", sitting: "On market 14d+", newbuild: "New builds" };
+    const VIEW_LABELS = { deals: "Deals", moveinready: "Move-in ready", sitting: "Sitting", newbuild: "New builds" };
 
     function translateRooms(s) { return s ? s.replace("rum", "rooms") : null; }
     function translateLocation(s) { return s ? s.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim() : s; }
@@ -122,7 +123,9 @@
       feedEl.innerHTML = `<div class="feed-loading"><div class="feed-spinner"></div><div>Loading listings…</div></div>`;
       let data;
       try {
-        const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
+        // shared=1 forces the curated (shared-with-friends only) set even when an
+        // admin previews this page — so it never shows listings you haven't shared.
+        const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest&shared=1`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         data = await res.json();
       } catch (err) {
