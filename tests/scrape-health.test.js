@@ -57,15 +57,16 @@ test("homepage shows the scrape schedule, today-status, and wetroom re-checks", 
   assert.match(indexHtml, /Wetroom re-checks/i);
 });
 
-test("refresh workflow calls active scrape, sold scrape, image analysis, and sold reconciliation with a secret token", () => {
+test("refresh workflow fires the single background sold-refresh trigger with a secret token", () => {
   const fs = require("node:fs");
   const path = require("node:path");
   const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "refresh-fliphaus.yml"), "utf8");
 
-  assert.match(workflow, /api\/scrape/);
-  assert.match(workflow, /api\/scrape-sold/);
-  assert.match(workflow, /api\/analyze-images/);
-  assert.match(workflow, /api\/reconcile-sold/);
+  // The heavy scrape/analyse/reconcile/precompute now runs in the background on
+  // Render; the workflow just POSTs the trigger and exits (no more area-by-area
+  // curl-waiting that blew the Actions budget).
+  assert.match(workflow, /api\/refresh-sold-all/);
+  assert.match(workflow, /-X POST/);
   assert.match(workflow, /x-refresh-token/);
   assert.match(workflow, /--fail-with-body/);
 });

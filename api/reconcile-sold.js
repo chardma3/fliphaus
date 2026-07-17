@@ -104,9 +104,13 @@ async function reconcileSoldListings({ Listing, SoldListing, threshold = 80 } = 
   const soldListings = await SoldListing.find({});
   let confirmed = 0;
 
+  // Convert the sold set to plain objects ONCE, not once per disappeared listing.
+  // The old code rebuilt this array (a .toObject() on every sold doc) inside the
+  // loop, so N disappeared × M sold meant N×M conversions for identical data.
+  const soldObjs = soldListings.map((sold) => (typeof sold.toObject === "function" ? sold.toObject() : sold));
+
   for (const listing of listings) {
     const listingObj = typeof listing.toObject === "function" ? listing.toObject() : listing;
-    const soldObjs = soldListings.map((sold) => (typeof sold.toObject === "function" ? sold.toObject() : sold));
     const match = findBestSoldMatch(listingObj, soldObjs, threshold);
     if (!match) continue;
 
