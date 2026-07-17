@@ -1,11 +1,18 @@
-# Daily sold-comparables refresh + sold reconciliation + image analysis / self-heal.
-# The active listing scrape moved to the staggered scrape-batch-{1,2,3} workflows
-# (each reconciles its own areas' disappearances). This runs AFTER all three
-# batches so reconcile-sold matches freshly-disappeared listings against the
-# latest slutpriser. Cron is UTC; 13:00 UTC ≈ 15:00 Europe/Stockholm (summer) —
-# 40 min after batch 3 so its scrape has finished and freed the job lock.
-# Mon–Fri only (day-of-week 1-5): weekends add no new listings/sales, and this is
-# the long (~1–2h) job — no reason to run it Sat/Sun. See scrape-batch-1.yml.
+# Daily sold-comparables refresh + reconciliation + image analysis + precompute.
+#
+# This job used to hold a runner open ~2.5h EVERY weekday, curl-waiting on Render
+# while it scraped slutpriser area-by-area (22 requests, each up to 600s). On a
+# private repo that's ~3,300 Actions min/month — over the 2,000-min free budget,
+# which is why Actions kept running out.
+#
+# It now just TRIGGERS the work and exits (~1 min). /api/refresh-sold-all acquires
+# the job lock, returns 202 immediately, and runs the whole chain in the BACKGROUND
+# on Render (one browser over all areas, one reconcile, then analyse + precompute).
+# Progress/results show up in /api/scrape-health via per-stage scrapeRun rows.
+#
+# Runs AFTER the three scrape batches (13:00 UTC ≈ 15:00 Europe/Stockholm, summer)
+# so reconcile matches freshly-disappeared listings against the latest slutpriser.
+# Mon–Fri only (day-of-week 1-5): weekends add no new listings/sales.
 name: Refresh FlipHaus sold data
 
 on:
@@ -18,9 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Warm up FlipHaus server
-        # Wake a sleeping Render instance before the heavy scrape so the first
-        # request doesn't hit a cold start. /api/scrape-health is public and
-        # lightweight (two DB reads, no Puppeteer). Never fails the run.
+        # Wake a sleeping Render instance before triggering. /api/scrape-health is
+        # public and lightweight (two DB reads, no Puppeteer). Never fails the run.
         continue-on-error: true
         run: |
           curl -sS --max-time 60 --retry 6 --retry-all-errors --retry-delay 10 \
@@ -29,75 +35,17 @@ jobs:
         env:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
 
-      - name: Refresh Farsta sold comparable properties
-        # Farsta is the home area with the deepest sold history, so this walks the
-        # most pages and is the slowest single request — give it a generous ceiling
-        # (600s). Do NOT use --retry-all-errors: on a max-time timeout it would
-        # re-fire the whole heavy scrape while the server is usually still writing
-        # the data. continue-on-error + || echo so a slow finish never aborts the
-        # expansion-area scrape, image analysis, or reconcile-sold below (which
-        # matches whatever Farsta managed to write).
+      - name: Trigger background sold refresh (returns immediately)
+        # POST returns 202 in seconds; the heavy scrape/reconcile/precompute runs
+        # on Render. --retry (not --retry-all-errors) so we retry only transient
+        # connection failures, NOT a 409 "already running". continue-on-error so a
+        # 409 (a run already in flight) never red-Xes the workflow.
         continue-on-error: true
         run: |
-          curl --fail-with-body -sS --max-time 600 --retry 2 --retry-delay 20 \
-            -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
-            "$FLIPHAUS_REFRESH_URL/api/scrape-sold?area=Farsta&detailLimit=5&includeDetails=false&includeAnalysis=false" \
-            || echo "  ✗ Farsta sold scrape failed/timed out (server usually still wrote the data; reconcile-sold will pick it up)"
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
-
-      - name: Refresh expansion-area sold comparable properties
-        # Every area in LOCATION_IDS beyond Farsta. Looped (not one step each) to
-        # keep the workflow compact; --data-urlencode encodes the non-ASCII names
-        # (Skarpnäck, Årsta, Östermalm, …) and the spaces in "Stora Mossen" /
-        # "Lilla Essingen" / "Stora Essingen" (quoted so the for-loop keeps each
-        # one token). A blocked area is logged and skipped so one failure doesn't
-        # drop the others. (Gärdet retired 2026-06-24 — now covered by Östermalm.)
-        continue-on-error: true
-        run: |
-          for area in Kista Bagarmossen Skarpnäck Johanneshov Bromma Alvik "Stora Mossen" Enskede Solna Årsta Hägersten Hökarängen Kärrtorp Högdalen "Lilla Essingen" "Stora Essingen" "Östermalm" "Södermalm" Finntorp Ektorp Sickla; do
-            echo "→ sold scrape: $area"
-            curl --fail-with-body -sS -G --max-time 600 --retry 2 --retry-delay 20 \
-              -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
-              --data-urlencode "area=$area" \
-              --data-urlencode "detailLimit=5" \
-              --data-urlencode "includeDetails=false" \
-              --data-urlencode "includeAnalysis=false" \
-              "$FLIPHAUS_REFRESH_URL/api/scrape-sold" \
-              || echo "  ✗ $area sold scrape failed (continuing)"
-          done
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
-
-      - name: Analyse scraped listing images
-        # Scores new listings AND runs self-heal (re-hydrates the bot-block tail).
-        continue-on-error: true
-        run: |
-          curl --fail-with-body -sS --max-time 300 --retry 1 --retry-all-errors --retry-delay 20 -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/analyze-images?dataset=all&limit=10"
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
-
-      - name: Confirm sold FlipHaus dashboard listings
-        run: |
-          curl --fail-with-body -sS -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" "$FLIPHAUS_REFRESH_URL/api/reconcile-sold"
-        env:
-          FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
-          FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}
-
-      - name: Precompute resale estimates
-        # Runs LAST — after all sold comps are scraped + reconciled — so each active
-        # listing's stored sold-comp estimate is built from the freshest data. The
-        # feed then serves this stored value instead of crunching the whole sold set
-        # on every page load (fast pages, no memory spike). Not a Puppeteer job.
-        continue-on-error: true
-        run: |
-          curl --fail-with-body -sS --max-time 300 --retry 2 --retry-delay 20 \
-            -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
-            "$FLIPHAUS_REFRESH_URL/api/precompute-estimates" \
-            || echo "  ✗ precompute-estimates failed (feed falls back to live crunch until next run)"
+          curl --fail-with-body -sS --max-time 60 --retry 3 --retry-delay 15 \
+            -X POST -H "x-refresh-token: $FLIPHAUS_REFRESH_TOKEN" \
+            "$FLIPHAUS_REFRESH_URL/api/refresh-sold-all" \
+            || echo "  ✗ refresh trigger returned busy/failed (background job may already be running)"
         env:
           FLIPHAUS_REFRESH_URL: ${{ secrets.FLIPHAUS_REFRESH_URL }}
           FLIPHAUS_REFRESH_TOKEN: ${{ secrets.FLIPHAUS_REFRESH_TOKEN }}

@@ -152,19 +152,17 @@ test("sold scrape can be split by area for shorter cron requests", () => {
 const workflowDir = path.join(__dirname, "..", ".github", "workflows");
 const readWorkflow = (name) => fs.readFileSync(path.join(workflowDir, name), "utf8");
 
-test("sold-refresh workflow does sold comps + analyse + reconcile (active scrape moved to batches)", () => {
+test("sold-refresh workflow fires a single quick background trigger, not area-by-area curl-waiting", () => {
   const workflow = readWorkflow("refresh-fliphaus.yml");
-  assert.match(workflow, /--max-time 300/);
-  assert.match(workflow, /--retry 2/);
-  assert.match(workflow, /--retry-all-errors/);
-  assert.match(workflow, /api\/scrape-sold\?area=Farsta/);
+  // One fire-and-forget POST; the scrape/analyse/reconcile/precompute chain runs
+  // in the background on Render (see /api/refresh-sold-all).
+  assert.match(workflow, /api\/refresh-sold-all/);
+  assert.match(workflow, /-X POST/);
+  assert.match(workflow, /continue-on-error: true/);
+  // The trigger must return fast — no 600s per-area ceilings any more.
+  assert.doesNotMatch(workflow, /--max-time 600/);
   // Rissne (northern Sundbyberg) was dropped 2026-06-19 — must not be scraped.
   assert.doesNotMatch(workflow, /area=Rissne/);
-  assert.match(workflow, /api\/analyze-images\?dataset=all&limit=10/);
-  assert.match(workflow, /api\/reconcile-sold/);
-  assert.match(workflow, /continue-on-error: true/);
-  assert.match(workflow, /detailLimit=5/);
-  assert.match(workflow, /includeAnalysis=false/);
   // The active listing scrape moved to the staggered scrape-batch-* workflows.
   assert.doesNotMatch(workflow, /api\/scrape\?/);
 });

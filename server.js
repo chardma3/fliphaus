@@ -767,6 +767,67 @@ app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
   }
 });
 
+// Full daily sold refresh as ONE fire-and-forget background job.
+//
+// The old refresh workflow held a GitHub Actions runner open ~2.5h EVERY weekday,
+// doing nothing but curl-waiting on this work area-by-area — ~3,300 min/month,
+// well over the 2,000-min private-repo budget (that's why Actions ran out). It
+// also launched a fresh Chromium PER area (22×) and reconciled 22×.
+//
+// This endpoint acquires the job lock, responds 202 immediately (so the workflow
+// exits in ~1 min), then runs the whole chain in the BACKGROUND on Render — where
+// the scraping always happened anyway — in ONE browser over ALL areas, with a
+// SINGLE reconcile at the end (scrapeSold reconciles internally). Then it scores
+// fresh photos and rebuilds the stored resale estimates. No HTTP timeout applies
+// to background work, so the per-area 600s staggering is no longer needed.
+//
+// Each stage records its own scrapeRun row, so /api/scrape-health still shows
+// exactly what ran even though the HTTP caller is long gone.
+app.all("/api/refresh-sold-all", requireRefreshToken, async (req, res) => {
+  if (!jobLock.acquire("sold-refresh-all")) {
+    return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
+  }
+  // Respond before the heavy work — the runner just needs to know we accepted it.
+  res.status(202).json({ message: "Sold refresh started in background", startedAt: new Date().toISOString() });
+
+  (async () => {
+    const soldStartedAt = new Date();
+    try {
+      // One browser, every area (no `area` = all targets); reconcile runs at the
+      // end of scrapeSold against the freshest slutpriser.
+      const sold = await scrapeSold({ detailLimit: 5, includeDetails: false, includeAnalysis: false });
+      await recordScrapeRun({ job: "sold-scrape", label: "Sold prices — all areas (background)", status: "success", startedAt: soldStartedAt, result: sold });
+    } catch (err) {
+      console.error("❌ Background sold scrape error:", err);
+      await recordScrapeRun({ job: "sold-scrape", label: "Sold prices — all areas (background)", status: "failed", startedAt: soldStartedAt, error: err.message });
+    }
+
+    // Score newly-scraped listings + self-heal the bot-block tail. Isolated so a
+    // failure here can't skip precompute below.
+    const analyzeStartedAt = new Date();
+    try {
+      const analysis = await analyzeListingImagesRefresh({ dataset: "all", limit: 10 });
+      await recordScrapeRun({ job: "image-analysis", label: "Photo analysis & scoring (background)", status: "success", startedAt: analyzeStartedAt, result: analysis });
+    } catch (err) {
+      console.error("❌ Background image analysis error:", err);
+      await recordScrapeRun({ job: "image-analysis", label: "Photo analysis & scoring (background)", status: "failed", startedAt: analyzeStartedAt, error: err.message });
+    }
+
+    // Rebuild each active listing's stored resale estimate from the fresh comps.
+    const precomputeStartedAt = new Date();
+    try {
+      const est = await precomputeEstimates({ Listing, SoldListing });
+      await recordScrapeRun({ job: "precompute-estimates", label: "Precompute resale estimates (background)", status: "success", startedAt: precomputeStartedAt, result: est });
+    } catch (err) {
+      console.error("❌ Background precompute error:", err);
+      await recordScrapeRun({ job: "precompute-estimates", label: "Precompute resale estimates (background)", status: "failed", startedAt: precomputeStartedAt, error: err.message });
+    }
+
+    jobLock.release("sold-refresh-all");
+    console.log("✅ Background sold refresh finished");
+  })();
+});
+
 // Analyse already-scraped listing photos separately from Hemnet scraping.
 app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
   // Share the job lock with scrapes and the coverage sweep — one Puppeteer job at
