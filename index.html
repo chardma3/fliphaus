@@ -756,9 +756,15 @@
               ${listing.askingPriceNum ? (() => {
                 const c = calcInvestment(listing);
                 const badge = formatProfitBadgeModel(listing);
-                const profitClass = c.classification === "renovation-upside" ? "profit" : "loss";
+                // Move-in-ready "market gap" is a buy-and-resell profit, so it gets
+                // the same green profit + ROI headline as the renovation deals.
+                const hasResaleProfit = c.classification === "market-gap" && c.renovationProfit > 0;
+                const isProfitClass = c.classification === "renovation-upside" || hasResaleProfit;
+                const profitClass = isProfitClass ? "profit" : "loss";
                 const headline = c.classification === "renovation-upside"
                   ? `Estimated renovation profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}`
+                  : hasResaleProfit
+                  ? `Estimated resale profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}`
                   : badge?.detail || "No strong renovation ROI signal";
                 return `<div class="invest-calc">
                   <h5>Investment analysis</h5>
@@ -770,7 +776,7 @@
                   <div class="calc-divider"></div>
                   <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
                   <div class="calc-row sale"><span class="calc-label">Market gap before costs</span><span class="calc-value">${c.grossMarketGap > 0 ? '+' : ''}${formatSEKShort(c.grossMarketGap)}</span></div>
-                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${c.classification === "renovation-upside" ? '+' + formatSEKShort(c.renovationProfit) : (badge?.label || '—')}</span></div>
+                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) : (badge?.label || '—')}</span></div>
                 </div>`;
               })() : ""}
               ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}

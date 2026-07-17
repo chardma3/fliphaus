@@ -175,7 +175,10 @@
       classification = preliminary ? "preliminary-unprofitable" : "unprofitable";
     }
 
-    const displayProfit = ["renovation-upside", "preliminary-renovation-upside", "unprofitable", "preliminary-unprofitable"].includes(classification) ? renovationProfit : 0;
+    // market-gap included: a move-in-ready unit priced below market is a
+    // buy-and-resell profit (no renovation), so it carries a real profit/ROI
+    // figure like the renovation deals — not a bare "market gap" placeholder.
+    const displayProfit = ["renovation-upside", "preliminary-renovation-upside", "unprofitable", "preliminary-unprofitable", "market-gap"].includes(classification) ? renovationProfit : 0;
 
     return {
       price,
@@ -190,7 +193,7 @@
       grossMarketGap,
       profit: displayProfit,
       renovationProfit,
-      roi: classification === "renovation-upside" ? roi : 0,
+      roi: (classification === "renovation-upside" || classification === "market-gap") ? roi : 0,
       sizeNum,
       sqmPrice,
       estimateSource,
@@ -236,13 +239,26 @@
       };
     }
     if (calc.classification === "market-gap") {
+      // Move-in ready / already-renovated unit our comps say is priced BELOW its
+      // estimated market value — a buy-and-resell play. Show what we could sell
+      // for as a profit + ROI (same treatment as the renovation deals) instead of
+      // the vague "possible market gap" placeholder. Tilde + cautious styling when
+      // the resale estimate leans on the area benchmark rather than sold comps; a
+      // confident, comp-backed profit shows plainly. Falls back to the raw gap if
+      // costs (fees/carry) wipe out the net profit.
+      const tilde = calc.preliminary ? "~" : "";
+      const hasProfit = calc.renovationProfit > 0;
       return {
         type: "market-gap",
-        cssClass: "cautious",
-        label: "Possible market gap",
-        detail: "Already renovated / low renovation upside",
-        profit: null,
-        roi: null,
+        cssClass: calc.preliminary ? "cautious" : "positive",
+        label: hasProfit
+          ? `${tilde}+${formatSEKShort(calc.renovationProfit)}${calc.roi ? ` (${calc.roi}% ROI)` : ""}`
+          : `${tilde}${formatSEKShort(calc.grossMarketGap)} below market`,
+        detail: calc.preliminary
+          ? "Move-in ready — resell estimate from area benchmark; needs similar sold properties"
+          : "Move-in ready — resell profit vs comparable sold properties",
+        profit: hasProfit ? calc.renovationProfit : calc.grossMarketGap,
+        roi: calc.roi || null,
         calc,
       };
     }
