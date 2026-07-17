@@ -377,12 +377,41 @@
               ${floorPlanHtml}
               <div class="listing-actions">
                 <button class="action-btn remove-btn">Remove</button>
+                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet</a>
               </div>
             </div>
           `;
 
           div.querySelector(".remove-btn").addEventListener("click", () => removeFromFavorites(listing.id, div));
+
+          const reanalyzeBtn = div.querySelector(".reanalyze-btn");
+          if (reanalyzeBtn) {
+            reanalyzeBtn.addEventListener("click", async function() {
+              if (this.disabled) return;
+              const orig = this.textContent;
+              this.disabled = true;
+              this.style.opacity = "0.7";
+              this.textContent = "↻ Reanalyzing with Opus… (~20s)";
+              try {
+                const res = await fetch(`/api/admin/reanalyze/${listing.id}`, { method: "POST" });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  alert(data.detail || data.error || "Reanalysis failed");
+                  this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
+                  return;
+                }
+                // Re-score may change the score/badge/photos — reload the saved
+                // list so the corrected card shows.
+                this.textContent = "Updated ✓"; this.style.color = "#69db7c";
+                const favRes = await fetch("/api/favorites");
+                renderListings(await favRes.json());
+              } catch (err) {
+                alert("Reanalysis failed: " + err.message);
+                this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
+              }
+            });
+          }
 
           const renoToggle = div.querySelector(".reno-detail-toggle");
           if (renoToggle) {

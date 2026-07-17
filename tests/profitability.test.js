@@ -53,13 +53,18 @@ test("Skrakgränd 3 fixture returns low-upside style badge, not renovation ROI",
   const calc = calcInvestment(listing);
   const badge = formatProfitBadgeModel(listing);
 
+  // Not a renovation play, but a move-in-ready unit priced below market is a
+  // buy-and-resell profit — so it now carries an estimated resale profit + ROI,
+  // not a vague "possible market gap" placeholder.
   assert.equal(isRenovationUpsideCandidate(listing), false);
   assert.notEqual(calc.classification, "renovation-upside");
-  assert.equal(calc.profit, 0);
-  assert.equal(calc.roi, 0);
-  assert.equal(badge.roi, null);
-  assert.equal(badge.profit, null);
-  assert.match(`${badge.label} ${badge.detail}`, /market gap|move-in ready|low renovation upside/i);
+  assert.equal(calc.classification, "market-gap");
+  assert.ok(calc.profit > 0);
+  assert.ok(calc.roi > 0);
+  assert.equal(badge.profit, calc.renovationProfit);
+  assert.equal(badge.roi, calc.roi);
+  assert.doesNotMatch(badge.label, /possible market gap/i);
+  assert.match(badge.label, /ROI/);
 });
 
 test("unrenovated high-score profitable listing can return renovation-upside", () => {
