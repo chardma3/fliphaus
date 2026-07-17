@@ -30,6 +30,7 @@ const { buildScrapeHealth } = require("./api/scrape-health");
 const { recordScrapeRun, getRecentScrapeRuns } = require("./api/scrape-run.model");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
+const { sharePageHtml } = require("./api/share-page");
 const { buildVersionInfo } = require("./api/version");
 const { resolveRole, syncUserRole } = require("./api/roles");
 const { getSekToAud } = require("./api/fx");
@@ -1162,6 +1163,26 @@ app.get("/builders", (req, res) => res.sendFile(path.join(__dirname, "builders.h
 app.get("/manage-friends", (req, res) => res.sendFile(path.join(__dirname, "manage-friends.html")));
 app.get("/builder/login", (req, res) => res.sendFile(path.join(__dirname, "builder-login.html")));
 app.get("/builder", (req, res) => res.sendFile(path.join(__dirname, "builder-portal.html")));
+
+// Public per-listing SHARE page (Open Graph preview + Google sign-in gate). See
+// api/share-page.js for the rendered markup. Registered before the SPA catch-all.
+app.get("/l/:id", async (req, res) => {
+  try {
+    const listing = await Listing.findOne(
+      { id: req.params.id },
+      { id: 1, streetAddress: 1, locationDescription: 1, askingPrice: 1, askingPriceNum: 1, rooms: 1, size: 1, images: 1, thumbnail: 1, renovationSummary: 1 }
+    ).lean();
+    const base = process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+    res
+      .status(listing ? 200 : 404)
+      .set("Content-Type", "text/html; charset=utf-8")
+      .send(sharePageHtml(listing, base, req.params.id));
+  } catch (err) {
+    console.error("Share page error:", err);
+    res.status(500).send("Something went wrong loading this listing.");
+  }
+});
+
 app.get("/{*splat}", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 
 app.listen(PORT, () => {
