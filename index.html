@@ -163,7 +163,10 @@
       }
       .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
       .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
-      .aud-line { color: #69db7c; font-size: 0.82rem; font-weight: 600; margin: 2px 0 0 2px; }
+      #currency-bar { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0 2px; font-size: 0.8rem; color: #888; }
+      #currency-bar label { color: #aaa; }
+      #currency-bar select { background: #1e1e1e; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 5px 8px; font-size: 0.82rem; cursor: pointer; }
+      #fx-note { color: #666; }
 
       .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
       .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
@@ -479,14 +482,51 @@
       // "Friend mode": this same dashboard served at /friends. Curated shared-only
       // feed, friend nav, admin action buttons hidden — otherwise identical.
       const FRIENDS_VIEW = location.pathname === "/friends";
-      // SEK→AUD, loaded only in friend mode (friends see indicative A$ amounts).
-      let fx = null; // { rate, asOf, source }
-      function audFrom(sek) {
-        if (!fx || !fx.rate || !sek) return "";
-        return "A$ " + Math.round(sek * fx.rate).toLocaleString("en-AU");
-      }
+      // Display currency. Friend view only — the admin dashboard is always SEK
+      // (displayCurrency stays "SEK", fxRate 1, so every money formatter below is
+      // byte-identical for admin). The toggle persists per device. Extensible:
+      // add a currency here + a rate branch in loadFx() to scale to EUR/GBP/etc.
+      const CURRENCIES = { SEK: { label: "kr SEK" }, AUD: { label: "A$ AUD" } };
+      let displayCurrency = "SEK";
+      let fxRate = 1;    // multiply a SEK amount to get the display currency
+      let fxInfo = null; // { rate, asOf, source } — powers the "rate as of…" note
       async function loadFx() {
-        try { fx = await (await fetch("/api/fx/sek-aud")).json(); } catch { fx = null; }
+        // SEK is the base; only non-SEK needs a rate. /api/fx/sek-aud is a daily
+        // Frankfurter rate (cached), shape { rate, asOf, source }.
+        if (displayCurrency === "SEK") { fxRate = 1; return; }
+        try {
+          fxInfo = await (await fetch("/api/fx/sek-aud")).json();
+          fxRate = fxInfo && fxInfo.rate ? fxInfo.rate : 1;
+        } catch { fxInfo = null; fxRate = 1; }
+      }
+      // Per-m² price in the display currency.
+      function perSqm(sek) {
+        const v = Math.round((sek || 0) * fxRate);
+        return displayCurrency === "SEK" ? v.toLocaleString("sv-SE") + " kr/m²" : "A$ " + v.toLocaleString("en-AU") + "/m²";
+      }
+      // Asking price: keep Hemnet's exact SEK text in SEK mode, convert otherwise.
+      function priceStr(l) {
+        if (displayCurrency === "SEK") return l.askingPrice || "—";
+        return l.askingPriceNum ? formatSEK(l.askingPriceNum) : (l.askingPrice || "—");
+      }
+      // Convert "…kr / …K kr / …M kr" amounts inside a preformatted string (e.g. a
+      // profit-badge label) to the display currency. No-op in SEK mode.
+      function convertMoneyStr(str) {
+        if (displayCurrency === "SEK" || !str) return str;
+        return str.replace(/(\d[\d\s.,]*)\s*(M|K)?\s*kr\b/g, (m, num, unit) => {
+          let n = parseFloat(num.replace(/\s/g, "").replace(",", "."));
+          if (!isFinite(n)) return m;
+          if (unit === "M") n *= 1e6; else if (unit === "K") n *= 1e3;
+          return formatSEKShort(n);
+        });
+      }
+      function updateFxNote() {
+        const el = document.getElementById("fx-note");
+        if (!el) return;
+        if (displayCurrency === "SEK" || !fxInfo || !fxInfo.rate) { el.textContent = ""; return; }
+        const when = fxInfo.asOf ? new Date(fxInfo.asOf).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "";
+        const src = fxInfo.source === "fallback" ? "approx fixed rate" : "Frankfurter daily rate";
+        el.textContent = `1 SEK ≈ ${fxInfo.rate.toFixed(4)} AUD · ${src}${when ? " · " + when : ""}`;
       }
 
       function showLoginPrompt() {
@@ -531,7 +571,8 @@
 
       function formatSEK(n) {
         if (!n) return null;
-        return n.toLocaleString("sv-SE") + " kr";
+        const v = Math.round(n * fxRate);
+        return displayCurrency === "SEK" ? v.toLocaleString("sv-SE") + " kr" : "A$ " + v.toLocaleString("en-AU");
       }
 
       function translateRooms(str) {
@@ -561,8 +602,13 @@
 
       function formatSEKShort(n) {
         if (!n) return "—";
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M kr";
-        return Math.round(n / 1000) + "K kr";
+        const v = n * fxRate, sign = v < 0 ? "-" : "", abs = Math.abs(v);
+        if (displayCurrency === "SEK") {
+          if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1) + "M kr";
+          return sign + Math.round(abs / 1000) + "K kr";
+        }
+        if (abs >= 1000000) return sign + "A$ " + (abs / 1000000).toFixed(2) + "M";
+        return sign + "A$ " + Math.round(abs).toLocaleString("en-AU");
       }
 
       // Friends-share button: label + styling reflect whether the listing is
@@ -713,7 +759,7 @@
             : "";
           // No flip/profit badge on the New builds tab — they're new construction, not flips.
           const badgeModel = (currentView !== "newbuild" && listing.askingPriceNum) ? formatProfitBadgeModel(listing) : null;
-          const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
+          const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${convertMoneyStr(badgeModel.label)}</div>` : "";
           const gatedBadgeHtml = isGated(listing)
             ? `<div class="gated-badge" title="Gated by the cheap triage pass — kitchen & bathroom looked already renovated, so full scoring was skipped. Low renovation upside.">⚡ triage only</div>`
             : "";
@@ -750,10 +796,10 @@
             <h5>BRF intelligence</h5>
             ${b.name || b.buildYear ? `<div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${b.name || "Unknown"}${b.buildYear ? " · " + b.buildYear : ""}</span></div>` : ""}
             ${hasStambyte ? `<div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${b.stambyte.status}${b.stambyte.year ? " " + b.stambyte.year : ""}</span></div>` : ""}
-            ${hasDebt ? `<div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${b.debtPerSqm ? b.debtPerSqm.toLocaleString("sv-SE") + " kr/m² · " : ""}${b.avgiftRisk}</span></div>` : ""}
+            ${hasDebt ? `<div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${b.debtPerSqm ? perSqm(b.debtPerSqm) + " · " : ""}${b.avgiftRisk}</span></div>` : ""}
             ${hasArb ? `
             <div class="calc-divider"></div>
-            <div class="calc-row sale"><span class="calc-label">Renovated resale</span><span class="calc-value">${arb.estimatedRenovatedSqm ? arb.estimatedRenovatedSqm.toLocaleString("sv-SE") + " kr/m²" : "No sold comparables yet"}</span></div>
+            <div class="calc-row sale"><span class="calc-label">Renovated resale</span><span class="calc-value">${arb.estimatedRenovatedSqm ? perSqm(arb.estimatedRenovatedSqm) : "No sold comparables yet"}</span></div>
             ${arb.estimatedUpliftTotal ? `<div class="calc-row profit"><span class="calc-label">Potential uplift for this flat</span><span class="calc-value">+${formatSEKShort(arb.estimatedUpliftTotal)}</span></div>` : ""}
             <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : "Area-level"} · ${arb.totalComparableSales} sold · ${arb.confidence} confidence</span></div>
             <div class="intel-note">${arb.summary}</div>` : ""}
@@ -777,17 +823,16 @@
                 </div>
               </div>
               <div class="location">${translateLocation(listing.locationDescription)}</div>
-              <div class="rejected-summary">${listing.askingPrice} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
+              <div class="rejected-summary">${priceStr(listing)} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
               <div class="listing-meta">
-                <span class="price-tag">${listing.askingPrice}</span>
+                <span class="price-tag">${priceStr(listing)}</span>
                 ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
                 ${listing.size ? `<span>${listing.size}</span>` : ""}
                 ${listing.housingForm && !isApartmentType(listing.housingForm) ? `<span>${listing.housingForm}</span>` : ""}
                 ${listing.fee ? `<span>Fee ${translateFee(listing.fee)}</span>` : ""}
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
-                ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
+                ${listing.squareMeterPrice ? `<span>${displayCurrency === "SEK" ? listing.squareMeterPrice : (listing.askingPriceNum && listing.sizeNum ? perSqm(Math.round(listing.askingPriceNum / listing.sizeNum)) : listing.squareMeterPrice)}</span>` : ""}
               </div>
-              ${FRIENDS_VIEW && audFrom(listing.askingPriceNum) ? `<div class="aud-line">≈ ${audFrom(listing.askingPriceNum)} asking</div>` : ""}
               ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
@@ -802,7 +847,7 @@
                     <div class="reno-room ${r.estimatedCostSEK ? 'needs-work' : 'good'}">
                       <div class="reno-room-header">
                         <h5>${r.type}</h5>
-                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? Math.round(r.estimatedCostSEK/1000) + 'K kr' : 'No work needed'}</span>
+                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? formatSEKShort(r.estimatedCostSEK) : 'No work needed'}</span>
                       </div>
                       <div class="condition">${r.condition === 'original' || r.condition === 'dated' ? 'Needs full renovation' : r.condition === 'fair' ? 'Needs cosmetic update' : 'Good condition'}</div>
                       ${r.indicators?.length ? `<div class="indicators"><strong style="color:#ccc;">Work needed:</strong><ul>${r.indicators.map(i => '<li>Replace/update: ' + i.replace(/^(Old|Dated|Worn|Original|Basic)\s*/i, '') + '</li>').join('')}</ul></div>` : ''}
@@ -831,9 +876,9 @@
                   <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
                   <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
                   <div class="calc-divider"></div>
-                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}${FRIENDS_VIEW && audFrom(c.estimatedRenovatedSalePrice) ? ` · ${audFrom(c.estimatedRenovatedSalePrice)}` : ""}</span></div>
+                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
                   <div class="calc-row sale"><span class="calc-label">Market gap before costs</span><span class="calc-value">${c.grossMarketGap > 0 ? '+' : ''}${formatSEKShort(c.grossMarketGap)}</span></div>
-                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) + (FRIENDS_VIEW && audFrom(c.renovationProfit) ? ` · ${audFrom(c.renovationProfit)}` : "") : (badge?.label || '—')}</span></div>
+                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) : convertMoneyStr(badge?.label || '—')}</span></div>
                 </div>`;
               })() : ""}
               ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
@@ -1299,8 +1344,9 @@
           loadScrapeHealth();
           loadDigest();
         }
-        // Friends see indicative AUD amounts — load the rate before the first render.
-        if (FRIENDS_VIEW) await loadFx();
+        // Friends can pick a display currency — load the rate before the first
+        // render so amounts convert immediately, and show the rate/source/date.
+        if (FRIENDS_VIEW) { await loadFx(); updateFxNote(); }
         loadListings();
         setAreaCount();
       }
@@ -1325,6 +1371,27 @@
         // Hide the internal "before listings are sent to a builder…" pipeline panel.
         document.querySelectorAll(".instructions").forEach((el) => {
           if (/project manager|partner builder|prototype/i.test(el.textContent)) el.style.display = "none";
+        });
+
+        // Currency selector — friends pick SEK or A$ (extensible). Persisted per
+        // device so e.g. an Australian viewer only sets it once.
+        displayCurrency = localStorage.getItem("fh_currency") || "SEK";
+        const bar = document.createElement("div");
+        bar.id = "currency-bar";
+        bar.innerHTML = `
+          <label for="currency-select">Currency</label>
+          <select id="currency-select">
+            ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${code === displayCurrency ? "selected" : ""}>${c.label}</option>`).join("")}
+          </select>
+          <span id="fx-note"></span>`;
+        const tabs = document.getElementById("view-tabs");
+        if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(bar, tabs);
+        document.getElementById("currency-select").addEventListener("change", async (e) => {
+          displayCurrency = e.target.value;
+          localStorage.setItem("fh_currency", displayCurrency);
+          await loadFx();
+          updateFxNote();
+          if (allListingsData) renderListings(allListingsData);
         });
       }
 
