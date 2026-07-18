@@ -163,10 +163,10 @@
       }
       .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
       .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
-      #currency-bar { display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 10px 0 2px; font-size: 0.8rem; color: #888; }
-      #currency-bar label { color: #aaa; }
-      #currency-bar select { background: #1e1e1e; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 5px 8px; font-size: 0.82rem; cursor: pointer; }
-      #fx-note { color: #666; }
+      #currency-toggle { display: flex; align-items: center; }
+      #currency-toggle select { background: #1e1e1e; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 6px 8px; font-size: 0.82rem; cursor: pointer; }
+      #fx-note { text-align: center; color: #666; font-size: 0.78rem; margin: 8px 0 2px; }
+      #fx-note:empty { display: none; }
 
       .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
       .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
@@ -1344,9 +1344,10 @@
           loadScrapeHealth();
           loadDigest();
         }
-        // Friends can pick a display currency — load the rate before the first
-        // render so amounts convert immediately, and show the rate/source/date.
-        if (FRIENDS_VIEW) { await loadFx(); updateFxNote(); }
+        // Friends can pick a display currency — mount the toggle (next to the
+        // profile icon), load the rate before the first render so amounts convert
+        // immediately, and show the rate/source/date.
+        if (FRIENDS_VIEW) { mountCurrencyToggle(); await loadFx(); updateFxNote(); }
         loadListings();
         setAreaCount();
       }
@@ -1373,26 +1374,38 @@
           if (/project manager|partner builder|prototype/i.test(el.textContent)) el.style.display = "none";
         });
 
-        // Currency selector — friends pick SEK or A$ (extensible). Persisted per
-        // device so e.g. an Australian viewer only sets it once.
+        // Currency choice is persisted per device (an Australian viewer sets it
+        // once). Read it here so loadFx()/the first render use the right currency;
+        // the toggle itself is mounted next to the profile icon (mountCurrencyToggle).
         displayCurrency = localStorage.getItem("fh_currency") || "SEK";
-        const bar = document.createElement("div");
-        bar.id = "currency-bar";
-        bar.innerHTML = `
-          <label for="currency-select">Currency</label>
-          <select id="currency-select">
+      }
+
+      // Currency toggle lives in the header next to the profile icon; the
+      // rate/source/date note sits just above the view tabs (only shows for a
+      // non-SEK currency). Called after the header-right is populated.
+      function mountCurrencyToggle() {
+        const hr = document.getElementById("header-right");
+        if (hr && !document.getElementById("currency-select")) {
+          const wrap = document.createElement("div");
+          wrap.id = "currency-toggle";
+          wrap.innerHTML = `<select id="currency-select" aria-label="Display currency" title="Show prices in this currency">
             ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${code === displayCurrency ? "selected" : ""}>${c.label}</option>`).join("")}
-          </select>
-          <span id="fx-note"></span>`;
-        const tabs = document.getElementById("view-tabs");
-        if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(bar, tabs);
-        document.getElementById("currency-select").addEventListener("change", async (e) => {
-          displayCurrency = e.target.value;
-          localStorage.setItem("fh_currency", displayCurrency);
-          await loadFx();
-          updateFxNote();
-          if (allListingsData) renderListings(allListingsData);
-        });
+          </select>`;
+          hr.insertBefore(wrap, hr.firstChild);
+          document.getElementById("currency-select").addEventListener("change", async (e) => {
+            displayCurrency = e.target.value;
+            localStorage.setItem("fh_currency", displayCurrency);
+            await loadFx();
+            updateFxNote();
+            if (allListingsData) renderListings(allListingsData);
+          });
+        }
+        if (!document.getElementById("fx-note")) {
+          const note = document.createElement("div");
+          note.id = "fx-note";
+          const tabs = document.getElementById("view-tabs");
+          if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(note, tabs);
+        }
       }
 
       // Daily digest: new deals / move-in ready / new builds found, and listings
