@@ -1153,7 +1153,12 @@ app.get("/api/sold/area-intel", async (req, res) => {
 
 app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "login.html")));
 app.get("/invest", (req, res) => res.sendFile(path.join(__dirname, "investor.html")));
-app.get("/friends", (req, res) => res.sendFile(path.join(__dirname, "friends.html")));
+// Friends get the SAME dashboard as the admin (identical listing cards/info/
+// styling) — index.html runs in "friend mode" (path === "/friends"): curated
+// shared-only feed, friend nav, and the admin action buttons hidden. Keeping it
+// one file guarantees the listings never drift from the admin view. (friends.html
+// is retired.)
+app.get("/friends", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/invest/:listingId", (req, res) => res.sendFile(path.join(__dirname, "listing-detail.html")));
 app.get("/favorites", (req, res) => res.sendFile(path.join(__dirname, "favorites.html")));
 app.get("/areas", (req, res) => res.sendFile(path.join(__dirname, "areas.html")));
