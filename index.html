@@ -163,6 +163,7 @@
       }
       .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
       .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
+      .aud-line { color: #69db7c; font-size: 0.82rem; font-weight: 600; margin: 2px 0 0 2px; }
 
       .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
       .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
@@ -478,6 +479,15 @@
       // "Friend mode": this same dashboard served at /friends. Curated shared-only
       // feed, friend nav, admin action buttons hidden — otherwise identical.
       const FRIENDS_VIEW = location.pathname === "/friends";
+      // SEK→AUD, loaded only in friend mode (friends see indicative A$ amounts).
+      let fx = null; // { rate, asOf, source }
+      function audFrom(sek) {
+        if (!fx || !fx.rate || !sek) return "";
+        return "A$ " + Math.round(sek * fx.rate).toLocaleString("en-AU");
+      }
+      async function loadFx() {
+        try { fx = await (await fetch("/api/fx/sek-aud")).json(); } catch { fx = null; }
+      }
 
       function showLoginPrompt() {
         document.getElementById("login-prompt").classList.add("visible");
@@ -777,6 +787,7 @@
                 ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
                 ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
               </div>
+              ${FRIENDS_VIEW && audFrom(listing.askingPriceNum) ? `<div class="aud-line">≈ ${audFrom(listing.askingPriceNum)} asking</div>` : ""}
               ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
               ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
               ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
@@ -820,9 +831,9 @@
                   <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
                   <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
                   <div class="calc-divider"></div>
-                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
+                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}${FRIENDS_VIEW && audFrom(c.estimatedRenovatedSalePrice) ? ` · ${audFrom(c.estimatedRenovatedSalePrice)}` : ""}</span></div>
                   <div class="calc-row sale"><span class="calc-label">Market gap before costs</span><span class="calc-value">${c.grossMarketGap > 0 ? '+' : ''}${formatSEKShort(c.grossMarketGap)}</span></div>
-                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) : (badge?.label || '—')}</span></div>
+                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) + (FRIENDS_VIEW && audFrom(c.renovationProfit) ? ` · ${audFrom(c.renovationProfit)}` : "") : (badge?.label || '—')}</span></div>
                 </div>`;
               })() : ""}
               ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
@@ -832,7 +843,7 @@
                 ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
                 ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
                 ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
-                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
+                ${currentUser && (currentUser.role === "admin" || FRIENDS_VIEW) ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
               </div>
             </div>
           `;
@@ -1288,6 +1299,8 @@
           loadScrapeHealth();
           loadDigest();
         }
+        // Friends see indicative AUD amounts — load the rate before the first render.
+        if (FRIENDS_VIEW) await loadFx();
         loadListings();
         setAreaCount();
       }
