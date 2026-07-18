@@ -228,7 +228,7 @@
       }
 
       /* Top-level view tabs: Deals (strong flips) vs Move-in ready (browse) */
-      .view-tabs { display: flex; gap: 8px; margin: 18px 0 6px; }
+      .view-tabs { display: flex; gap: 8px; margin: 18px 0 6px; justify-content: center; flex-wrap: wrap; }
       .view-tab {
         padding: 9px 20px; border-radius: 8px; cursor: pointer;
         font-size: 0.92rem; font-weight: 600;
@@ -475,6 +475,9 @@
       let allListingsData = null;
       let currentView = "deals"; // "deals" (7-10), "moveinready" (1-6), or "newbuild" (projekt listings)
       let activeFilter = null;
+      // "Friend mode": this same dashboard served at /friends. Curated shared-only
+      // feed, friend nav, admin action buttons hidden — otherwise identical.
+      const FRIENDS_VIEW = location.pathname === "/friends";
 
       function showLoginPrompt() {
         document.getElementById("login-prompt").classList.add("visible");
@@ -826,10 +829,10 @@
               ${floorPlanHtml}
               <div class="listing-actions">
                 <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
-                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
-                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
-                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
-                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
+                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
+                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
+                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
+                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
               </div>
             </div>
           `;
@@ -1144,7 +1147,8 @@
           </div>`;
         let data;
         try {
-          const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest`);
+          // In friend mode, request only the admin-curated (shared) listings.
+          const res = await fetch(`/api/listings?view=${currentView}&sort=score-newest${FRIENDS_VIEW ? "&shared=1" : ""}`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           data = await res.json();
         } catch (err) {
@@ -1242,13 +1246,24 @@
         const data = await res.json();
         currentUser = data.user;
 
-        // This is the admin (Claire-facing) dashboard: scraping activity log,
-        // reanalyse and send-to-builders all live here and nowhere else. A
-        // logged-in non-admin who lands on "/" is bounced to their own view so
-        // they never see the internal controls (the backend also 403s them).
-        if (currentUser && currentUser.role !== "admin") {
-          window.location.replace(currentUser.role === "friend" ? "/friends" : "/invest");
-          return;
+        if (FRIENDS_VIEW) {
+          // Same dashboard, friend audience. Only friends (and admin, previewing)
+          // may see it; everyone else goes to their own home.
+          if (!currentUser) { window.location.replace("/login"); return; }
+          if (currentUser.role !== "friend" && currentUser.role !== "admin") {
+            window.location.replace("/invest");
+            return;
+          }
+          applyFriendsChrome();
+        } else {
+          // The admin (Claire-facing) dashboard: scraping activity log, reanalyse
+          // and send-to-builders all live here and nowhere else. A logged-in
+          // non-admin who lands on "/" is bounced to their own view so they never
+          // see the internal controls (the backend also 403s them).
+          if (currentUser && currentUser.role !== "admin") {
+            window.location.replace(currentUser.role === "friend" ? "/friends" : "/invest");
+            return;
+          }
         }
 
         const headerRight = document.getElementById("header-right");
@@ -1268,10 +1283,36 @@
           `;
         }
 
-        loadScrapeHealth();
+        // Admin-only panels (scrape log + daily digest) never load in friend mode.
+        if (!FRIENDS_VIEW) {
+          loadScrapeHealth();
+          loadDigest();
+        }
         loadListings();
         setAreaCount();
-        loadDigest();
+      }
+
+      // Turn the admin dashboard into the friends view: friend nav, hide the
+      // internal pipeline explainer, point the logo home to /friends. Listings,
+      // cards, tabs, scoring legend and styling are all left exactly as the admin
+      // sees them (minus the admin action buttons, gated by !FRIENDS_VIEW).
+      function applyFriendsChrome() {
+        document.body.classList.add("friends-mode");
+        const logo = document.querySelector("header a[href='/']");
+        if (logo) logo.setAttribute("href", "/friends");
+        const nav = document.querySelector(".nav-menu");
+        if (nav) {
+          nav.innerHTML = `
+            <a href="/friends" class="nav-item active">Listings</a>
+            <a href="/areas" class="nav-item">Areas</a>
+            <a href="/methodology" class="nav-item">How it works</a>
+            <a href="/market" class="nav-item">Market</a>
+            <a href="/glossary" class="nav-item">Glossary</a>`;
+        }
+        // Hide the internal "before listings are sent to a builder…" pipeline panel.
+        document.querySelectorAll(".instructions").forEach((el) => {
+          if (/project manager|partner builder|prototype/i.test(el.textContent)) el.style.display = "none";
+        });
       }
 
       // Daily digest: new deals / move-in ready / new builds found, and listings
