@@ -359,12 +359,15 @@ app.get("/api/favorites", requireAuth, async (req, res) => {
   try {
     const prefs = await Preference.find({ userId: req.user.id, status: "saved" });
     const ids = prefs.map((p) => p.listingId);
-    // Drop favorites that have since sold — a saved listing that's off the market
-    // is no longer actionable, so it shouldn't clutter the saved view. The sold
-    // record still lives in /api/sold and the Preference row is left intact, so
-    // this is a display filter, not a destructive un-save.
+    // Only show favorites that are still ON the market. A saved listing that's
+    // sold OR withdrawn/disappeared from Hemnet is no longer actionable, so it
+    // shouldn't clutter the saved view. Note: a listing that left Hemnet without a
+    // matched final price stays "disappeared" (never "confirmed_sold"), so hiding
+    // only sold statuses left those lingering — hence the full off-market set here.
+    // The Preference row is left intact (non-destructive); if it re-lists as
+    // "active" it reappears.
     const listings = await Listing.find(
-      { id: { $in: ids }, status: { $nin: ["confirmed_sold", "sold"] } },
+      { id: { $in: ids }, status: { $nin: ["confirmed_sold", "sold", "disappeared", "removed"] } },
       { __v: 0 }
     ).lean();
     // Serve stored precomputed estimates; only load the sold set (projected, no
