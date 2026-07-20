@@ -27,7 +27,7 @@
       header h1 { font-size: 1.8rem; color: #fff; }
       header h2 { font-size: 0.85rem; font-weight: 300; color: #666; margin-top: 2px; }
 
-      .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+      .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
       .header-right img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }
       .header-right span { font-size: 0.85rem; color: #aaa; }
       .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
@@ -163,19 +163,19 @@
       }
       .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
       .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
-      #currency-toggle { display: flex; align-items: center; }
+      #currency-toggle { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
       #currency-toggle select { background: #1e1e1e; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 6px 8px; font-size: 0.82rem; cursor: pointer; }
-      #fx-note { text-align: center; color: #666; font-size: 0.78rem; margin: 8px 0 2px; }
+      #fx-note { color: #666; font-size: 0.62rem; line-height: 1.2; text-align: right; max-width: 160px; }
       #fx-note:empty { display: none; }
 
       .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
       .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
 
       .listing-actions {
-        display: flex; gap: 10px; margin-top: 10px;
+        display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;
       }
       .action-btn {
-        flex: 1; padding: 8px; border: none; border-radius: 6px;
+        flex: 1 1 auto; min-width: 130px; text-align: center; padding: 8px; border: none; border-radius: 6px;
         font-family: "Poppins", sans-serif; font-size: 0.82rem;
         cursor: pointer; transition: opacity 0.2s;
       }
@@ -1388,9 +1388,10 @@
         if (hr && !document.getElementById("currency-select")) {
           const wrap = document.createElement("div");
           wrap.id = "currency-toggle";
+          // Select + the rate/source/date note stacked beneath it (small text).
           wrap.innerHTML = `<select id="currency-select" aria-label="Display currency" title="Show prices in this currency">
             ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${code === displayCurrency ? "selected" : ""}>${c.label}</option>`).join("")}
-          </select>`;
+          </select><span id="fx-note"></span>`;
           hr.insertBefore(wrap, hr.firstChild);
           document.getElementById("currency-select").addEventListener("change", async (e) => {
             displayCurrency = e.target.value;
@@ -1399,12 +1400,6 @@
             updateFxNote();
             if (allListingsData) renderListings(allListingsData);
           });
-        }
-        if (!document.getElementById("fx-note")) {
-          const note = document.createElement("div");
-          note.id = "fx-note";
-          const tabs = document.getElementById("view-tabs");
-          if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(note, tabs);
         }
       }
 
