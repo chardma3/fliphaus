@@ -185,12 +185,16 @@ function buildBrfIntelligence(listing, soldListingsOrIndex = []) {
     else unknown.push(price);
   }
 
-  // Resale benchmark from ALL real comps in scope (classification-free): the 75th
-  // percentile of actual sold kr/m². This is the primary estimate the ROI calc
-  // uses, so we no longer need every comp tagged renovated/unrenovated.
+  // Resale benchmark from the real local sold kr/m². The 75th percentile assumes a
+  // renovated flat sells NEAR THE TOP of the local range — but we can only justify
+  // that when we actually have condition-matched renovated comps proving renovated
+  // units fetch a premium. With ZERO renovated comps (every sale unknown-condition)
+  // the honest estimate is the MEDIAN — the typical local price — not the top
+  // quartile, which otherwise inflates the ROI on an unproven premium.
   const allSqm = sales.map((sale) => parseNumber(sale.soldPriceSqm)).filter((p) => p > 0);
   const comparableCount = allSqm.length;
-  const estimatedRenovatedSqm = percentile(allSqm, RENOVATED_RESALE_PERCENTILE);
+  const resalePercentile = renovated.length > 0 ? RENOVATED_RESALE_PERCENTILE : 50;
+  const estimatedRenovatedSqm = percentile(allSqm, resalePercentile);
   const medianSqm = percentile(allSqm, 50);
 
   // The renovated-vs-unrenovated split is still computed when comps happen to be
@@ -205,7 +209,12 @@ function buildBrfIntelligence(listing, soldListingsOrIndex = []) {
   const estimatedUpliftTotal = classifiedUpliftPerSqm != null && sizeSqm
     ? Math.round(classifiedUpliftPerSqm * sizeSqm)
     : null;
-  const confidence = calculateConfidence(scope, comparableCount);
+  let confidence = calculateConfidence(scope, comparableCount);
+  // Volume alone doesn't make a RENOVATED-resale estimate high-confidence. With no
+  // condition-matched renovated comps we're using the median (typical local price),
+  // which is an honest area estimate but not a proven renovated level — so cap it
+  // at "medium" rather than claiming "high" off comp count.
+  if (renovated.length === 0 && confidence === "high") confidence = "medium";
 
   const basis = scope === "same_brf"
     ? "same BRF sales"
@@ -213,8 +222,9 @@ function buildBrfIntelligence(listing, soldListingsOrIndex = []) {
       ? "area-level sales"
       : "insufficient sold-listing evidence";
 
+  const percentileLabel = renovated.length > 0 ? "75th percentile" : "median";
   const summary = estimatedRenovatedSqm != null
-    ? `${basis}: ${comparableCount} sold comparable${comparableCount === 1 ? "" : "s"} in the last year, renovated-level resale around ${estimatedRenovatedSqm.toLocaleString("sv-SE")} kr/m² (75th percentile of local sales).`
+    ? `${basis}: ${comparableCount} sold comparable${comparableCount === 1 ? "" : "s"} in the last year, resale around ${estimatedRenovatedSqm.toLocaleString("sv-SE")} kr/m² (${percentileLabel} of local sales${renovated.length ? "" : " — no condition-matched renovated comps, so median not top quartile"}).`
     : `${basis}: no sold comparables collected yet.`;
 
   return {

@@ -89,6 +89,18 @@ Coverage requirement:
 - Include roomCoverage.kitchenVisible and roomCoverage.bathroomVisible.
 - If kitchen or bathroom is missing from the provided photos, lower confidence and say what is missing in summary.
 
+Renovation cost per room (estimatedCostSEK) — cost the ACTUAL WORK you identified, NOT the room type, and keep each room's cost consistent with its condition and your indicators/summary:
+- Kitchen:
+  - renovated / newly_renovated → null (no work).
+  - COSMETIC — modern cabinet fronts AND worktop, only the appliances, a splashback, a tap or handles are dated → 10,000–30,000. A free-standing white cooker/fridge in an otherwise modern kitchen is an APPLIANCE swap, not a kitchen renovation — cost it here. If your indicators say the fronts are modern/updated, the kitchen CANNOT be a 90k+ full gut.
+  - PARTIAL — some cabinetry/worktop dated but mixed old/new → 40,000–70,000.
+  - FULL GUT — original: dated fronts with laminate/steel worktop needing NEW cabinets AND worktop → 90,000–150,000.
+- Bathroom:
+  - renovated / newly_renovated → null.
+  - COSMETIC — sound modern wet zone, only a basin/tap/toilet/paint dated → 15,000–40,000.
+  - FULL WET-ROOM RENO — dated/original needing re-tile + re-waterproof + new fixtures → 90,000–150,000.
+Reserve the 90k+ bands for a kitchen that needs new cabinetry AND worktop, or a bathroom that needs a full re-tile/re-waterproof. totalEstimatedCostSEK is the sum of the per-room costs.
+
 Respond with ONLY valid JSON, no markdown fences. Use this exact structure:
 {
   "renovationScore": <1-10, where 10 = maximum renovation needed>,
