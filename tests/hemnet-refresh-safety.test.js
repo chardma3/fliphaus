@@ -149,36 +149,21 @@ test("sold scrape can be split by area for shorter cron requests", () => {
   );
 });
 
-const workflowDir = path.join(__dirname, "..", ".github", "workflows");
-const readWorkflow = (name) => fs.readFileSync(path.join(workflowDir, name), "utf8");
+test("scheduled-scrape worker runs the full daily sequence off the web box", () => {
+  // The web-box GitHub workflows (scrape-batch-*, refresh-fliphaus) were retired —
+  // scraping now runs on a SEPARATE Render instance via scripts/scheduled-scrape.js
+  // so it can't pin the web service. The worker must still cover every stage the
+  // old workflows did, calling the functions directly (no HTTP).
+  const worker = fs.readFileSync(path.join(__dirname, "..", "scripts", "scheduled-scrape.js"), "utf8");
+  assert.match(worker, /require\("\.\.\/api\/scrape"\)/);            // active scrape
+  assert.match(worker, /require\("\.\.\/api\/scrape-sold"\)/);       // sold + reconcile
+  assert.match(worker, /analyzeListingImagesRefresh/);              // photo analysis / self-heal
+  assert.match(worker, /precomputeEstimates/);                     // resale estimates
+  assert.match(worker, /mongoose\.connect\(process\.env\.MONGO_URI\)/);
 
-test("sold-refresh workflow fires a single quick background trigger, not area-by-area curl-waiting", () => {
-  const workflow = readWorkflow("refresh-fliphaus.yml");
-  // One fire-and-forget POST; the scrape/analyse/reconcile/precompute chain runs
-  // in the background on Render (see /api/refresh-sold-all).
-  assert.match(workflow, /api\/refresh-sold-all/);
-  assert.match(workflow, /-X POST/);
-  assert.match(workflow, /continue-on-error: true/);
-  // The trigger must return fast — no 600s per-area ceilings any more.
-  assert.doesNotMatch(workflow, /--max-time 600/);
-  // Rissne (northern Sundbyberg) was dropped 2026-06-19 — must not be scraped.
-  assert.doesNotMatch(workflow, /area=Rissne/);
-  // The active listing scrape moved to the staggered scrape-batch-* workflows.
-  assert.doesNotMatch(workflow, /api\/scrape\?/);
-});
-
-test("each staggered batch workflow scrapes exactly one bounded batch at its own cron", () => {
-  const crons = [];
-  for (let n = 1; n <= 3; n++) {
-    const wf = readWorkflow(`scrape-batch-${n}.yml`);
-    assert.match(wf, new RegExp(`api/scrape\\?includeDetails=false&batch=${n}`));
-    assert.match(wf, /--max-time 300/);
-    assert.match(wf, /--retry 2/);
-    assert.match(wf, /workflow_dispatch:/); // manually triggerable for verification
-    const m = wf.match(/cron:\s*"([^"]+)"/);
-    assert.ok(m, `batch ${n} has a cron`);
-    crons.push(m[1]);
+  // The retired web-box workflows must be gone (they made scrapes pin the box).
+  const workflowDir = path.join(__dirname, "..", ".github", "workflows");
+  for (const gone of ["refresh-fliphaus.yml", "scrape-batch-1.yml", "scrape-batch-2.yml", "scrape-batch-3.yml"]) {
+    assert.ok(!fs.existsSync(path.join(workflowDir, gone)), `${gone} should be retired`);
   }
-  // Distinct fire times so two batches never hit the single instance at once.
-  assert.equal(new Set(crons).size, 3);
 });
