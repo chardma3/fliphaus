@@ -79,7 +79,8 @@ test("sub-area labels match their parent scraped area's sold comps", () => {
   }));
   const arb = buildBrfIntelligence(sodermalmSub, comps).renovationArbitrage;
   assert.equal(arb.scope, "area");
-  assert.equal(arb.confidence, "high");
+  // No condition-matched renovated comps here → capped at medium (median-based), not high.
+  assert.equal(arb.confidence, "medium");
   assert.equal(arb.totalComparableSales, 12);
 
   // Unscraped area stays unmatched (no false positive against Södermalm comps).
@@ -104,10 +105,10 @@ test("comps match on real location, not the search catchment they were scraped u
   assert.equal(arb.confidence, "medium"); // 8 area comps
 });
 
-test("a year of UNCLASSIFIED area comps still yields a confident resale estimate", () => {
-  // The whole point: none of these sales carries a condition label or score, yet
-  // we have plenty of them — so the estimate is real and confident, no longer
-  // thrown away as "not enough similar sales".
+test("a year of UNCLASSIFIED area comps yields a MEDIAN estimate at medium confidence (not top-quartile/high)", () => {
+  // Plenty of comps, but none condition-matched — so the estimate is the MEDIAN
+  // (typical local price), and confidence is capped at medium: we can't claim a
+  // proven renovated premium off comp volume alone (that's what inflated ROI).
   const listing = { brfName: "BRF Whatever", size: "50 m²", locationDescription: "Farsta, Stockholm" };
   const soldListings = Array.from({ length: 14 }, (_, i) => ({
     area: "Farsta",
@@ -118,11 +119,12 @@ test("a year of UNCLASSIFIED area comps still yields a confident resale estimate
 
   const arb = buildBrfIntelligence(listing, soldListings).renovationArbitrage;
   assert.equal(arb.scope, "area");
-  assert.equal(arb.confidence, "high"); // 14 area comps >= 12
+  assert.equal(arb.confidence, "medium"); // capped: 14 comps but 0 condition-matched renovated
   assert.equal(arb.totalComparableSales, 14);
-  assert.ok(arb.estimatedRenovatedSqm > 0, "resale estimate computed without any classification");
+  // Median of 48k..61k (14 values) = 54500; top-quartile (old p75) would have been higher.
+  assert.equal(arb.estimatedRenovatedSqm, arb.medianSqm);
   assert.equal(arb.renovatedSales, 0); // nothing was tagged
-  assert.equal(arb.estimatedUpliftPerSqm, null); // classified uplift unavailable, but estimate still confident
+  assert.equal(arb.estimatedUpliftPerSqm, null);
 });
 
 test("falls back to area-level evidence with low confidence when comps are sparse", () => {
