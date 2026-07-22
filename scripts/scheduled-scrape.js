@@ -19,8 +19,9 @@
  * Sequence (mirrors the old GitHub workflows, in order):
  *   1. Active listings — all areas (+ disappearance reconciliation)
  *   2. Sold prices (slutpriser) — all areas (+ sold reconciliation, built in)
- *   3. Photo analysis / self-heal
- *   4. Precompute resale estimates
+ *   3. Photo analysis & scoring (new active + sold)
+ *   4. Gallery self-heal (active) — bounded rounds; replaces the web-box coverage sweep
+ *   5. Precompute resale estimates
  *
  * Each stage is isolated: a failure logs + records "failed" but never aborts the
  * later stages. Needs MONGO_URI + ANTHROPIC_API_KEY + HEMNET_PROXY_* (the same
@@ -77,9 +78,29 @@ async function stage(job, label, fn) {
     // scrapeSold reconciles disappeared→sold at the end of its own run.
     await stage("sold-scrape", "Sold prices — all areas", () =>
       scrapeSold({ detailLimit: 5, includeDetails: false, includeAnalysis: false }));
-    // Score freshly-scraped listings + self-heal the bot-block tail.
+    // Score freshly-scraped listings (active + sold), one pass.
+    const analyzeLimit = Number(process.env.SCRAPE_ANALYZE_LIMIT) || 10;
     await stage("image-analysis", "Photo analysis & scoring", () =>
-      analyzeListingImagesRefresh({ dataset: "all", limit: 10 }));
+      analyzeListingImagesRefresh({ dataset: "all", limit: analyzeLimit }));
+
+    // Drain the ACTIVE self-heal tail — re-hydrate galleries that got bot-blocked
+    // so those listings score properly. This REPLACES the hourly coverage sweep
+    // that used to run on the web box (turn ENABLE_COVERAGE_SWEEP off there once
+    // this is live, so the web box runs no Chrome at all). Bounded by rounds so
+    // cost stays predictable; each round stops early when nothing's left. Tune with
+    // SCRAPE_SELFHEAL_ROUNDS (× SCRAPE_ANALYZE_LIMIT listings/day).
+    const selfHealRounds = Number(process.env.SCRAPE_SELFHEAL_ROUNDS) || 4;
+    await stage("self-heal", "Gallery self-heal (active)", async () => {
+      let analyzed = 0;
+      let rounds = 0;
+      for (let i = 0; i < selfHealRounds; i++) {
+        const r = await analyzeListingImagesRefresh({ dataset: "active", limit: analyzeLimit });
+        rounds += 1;
+        analyzed += r.active?.analyzed || 0;
+        if ((r.active?.analyzed || 0) === 0) break; // tail drained for now
+      }
+      return { rounds, analyzed };
+    });
     // Rebuild stored resale estimates from the fresh comps.
     await stage("precompute-estimates", "Precompute resale estimates", () =>
       precomputeEstimates({ Listing, SoldListing }));
