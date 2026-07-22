@@ -1,0 +1,45 @@
+# Render Blueprint — defines the standalone SCRAPE CRON JOB that runs on its OWN
+# instance, separate from the web service, so scraping never pins the web box
+# (see scripts/scheduled-scrape.js). The web service is managed separately in the
+# Render dashboard and is intentionally NOT defined here, so applying this
+# Blueprint will not touch or duplicate it.
+#
+# HOW TO USE:
+#   1. If you already created a scrape service manually, DELETE it first (so you
+#      don't end up with two).
+#   2. Render dashboard -> New -> Blueprint -> connect the chardma3/fliphaus repo.
+#      Render reads this file and pre-fills everything below.
+#   3. Fill in the secret values when prompted (they're sync:false — never stored
+#      in the repo, which matters because the repo is public).
+#   4. Apply. The job then runs on the schedule; to run it now, open the cron job
+#      and click "Trigger Run".
+#
+# Schedule is UTC. "0 11 * * 1-5" = 11:00 UTC (~13:00 Europe/Stockholm, summer)
+# on weekdays. Tune the schedule or the SCRAPE_*/SOLD_* env vars as needed.
+services:
+  - type: cron
+    name: fliphaus-scrape
+    runtime: node
+    plan: standard          # 2 GB RAM — Chromium (Puppeteer) needs it
+    region: frankfurt        # ⚠ set to match your web service + MongoDB region (region can't be changed later)
+    branch: main
+    schedule: "0 11 * * 1-5"
+    buildCommand: npm install
+    startCommand: node scripts/scheduled-scrape.js
+    envVars:
+      # Secrets — set the values in the Render dashboard, not here.
+      - key: MONGO_URI
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: HEMNET_PROXY_SERVER
+        sync: false
+      - key: HEMNET_PROXY_USERNAME
+        sync: false
+      - key: HEMNET_PROXY_PASSWORD
+        sync: false
+      # Optional overrides — only needed if your web service sets them (copy to match).
+      - key: ANALYSIS_MODEL
+        sync: false
+      - key: TRIAGE_MODEL
+        sync: false
