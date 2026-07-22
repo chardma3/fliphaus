@@ -36,7 +36,7 @@ const SOLD_MAX_PAGE_ATTEMPTS = Math.max(1, Number(process.env.SOLD_SCRAPE_MAX_PA
 // day. Set SOLD_SCRAPE_FULL_WALK=true to force the old full-depth walk (use for an
 // occasional deep refresh, e.g. to backfill price corrections on older sales).
 const SOLD_FULL_WALK = String(process.env.SOLD_SCRAPE_FULL_WALK || "").toLowerCase() === "true";
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { jitteredSleep, retryBackoff, PACING } = require("./scrape-pacing");
 
 function parsePrice(str) {
   if (!str) return 0;
@@ -161,6 +161,7 @@ async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PA
   const seen = new Set();
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+    if (pageNum > 1) await jitteredSleep(PACING.soldPageDelayMs); // pace between pages (jittered)
     // Retry page failures before giving up. The proxy pool is mixed — a
     // datacenter exit gets blocked (bot-protection) — and each request rotates
     // to a fresh exit, so retrying with a short pause usually lands a
@@ -174,7 +175,7 @@ async function scrapeSoldArea(page, areaName, locationId, maxPages = SOLD_MAX_PA
         break;
       } catch (err) {
         console.error(`  ✗ ${areaName} sold page ${pageNum} (attempt ${attempt}/${SOLD_MAX_PAGE_ATTEMPTS}): ${err.message}`);
-        if (attempt < SOLD_MAX_PAGE_ATTEMPTS) await sleep(1500);
+        if (attempt < SOLD_MAX_PAGE_ATTEMPTS) await retryBackoff(attempt, PACING.retryBaseMs);
       }
     }
     if (pageListings === null) break; // page failed after retries
@@ -251,14 +252,14 @@ module.exports = async (options = {}) => {
       }
       console.error(`  ✗ Failed ${area}:`, err.message);
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    await jitteredSleep(PACING.areaDelayMs); // pace between areas (jittered)
   }
 
   if (includeDetails && detailLimit > 0) {
     for (const listing of allSold.slice(0, detailLimit)) {
       const detail = await scrapeSoldDetail(page, listing.slug);
       if (detail) Object.assign(listing, detail);
-      await new Promise((r) => setTimeout(r, 500));
+      await jitteredSleep(PACING.soldDetailDelayMs); // pace between detail fetches (jittered)
     }
     if (allSold.length > detailLimit) {
       console.log(`  ⏱ Detail scrape capped at ${detailLimit}/${allSold.length} sold listings for this request`);
