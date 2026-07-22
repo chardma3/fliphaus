@@ -56,7 +56,7 @@ Each scored listing's ROI is estimated from **real sold comparables**, not a har
 - **Database:** MongoDB Atlas via Mongoose; sessions stored in Mongo (`express-session` + `connect-mongo`).
 - **AI:** Anthropic Claude via `@anthropic-ai/sdk` — Haiku 4.5 triage (worker) + Sonnet 4.6 renovation scoring (architect); model ids env-overridable.
 - **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
-- **Scheduling:** GitHub Actions for the daily heavy jobs; a lightweight in-process loop for the hourly coverage self-heal.
+- **Scheduling:** a dedicated **Render Cron Job** runs the daily scrape on its **own instance** (`scripts/scheduled-scrape.js`), separate from the web service so scraping never blocks the app. (GitHub Actions is no longer used for scraping.)
 - **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / friend / builder), enforced server-side (`requireAdmin` on every `/api/admin/*` route).
 - **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps.
 - **Tests:** Node's built-in `node --test`; pure-function unit tests (no DB/network), run with `npm test`.
@@ -98,10 +98,10 @@ Three role-scoped surfaces sit on top of the same data, plus the builder portal:
 - **SEK → AUD** for the friends view comes from `api/fx.js` (`/api/fx/sek-aud`): a daily rate from Frankfurter (free, no key), cached in-process for 24h, degrading to the last good rate and then a fixed fallback (`FALLBACK_SEK_AUD`) so the page never shows a broken figure.
 
 ### Scheduling & concurrency
-- **GitHub Actions** runs the daily heavy work: three staggered active-scrape batches + a sold/analysis/reconcile refresh (see *Data refresh pipeline* below).
-- The **in-process nightly scheduler** (`api/scheduler.js`) is intentionally **off** in production (`ENABLE_SCHEDULER` unset) — GitHub Actions already does that work, and running it in-process too would double-scrape.
-- The **coverage self-heal sweep** *is* in-process (`ENABLE_COVERAGE_SWEEP=true`): every `COVERAGE_SWEEP_MINUTES` (default **60**) it re-hydrates and re-scores listings still missing a displayed wet room. It **skips the model call when Hemnet returns no richer gallery** (re-scoring the same thumbnails wastes tokens) and counts the attempt, so bot-blocked listings drain out after `MAX_HYDRATION_ATTEMPTS` instead of being re-scored every tick forever. Was 5 min — that ran up the AI bill once the scorer moved to Sonnet; see the cost note below.
-- **`api/job-lock.js`** is a process-wide mutex shared by every Puppeteer job (HTTP `/api/scrape`, `/api/analyze-images`, and the sweep) so two headless Chromium sessions never run at once on the single instance — the sweep defers to any in-flight scrape and retries on its next tick.
+- **Scraping runs on a separate Render Cron Job** (`scripts/scheduled-scrape.js`), on its **own instance** — not the web service — so a scrape can never starve the app. See *Data refresh pipeline* below.
+- The **in-process nightly scheduler** (`api/scheduler.js`, `ENABLE_SCHEDULER`) stays **off** in production — the cron worker owns the daily scrape, so running it in-process too would double-scrape.
+- The **coverage self-heal** used to run in-process on the web service (`ENABLE_COVERAGE_SWEEP`, hourly). It now runs on the cron worker as a bounded stage (`SCRAPE_SELFHEAL_ROUNDS` × `SCRAPE_ANALYZE_LIMIT` active re-hydration passes/day), so `ENABLE_COVERAGE_SWEEP` can be left **off** and the web service runs **no** Puppeteer at all. (It still skips the model call when Hemnet returns no richer gallery, and drains bot-blocked listings after `MAX_HYDRATION_ATTEMPTS`.)
+- **`api/job-lock.js`** is a process-wide mutex for the on-demand Puppeteer endpoints on the web service (`/api/scrape`, `/api/analyze-images`, the admin *Reanalyze* button) so two headless Chromium sessions never run at once. The daily pipeline no longer competes for it — it's on the separate cron instance.
 
 ## Scale plan
 
@@ -111,32 +111,26 @@ Launch in Sweden → expand to Australia, UK, Portugal, Netherlands.
 
 FlipHaus depends on fresh Hemnet data for property selection, renovation analysis, and sold-market evidence. The front-end health banner and `/api/scrape-health` endpoint should be checked whenever the dashboard looks wrong.
 
-### Scheduled refresh
+### Scheduled refresh (the Render cron worker)
 
-The active scrape is split across **three staggered GitHub Actions workflows** (`scrape-batch-{1,2,3}.yml`) so a single `/api/scrape?batch=N` request stays well under Hemnet's ~100s Cloudflare edge timeout as areas grow. Each batch also reconciles its own areas' disappearances, so withdrawals are caught same-day. The batches are spaced **40 min apart** so each one's scrape (up to 6 proxy retries per area) finishes and releases the single-instance job lock before the next fires — otherwise the later batch gets `409 Busy` and fails (the lock only allows one Puppeteer job at a time).
+The daily refresh is a single standalone script, **`scripts/scheduled-scrape.js`**, run by a **Render Cron Job** on its own 2 GB instance (schedule `0 11 * * 1-5` UTC ≈ 13:00 Stockholm, weekdays). It calls the scrape functions **directly** (no HTTP), so none of the per-request Cloudflare/Render timeouts apply and it scrapes all areas in one pass. Because it's a different instance from the web service, the app stays fully responsive no matter how long a scrape takes.
 
-All four run **Monday–Friday only** (cron day-of-week `1-5`): Hemnet agents don't publish new listings on weekends, so a Sat/Sun run adds nothing and just ties up the single Render instance with Chromium (a long scrape starves the web app — logins/pages hang while it runs). The scrape is in-process on the one web service, so its run window is also its unresponsive window; keeping it to weekdays avoids weekend collisions. (The durable fix, if daytime hangs recur, is a separate background worker for the browser scraping — see the architecture note below.)
+Stages, in order (each isolated — a failure records `failed` but never aborts the rest, and each writes a `scrapeRun` row so `/api/scrape-health` shows it, labelled *"… — all areas"*):
 
-| Workflow | Cron (UTC) | Stockholm (CEST) | Does |
-|----------|-----------|------------------|------|
-| `scrape-batch-1.yml` | `0 11 * * 1-5`  | 13:00 Mon–Fri | Active listings, batch 1/3 |
-| `scrape-batch-2.yml` | `40 11 * * 1-5` | 13:40 Mon–Fri | Active listings, batch 2/3 |
-| `scrape-batch-3.yml` | `20 12 * * 1-5` | 14:20 Mon–Fri | Active listings, batch 3/3 |
-| `refresh-fliphaus.yml` | `0 13 * * 1-5` | 15:00 Mon–Fri | Sold prices + image analysis + sold reconciliation (runs **after** the batches) |
+1. **Active listings — all areas** (+ per-area disappearance reconciliation).
+2. **Sold prices — all areas** (+ sold reconciliation, built into the sold scrape).
+3. **Photo analysis & scoring** — one `dataset:"all"` pass (new active + sold).
+4. **Gallery self-heal (active)** — bounded `SCRAPE_SELFHEAL_ROUNDS` × `SCRAPE_ANALYZE_LIMIT` re-hydration passes; replaces the old web-box coverage sweep.
+5. **Precompute resale estimates** — rebuilds every active listing's stored sold-comp estimate from the fresh data, so the feed serves it without crunching.
 
-> Keep these times in sync with `DAILY_SCRAPES` in `api/scrape-health.js` (the dashboard schedule panel) — same UTC values.
+Human-like **jittered pacing** (`api/scrape-pacing.js`, env-tunable: `SCRAPE_AREA_DELAY_MS`, `SCRAPE_RETRY_BASE_MS`, `SOLD_PAGE_DELAY_MS`, `SOLD_DETAIL_DELAY_MS`) spaces requests out to trip Hemnet's Cloudflare bot detection less. (Rissne was dropped as an area — thin owner-occupier resale; it must not be scraped.)
 
-All workflows use the `FLIPHAUS_REFRESH_URL` and `FLIPHAUS_REFRESH_TOKEN` GitHub secrets. Do not commit token values.
+**Render setup** (defined in `render.yaml`; the live job was created manually so don't re-apply the Blueprint):
+- Build: `npm install && npx puppeteer browsers install chrome`
+- Env: `PUPPETEER_CACHE_DIR=/opt/render/project/src/.cache/puppeteer` + the same secrets as the web service (`MONGO_URI`, `ANTHROPIC_API_KEY`, `HEMNET_PROXY_*`, optional `ANALYSIS_MODEL`/`TRIAGE_MODEL`).
+- Modes: `node scripts/scheduled-scrape.js` (full) · `active` · `sold`.
 
-`refresh-fliphaus.yml` steps:
-
-1. `/api/scrape-sold?area=Farsta&detailLimit=5&includeDetails=false&includeAnalysis=false` refreshes Farsta sold comparables.
-2. A looped step refreshes sold comparables for every other live area (Kista, Bagarmossen, …, Östermalm, Södermalm, Finntorp, Ektorp, Sickla), tolerating per-area blocks. The loop is the single source — add an area to `LOCATION_IDS` *and* to this loop.
-3. `/api/analyze-images?dataset=all&limit=10` scores newly-scraped photos and runs the bounded self-heal (separate post-scrape step, see below).
-4. `/api/reconcile-sold` confirms disappeared dashboard listings only when they match scraped sold records strongly enough.
-5. `/api/precompute-estimates` runs **last** — recomputes and stores every active listing's sold-comp estimate from the now-fresh sold data, so the feed serves it without crunching. (Can also be triggered on its own via the *Precompute resale estimates* workflow.)
-
-The sold scrape is intentionally split by area and capped at a low `detailLimit` per request to keep each HTTP request short and avoid Render/GitHub/Cloudflare timeouts. (Rissne was dropped as an area — thin owner-occupier resale; it must not be scraped.)
+**GitHub Actions** no longer runs any scraping. The only remaining workflows (`precompute-estimates`, `prune-sold`, `reanalyse-deals`) are **manual-only** (`workflow_dispatch`) convenience triggers that hit the web-service endpoints on demand.
 
 ### Run history — every scrape that actually ran (not just the schedule)
 
@@ -153,11 +147,13 @@ The sold scrape is intentionally split by area and capped at a low `detailLimit`
 
 **Why this is the efficient choice.** Write volume is ~4 rows/day (one per scheduled run) — a single indexed insert each, negligible against the scrape work itself. A single index on `startedAt` does double duty: it is both the TTL that auto-expires rows after 180 days (MongoDB prunes in the background, so the collection never grows unbounded — ~720 rows at steady state) **and** the sort key for the limit-20 read, so the dashboard query is an indexed descending scan with no in-memory sort. There are deliberately **no** per-field indexes on `job`/`status` because nothing queries by them yet — adding unused indexes would only tax every write. If run analytics are wanted later (e.g. success rate per batch over 30 days), the collection is already the right shape to aggregate over.
 
-### Continuous coverage self-heal (in-process, not GitHub Actions)
+### Coverage self-heal (now on the cron worker)
 
-Independently of the daily workflows, the always-on web service runs the coverage sweep every `COVERAGE_SWEEP_MINUTES` (default **60**, was 5) when `ENABLE_COVERAGE_SWEEP=true`. It re-hydrates and re-scores listings still missing a displayed kitchen/bathroom — the bot-block tail. **Cost guard:** when a fetch returns no richer gallery than what's stored (Hemnet blocked the detail page), it skips the model call and counts the attempt, so a permanently-blocked listing drains out of the queue after `MAX_HYDRATION_ATTEMPTS` (default 4) rather than being re-scored every tick. Without this, ~4 un-fetchable listings re-scored every 5 min on Sonnet burned a \$20 credit overnight. It defers to any in-flight scrape via the shared job lock; every tick logs the queue size, and its last run is visible at `/api/scrape-health` (`coverageSweep.lastRun`, incl. `queued`). Keep `ENABLE_SCHEDULER` **off** (GitHub Actions owns the daily scrape); the sweep has its own flag.
+Listings that got bot-blocked during a scrape keep a partial gallery (missing a displayed kitchen/bathroom) — the "bot-block tail". Re-hydrating and re-scoring them is **stage 4 of the cron worker** (`SCRAPE_SELFHEAL_ROUNDS` bounded `dataset:"active"` passes per daily run). The same **cost guard** applies: when a fetch returns no richer gallery than what's stored, it skips the model call and counts the attempt, so a permanently-blocked listing drains out after `MAX_HYDRATION_ATTEMPTS` (default 4).
 
-A single stuck deal can be force-corrected without the sweep by re-running the **Reanalyse deals (manual)** workflow, or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>`.
+The old in-process web-service sweep (`ENABLE_COVERAGE_SWEEP`, every `COVERAGE_SWEEP_MINUTES`) still exists as a fallback but is meant to stay **off** in production now that the worker handles it — that keeps the web service free of Puppeteer entirely. Keep `ENABLE_SCHEDULER` **off** too (the cron worker owns the daily scrape).
+
+A single stuck deal can be force-corrected via the admin **Reanalyze (Opus)** button, the **Reanalyse deals (manual)** workflow, or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>`.
 
 Longer-term architecture note: if Hemnet scraping continues to exceed HTTP/proxy time limits even after area splitting and lower `detailLimit` values, move the actual browser scraping into a background worker/queue. In that model the HTTP endpoint should enqueue a refresh job and return quickly, while the worker updates MongoDB and exposes job status separately.
 
@@ -176,12 +172,12 @@ Do not commit proxy credentials. Add them only in Render service environment var
 Recommended setup:
 
 1. Choose a residential proxy or scraping-browser provider with Sweden/Stockholm residential exits.
-2. In Render, open the FlipHaus web service.
+2. In Render, open the **scrape cron job** (and the web service, if you use it for on-demand reanalyse).
 3. Go to Environment.
 4. Add `HEMNET_PROXY_SERVER`, `HEMNET_PROXY_USERNAME`, and `HEMNET_PROXY_PASSWORD` using the provider values.
 5. Save changes and let Render redeploy.
-6. Manually run the GitHub Actions workflow `Refresh FlipHaus data`.
-7. Check the workflow logs. A successful active scrape should return a JSON body like `Scrape complete` with a non-zero `total`.
+6. On the cron job, click **Trigger Run** (or run `node scripts/scheduled-scrape.js active` from the Shell).
+7. Check the cron job's run logs. A successful active scrape logs `✓ Active listings — all areas` with a non-zero `total`.
 8. Check `/api/scrape-health` and confirm the active `lastScrapeDate` moved to today.
 
 Known working Smartproxy shape for the prototype:
@@ -229,7 +225,7 @@ NODE
 
 If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, run the workflow.
 
-The scheduled workflow calls `/api/scrape?includeDetails=false` for the active refresh. This updates active listings quickly from Hemnet search result pages and skips slower detail-page work so GitHub Actions can continue to the sold comparable-property steps. The scheduled sold refreshes also use `includeDetails=false&includeAnalysis=false` with small per-area requests; run richer sold refreshes manually if detail-page enrichment is needed. Each scheduled scrape request has a five-minute curl timeout and retries twice because residential proxy exits can occasionally receive Hemnet bot-protection pages.
+The cron worker scrapes active listings with `includeDetails=false` — quickly from Hemnet search result pages, skipping slower detail-page work (galleries are hydrated later by the analysis/self-heal stages). The sold scrape also uses `includeDetails=false&includeAnalysis=false` with a low `detailLimit`. Because the worker calls the functions directly (no HTTP), there's no curl/Cloudflare request timeout; per-area retries + jittered pacing handle the occasional bot-protection page.
 
 Image analysis is deliberately a separate post-scrape step: `/api/analyze-images?dataset=all&limit=10`. It analyses photos already saved in MongoDB, so it does not keep a Puppeteer browser open or actively scrape Hemnet while the AI model is working. The workflow marks this step `continue-on-error: true`, so a temporary model/API failure does not make the core scrape look failed or stale.
 
@@ -269,13 +265,13 @@ Use `/api/scrape-health` to inspect:
 - `recentRuns` — the last 20 scrape/analysis runs that actually executed, with per-run status and result counts (see *Run history* above)
 - `estimates` — precomputed-estimate freshness: `precomputed` / `missing` counts over active listings and the `oldestAt` stamp. If `missing` climbs or `oldestAt` ages past a day, the daily precompute isn't running (`scripts/diagnose-precomputed-estimates.js` breaks it down per area). See *Backend architecture → Feed*.
 
-If data is stale and GitHub Actions failed:
+If data is stale and the scrape failed:
 
-1. Open the failed GitHub Actions run and identify which endpoint failed.
+1. Open the **cron job's run log** (Render → the scrape cron job → Logs / Runs) and identify which stage failed.
 2. If the error mentions Hemnet bot protection or missing `__NEXT_DATA__`, the source site blocked or changed the scraper; do not trust zero-result data.
-3. **`Refusing to persist zero active listings`** on every batch = the scraper got nothing from Hemnet across all areas — almost always the **residential proxy is out of data/credit** (top it up) or blocked. The guard is working: it refuses to save a zero result that would mark every listing `disappeared`, so no data is lost.
-4. If the error is `524` or a long timeout on `/api/scrape-sold`, keep the area-split workflow and lower `detailLimit` further.
-5. Re-run the workflow manually only after checking that the source site is reachable.
+3. **`Refusing to persist zero active listings`** = the scraper got nothing from Hemnet across all areas. The guard is working — it refuses to save a zero result that would mark every listing `disappeared`, so no data is lost. Check the **residential proxy** (credit/blocked) and Cloudflare bot-blocking; ease it with the pacing env vars if needed.
+4. **`Could not find Chrome`** = the cron job didn't install the browser — set Build Command to `npm install && npx puppeteer browsers install chrome` + `PUPPETEER_CACHE_DIR=/opt/render/project/src/.cache/puppeteer`, then **Clear build cache & deploy** (a plain Trigger Run won't rebuild).
+5. **Trigger Run** again after checking the source site is reachable, or run `node scripts/scheduled-scrape.js active` from the cron job's Shell.
 
 ### Dashboard data endpoints (read-only, no auth)
 
