@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
 
 // A log of every scrape/analysis run the server actually performed — one document
-// per HTTP hit on /api/scrape, /api/scrape-sold and /api/analyze-images, whatever
-// triggered it (GitHub Actions, the in-process scheduler, or a manual curl). This
-// is the source of truth for "which scrapes have actually run", as opposed to the
-// static DAILY_SCRAPES schedule (api/scrape-health.js) which only lists what is
-// MEANT to run. The dashboard health panel renders the most recent of these.
+// per run, whatever triggered it (the Render cron worker scripts/scheduled-scrape.js,
+// the in-process scheduler, or a manual curl on /api/scrape*). This is the source
+// of truth for "which scrapes have actually run", as opposed to the static
+// DAILY_SCRAPES schedule (api/scrape-health.js) which only lists what is MEANT to
+// run. The dashboard health panel renders the most recent of these.
 const scrapeRunSchema = new mongoose.Schema({
   // Machine kind: "active-scrape" | "sold-scrape" | "image-analysis".
   job: String,

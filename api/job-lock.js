@@ -1,14 +1,14 @@
 // A process-wide mutex for the heavy Puppeteer/proxy jobs (active scrape, image
 // analysis / self-heal, the fast coverage sweep). The Render web service is a
 // SINGLE always-on instance, so an in-memory flag is enough — and it's the only
-// thing that can coordinate the in-process scheduler with the HTTP /api/scrape
-// and /api/analyze-images requests that GitHub Actions fires. Two of these jobs
-// running at once would put two headless Chromium sessions on the same small
-// instance and OOM it (the 2 GB incident), so only one holds the lock at a time.
+// thing that can coordinate the in-process scheduler with any manual HTTP
+// /api/scrape and /api/analyze-images requests. Two of these jobs running at once
+// would put two headless Chromium sessions on the same small instance and OOM it
+// (the 2 GB incident), so only one holds the lock at a time.
 //
 // Priority is by who YIELDS: the coverage sweep checks isBusy() and defers (it's
 // frequent and cheap, so it can always wait); scrapes/analysis acquire the lock
-// and a caller that can't get it should back off and retry (GitHub Actions does).
+// and a caller that can't get it should back off and retry.
 
 let current = null; // name of the running job, or null when idle
 
