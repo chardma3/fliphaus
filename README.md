@@ -130,7 +130,7 @@ Human-like **jittered pacing** (`api/scrape-pacing.js`, env-tunable: `SCRAPE_ARE
 - Env: `PUPPETEER_CACHE_DIR=/opt/render/project/src/.cache/puppeteer` + the same secrets as the web service (`MONGO_URI`, `ANTHROPIC_API_KEY`, `HEMNET_PROXY_*`, optional `ANALYSIS_MODEL`/`TRIAGE_MODEL`).
 - Modes: `node scripts/scheduled-scrape.js` (full) · `active` · `sold`.
 
-**GitHub Actions** no longer runs any scraping. The only remaining workflows (`precompute-estimates`, `prune-sold`, `reanalyse-deals`) are **manual-only** (`workflow_dispatch`) convenience triggers that hit the web-service endpoints on demand.
+**GitHub Actions** has been removed entirely — the repo has no workflows. Scraping runs on the Render cron worker; the previously-manual operations (precompute, prune-sold, reanalyse-deals) are folded into that nightly run or remain available as web-service endpoints you can `curl` on demand: `/api/precompute-estimates`, `/api/prune-sold`, `/api/analyze-images`.
 
 ### Run history — every scrape that actually ran (not just the schedule)
 

@@ -161,9 +161,12 @@ test("scheduled-scrape worker runs the full daily sequence off the web box", () 
   assert.match(worker, /precomputeEstimates/);                     // resale estimates
   assert.match(worker, /mongoose\.connect\(process\.env\.MONGO_URI\)/);
 
-  // The retired web-box workflows must be gone (they made scrapes pin the box).
+  // GitHub Actions is fully retired — scraping runs on the Render cron worker and
+  // the old manual convenience workflows were folded into it / their endpoints.
+  // Assert no workflows remain at all (the directory is gone or empty).
   const workflowDir = path.join(__dirname, "..", ".github", "workflows");
-  for (const gone of ["refresh-fliphaus.yml", "scrape-batch-1.yml", "scrape-batch-2.yml", "scrape-batch-3.yml"]) {
-    assert.ok(!fs.existsSync(path.join(workflowDir, gone)), `${gone} should be retired`);
-  }
+  const remaining = fs.existsSync(workflowDir)
+    ? fs.readdirSync(workflowDir).filter((f) => /\.ya?ml$/.test(f))
+    : [];
+  assert.deepEqual(remaining, [], `no GitHub workflows should remain, found: ${remaining.join(", ")}`);
 });

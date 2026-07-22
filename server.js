@@ -690,7 +690,7 @@ function activeScrapeLabel(query = {}) {
 
 app.get("/api/scrape", requireRefreshToken, async (req, res) => {
   // Hold the shared job lock so the coverage sweep / nightly run defer to this
-  // scrape. If another heavy job is mid-flight, 409 quickly; GitHub Actions retries.
+  // scrape. If another heavy job is mid-flight, 409 quickly; the caller retries.
   if (!jobLock.acquire("http-scrape")) {
     return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
   }
@@ -839,7 +839,7 @@ app.all("/api/refresh-sold-all", requireRefreshToken, async (req, res) => {
 // Analyse already-scraped listing photos separately from Hemnet scraping.
 app.get("/api/analyze-images", requireRefreshToken, async (req, res) => {
   // Share the job lock with scrapes and the coverage sweep — one Puppeteer job at
-  // a time on the single instance. 409 if busy; GitHub Actions retries.
+  // a time on the single instance. 409 if busy; the caller retries.
   if (!jobLock.acquire("http-analyze")) {
     return res.status(409).json({ error: "Busy", detail: `Another job is running: ${jobLock.currentJob()}` });
   }

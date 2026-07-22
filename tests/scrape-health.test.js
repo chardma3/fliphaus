@@ -28,7 +28,8 @@ test("scrape health exposes the 24h scrape schedule and whether a run happened t
     now: new Date("2026-06-24T09:00:00Z"),
   });
   assert.equal(notYet.active.ranToday, false);
-  assert.ok(Array.isArray(notYet.schedule) && notYet.schedule.length >= 4);
+  // One automated refresh now (the Render cron worker), not the old 3-batch run.
+  assert.ok(Array.isArray(notYet.schedule) && notYet.schedule.length >= 1);
   // Each schedule entry has a job label + a UTC HH:MM the frontend localises.
   for (const s of notYet.schedule) {
     assert.ok(s.job, "has a job label");
@@ -52,7 +53,7 @@ test("homepage shows the scrape schedule, today-status, and wetroom re-checks", 
   assert.match(indexHtml, /id="scrape-health"/);
   assert.match(indexHtml, /fetch\("\/api\/scrape-health"\)/);
   assert.match(indexHtml, /Last updated/i);
-  assert.match(indexHtml, /Scrapes every 24h/i);
+  assert.match(indexHtml, /Automatic refresh \(weekdays/i);
   assert.match(indexHtml, /No scrape has run yet today/i);
   assert.match(indexHtml, /Wetroom re-checks/i);
 });

@@ -25,15 +25,14 @@ function formatDateOnly(date) {
   return date ? date.toISOString().slice(0, 10) : null;
 }
 
-// The scrapes that run every 24h, for the dashboard health panel. Times are UTC
-// (GitHub Actions' cron timezone) — KEEP IN SYNC with the cron lines in
-// .github/workflows/{scrape-batch-1,2,3}.yml and refresh-fliphaus.yml. The
-// frontend renders them in Stockholm local time so DST is handled there.
+// The single automated refresh, for the dashboard health panel. It runs on the
+// standalone Render Cron Job (render.yaml `schedule` → scripts/scheduled-scrape.js),
+// NOT in-process and NOT GitHub Actions (both retired). One run does the whole
+// sequence — active scrape, sold prices, scoring, gallery self-heal, precompute.
+// The time is UTC (Render cron's timezone) — KEEP IN SYNC with render.yaml's
+// `schedule`. The frontend renders it in Stockholm local time so DST is handled there.
 const DAILY_SCRAPES = [
-  { job: "Active listings — batch 1 of 3", utc: "11:00", does: "New & changed listings" },
-  { job: "Active listings — batch 2 of 3", utc: "11:40", does: "New & changed listings" },
-  { job: "Active listings — batch 3 of 3", utc: "12:20", does: "New & changed listings" },
-  { job: "Sold prices + photo analysis", utc: "13:00", does: "Slutpriser, scoring, sold reconciliation" },
+  { job: "Daily refresh (weekdays)", utc: "11:00", does: "New & changed listings, sold prices, scoring, resale estimates" },
 ];
 
 function buildScrapeHealth({ activeListings = [], soldListings = [], now = new Date() } = {}) {
