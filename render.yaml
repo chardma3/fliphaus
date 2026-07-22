@@ -24,9 +24,16 @@ services:
     region: frankfurt        # ⚠ set to match your web service + MongoDB region (region can't be changed later)
     branch: main
     schedule: "0 11 * * 1-5"
-    buildCommand: npm install
+    # Puppeteer 24 needs the Chrome binary installed at build time. Install it into
+    # the PERSISTED project dir (below) so it survives build->run and cached builds
+    # — a plain `npm install` leaves Chrome missing at runtime ("Could not find Chrome").
+    buildCommand: npm install && npx puppeteer browsers install chrome
     startCommand: node scripts/scheduled-scrape.js
     envVars:
+      # Where Puppeteer installs + looks for Chrome. Inside /opt/render/project/src
+      # (the only path Render persists between build and run). NOT a secret.
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/src/.cache/puppeteer
       # Secrets — set the values in the Render dashboard, not here.
       - key: MONGO_URI
         sync: false
