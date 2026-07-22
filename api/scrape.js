@@ -7,7 +7,7 @@ const { buildActiveScrapeOptions, buildListingUpsert } = require("./scrape-optio
 
 puppeteer.use(StealthPlugin());
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { jitteredSleep, retryBackoff, PACING } = require("./scrape-pacing");
 
 const TRANSIT_INFO = {
   Rissne: { minutes: 15, station: "Rissne", line: "Blue line (T-bana)" },
@@ -154,7 +154,11 @@ module.exports = async (options = {}) => {
   // (every area failed → zero listings) is caught by assertNonEmptyRefreshResult.
   const MAX_AREA_ATTEMPTS = Math.max(1, Number(process.env.SCRAPE_MAX_AREA_ATTEMPTS) || 6);
 
-  for (const { area, locationId: id } of targets) {
+  for (const [areaIdx, { area, locationId: id }] of targets.entries()) {
+    // Space areas apart (jittered) so we don't hammer Hemnet in a tight, robotic
+    // burst — the pattern Cloudflare flags. Costs a few seconds per area, which is
+    // free on the dedicated scrape worker. Skip before the first area.
+    if (areaIdx > 0) await jitteredSleep(PACING.areaDelayMs);
     let lastErr = null;
     for (let attempt = 1; attempt <= MAX_AREA_ATTEMPTS; attempt++) {
       try {
@@ -172,7 +176,9 @@ module.exports = async (options = {}) => {
           `  ✗ ${area} attempt ${attempt}/${MAX_AREA_ATTEMPTS}` +
             `${blocked ? " (blocked — likely a datacenter proxy exit; retrying for a fresh IP)" : ""}: ${err.message}`
         );
-        if (attempt < MAX_AREA_ATTEMPTS) await sleep(1500); // give the proxy time to rotate the exit
+        // Growing, jittered backoff so a fresh exit / rate window has more time to
+        // clear on each successive try (was a flat 1.5s).
+        if (attempt < MAX_AREA_ATTEMPTS) await retryBackoff(attempt, PACING.retryBaseMs);
       }
     }
     if (lastErr) failedAreas.push(area);
