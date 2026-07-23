@@ -58,7 +58,7 @@ Each scored listing's ROI is estimated from **real sold comparables**, not a har
 - **Scraping:** Puppeteer + `puppeteer-extra-plugin-stealth`, routed through a Sweden residential proxy (Cheerio for light HTML parsing).
 - **Scheduling:** a dedicated **Render Cron Job** runs the daily scrape on its **own instance** (`scripts/scheduled-scrape.js`), separate from the web service so scraping never blocks the app. (GitHub Actions is no longer used for scraping.)
 - **Auth:** Passport — Google OAuth 2.0 + email/password (bcrypt); token magic-links for builders. Role-based routing (admin / investor / friend / builder), enforced server-side (`requireAdmin` on every `/api/admin/*` route).
-- **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps.
+- **Frontend:** Server-served static HTML/CSS/vanilla-JS (no framework); Leaflet/OpenStreetMap for maps. The listing card — its markup, styles and money/text formatters — is one shared module (`card.js`, exposing `window.FlipCard`, + `card.css`) that both the dashboard (`index.html` / `/friends`) and the favorites page (`favorites.html`) render from, so the two can't drift; `profitability.js` (also used server-side) supplies the investment maths.
 - **Tests:** Node's built-in `node --test`; pure-function unit tests (no DB/network), run with `npm test`.
 
 ## Backend architecture
@@ -79,7 +79,7 @@ Express app (`server.js`) + ~22 focused modules under `api/`. The heavy lifting 
 
 **Estimates are precomputed, not crunched per request.** Each listing's sold-comp estimate (`brfIntelligence`) is computed **once** — at the end of the daily refresh and on manual reanalyse (`api/precompute-estimates.js`) — and stored on the listing with a `brfIntelligenceAt` stamp. The feed serves that stored value and only falls back to a live crunch when a listing hasn't been precomputed yet (new/just-scored), so in steady state the feed **never loads the sold collection at all**. Previously it loaded and re-indexed the entire ~9,500-row sold set (`SoldListing.find({})` + `buildSoldIndex`) on *every* request; that per-request memory spike is what collided with the daily scrape and hung the app. Freshness is guaranteed because the recompute runs immediately after the sold data updates — see *Data refresh pipeline*. `/api/scrape-health` reports precomputed-estimate freshness; `scripts/diagnose-precomputed-estimates.js` is the read-only check.
 
-**Bounded sold collection.** Every consumer of sold data uses at most ~12 months of history, so `api/prune-sold.js` (via the manual *Prune old sold comps* workflow, dry-run by default) drops rows older than `SOLD_RETENTION_MONTHS` (default 15) to keep the collection from growing without limit. Sold reads for comps also project away the large unused `images[]` arrays (`SOLD_COMP_FIELDS`).
+**Bounded sold collection.** Every consumer of sold data uses at most ~12 months of history, so `api/prune-sold.js` (via `POST /api/prune-sold`, dry-run by default) drops rows older than `SOLD_RETENTION_MONTHS` (default 15) to keep the collection from growing without limit. Sold reads for comps also project away the large unused `images[]` arrays (`SOLD_COMP_FIELDS`).
 
 ### Dashboard tiers (who sees what)
 
@@ -134,9 +134,9 @@ Human-like **jittered pacing** (`api/scrape-pacing.js`, env-tunable: `SCRAPE_ARE
 
 ### Run history — every scrape that actually ran (not just the schedule)
 
-**What it is.** The table above is the *schedule* — what is *meant* to run. Separately, the dashboard's *Completed scrapes (most recent first)* list and `/api/scrape-health` (`recentRuns`) show every scrape/analysis that the server *actually performed*: timestamp, label (e.g. "Active listings — batch 2 of 3"), outcome status (✓ success / ⚠ partial / ✗ failed), and a one-line result summary (listings found, sold added, photos analysed, or the error).
+**What it is.** The table above is the *schedule* — what is *meant* to run. Separately, the dashboard's *Completed scrapes (most recent first)* list and `/api/scrape-health` (`recentRuns`) show every scrape/analysis that the server *actually performed*: timestamp, label (e.g. "Active listings — all areas", "Photo analysis & scoring"), outcome status (✓ success / ⚠ partial / ✗ failed), and a one-line result summary (listings found, sold added, photos analysed, or the error).
 
-**How it works.** Each of the three refresh endpoints — `/api/scrape`, `/api/scrape-sold`, `/api/analyze-images` (`server.js`) — records one row to a `scrapeRun` collection (`api/scrape-run.model.js`) when it finishes, capturing start time, duration, status and the endpoint's own result object. Recording is **best-effort**: `recordScrapeRun()` swallows its own errors so a logging hiccup can never fail or slow a scrape that already succeeded. `/api/scrape-health` reads back the 20 most recent rows via `getRecentScrapeRuns()`. Because every run logs itself regardless of trigger, the list is **trigger-agnostic** — it captures GitHub Actions batches, a manual `curl`, and the in-process scheduler identically. Note it records runs *going forward*: scrapes from before this was deployed were never logged, so the history fills in from first run after deploy.
+**How it works.** Each of the three refresh endpoints — `/api/scrape`, `/api/scrape-sold`, `/api/analyze-images` (`server.js`) — records one row to a `scrapeRun` collection (`api/scrape-run.model.js`) when it finishes, capturing start time, duration, status and the endpoint's own result object. Recording is **best-effort**: `recordScrapeRun()` swallows its own errors so a logging hiccup can never fail or slow a scrape that already succeeded. `/api/scrape-health` reads back the 20 most recent rows via `getRecentScrapeRuns()`. Because every run logs itself regardless of trigger, the list is **trigger-agnostic** — it captures the cron worker's stages, a manual `curl`, and the in-process scheduler identically. Note it records runs *going forward*: scrapes from before this was deployed were never logged, so the history fills in from first run after deploy.
 
 **Why we built it.** Previously the panel rendered only the static schedule plus one "last updated" timestamp, so it looked like a single scrape — there was no way to see whether each staggered batch fired, whether an area was blocked, or how many listings/sold/photos a run actually returned. Operationally, "is the data fresh?" was answerable but "did batch 3 run and what did it find?" was not — that lived only in GitHub Actions logs, off the dashboard. The run log puts that on the dashboard.
 
@@ -153,7 +153,7 @@ Listings that got bot-blocked during a scrape keep a partial gallery (missing a 
 
 The old in-process web-service sweep (`ENABLE_COVERAGE_SWEEP`, every `COVERAGE_SWEEP_MINUTES`) still exists as a fallback but is meant to stay **off** in production now that the worker handles it — that keeps the web service free of Puppeteer entirely. Keep `ENABLE_SCHEDULER` **off** too (the cron worker owns the daily scrape).
 
-A single stuck deal can be force-corrected via the admin **Reanalyze (Opus)** button, the **Reanalyse deals (manual)** workflow, or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>`.
+A single stuck deal can be force-corrected via the admin **Reanalyze (Opus)** button or `GET /api/analyze-images?dataset=active&target=<hemnet-id-or-slug>` (curl). A prompt/model change can be rolled out to existing deals in a nightly worker run by setting `REANALYZE_DEALS_ONCE=true`.
 
 Longer-term architecture note: if Hemnet scraping continues to exceed HTTP/proxy time limits even after area splitting and lower `detailLimit` values, move the actual browser scraping into a background worker/queue. In that model the HTTP endpoint should enqueue a refresh job and return quickly, while the worker updates MongoDB and exposes job status separately.
 
@@ -188,7 +188,7 @@ Known working Smartproxy shape for the prototype:
 
 Do not use `proxy.eu.smartproxy.net`; that host may not resolve. Do not put the username or password inside `HEMNET_PROXY_SERVER` when separate username/password environment variables are configured.
 
-Before running the full workflow, test the proxy inside Render Web Shell without exposing secrets:
+Before running a full scrape, test the proxy inside Render Web Shell without exposing secrets:
 
 ```bash
 curl -sS --max-time 25 -x "$HEMNET_PROXY_SERVER" -U "$HEMNET_PROXY_USERNAME:$HEMNET_PROXY_PASSWORD" "https://api.ipify.org?format=json"
@@ -223,13 +223,13 @@ const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require('./api/pu
 NODE
 ```
 
-If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, run the workflow.
+If the title is `Just a moment...` and `HAS NEXT_DATA` is `false`, the proxy is connected but Hemnet is still showing bot protection. If the title is a real Hemnet page and `HAS NEXT_DATA` is `true`, trigger a scrape run (the Render cron job's **Trigger Run**, or `node scripts/scheduled-scrape.js`).
 
 The cron worker scrapes active listings with `includeDetails=false` — quickly from Hemnet search result pages, skipping slower detail-page work (galleries are hydrated later by the analysis/self-heal stages). The sold scrape also uses `includeDetails=false&includeAnalysis=false` with a low `detailLimit`. Because the worker calls the functions directly (no HTTP), there's no curl/Cloudflare request timeout; per-area retries + jittered pacing handle the occasional bot-protection page.
 
-Image analysis is deliberately a separate post-scrape step: `/api/analyze-images?dataset=all&limit=10`. It analyses photos already saved in MongoDB, so it does not keep a Puppeteer browser open or actively scrape Hemnet while the AI model is working. The workflow marks this step `continue-on-error: true`, so a temporary model/API failure does not make the core scrape look failed or stale.
+Image analysis is deliberately a separate post-scrape step: `/api/analyze-images?dataset=all&limit=10`. It analyses photos already saved in MongoDB, so it does not keep a Puppeteer browser open or actively scrape Hemnet while the AI model is working. On the cron worker each stage is wrapped by `stage()` (records a `scrapeRun` row, never throws), so a temporary model/API failure logs as "failed" but doesn't abort the run or make the core scrape look stale.
 
-Cost note: this should not require a new paid Render service, but the residential proxy/scraping provider itself is usually paid, and the separate image-analysis step uses the configured AI vision API. The scheduled workflow keeps that to a small batch of 10 items per run.
+Cost note: the scrape runs on its own Render cron instance (Standard plan for the 2 GB Chromium needs), and the residential proxy/scraping provider itself is usually paid; the separate image-analysis step uses the configured AI vision API and is kept to a small batch (`SCRAPE_ANALYZE_LIMIT`, default 10) per run.
 
 ### Safety rules
 
@@ -289,5 +289,5 @@ npm start
 ```
 
 Optional env:
-- `SOLD_RETENTION_MONTHS` — how many months of sold comparables to keep (default **15**). The *Prune old sold comps* workflow (dry-run by default) deletes sold rows older than this; every consumer uses ≤12 months, so 15 leaves a safe margin. Lower it to shrink the collection now, raise it to keep more history.
+- `SOLD_RETENTION_MONTHS` — how many months of sold comparables to keep (default **15**). `POST /api/prune-sold` (dry-run by default) deletes sold rows older than this; every consumer uses ≤12 months, so 15 leaves a safe margin. Lower it to shrink the collection now, raise it to keep more history.
 - `FRIEND_EMAILS` — **legacy/optional.** Comma-separated emails that are auto-promoted to the read-only `friend` role on login. Friend access is now managed in-app on `/manage-friends` (admin promotes signed-up users), so this env var is no longer required — it only pre-authorises an email before it signs up. Because `syncUserRole` is promote-only, removing an email here no longer demotes anyone; demote from the Friends access page instead.
