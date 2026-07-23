@@ -6,8 +6,11 @@
     <title>Favorites — FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/card.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
+      /* Page chrome only — the listing-card styles live in /card.css, shared with
+         the main dashboard so favorites and listings render identically. */
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
@@ -33,7 +36,7 @@
       .signout-link { font-size: 0.8rem; color: #555; text-decoration: none; }
       .signout-link:hover { color: #888; }
 
-      .nav-menu { width:100%;max-width:700px;display:flex;justify-content:center;margin-bottom:16px;background:#1a1a1a;border:1px solid #2a2a2a; }
+      .nav-menu { width:100%;max-width:700px;display:flex;flex-wrap:wrap;justify-content:center;margin-bottom:16px;background:#1a1a1a;border:1px solid #2a2a2a; }
       .nav-item { font-family:"Poppins",sans-serif;font-size:0.78rem;color:#666;text-decoration:none;padding:10px 12px;border-right:1px solid #2a2a2a;transition:all 0.2s; }
       .nav-item:last-child { border-right:none; }
       .nav-item:hover { color:#ccc;background:#222; }
@@ -55,135 +58,6 @@
       }
 
       #feed { width: 100%; display: flex; flex-direction: column; align-items: center; }
-
-      .listing {
-        background: #1a2e1f; border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        width: 100%; max-width: 700px;
-        margin-bottom: 12px; overflow: hidden;
-        position: relative;
-      }
-
-      .carousel {
-        position: relative; width: 100%; height: 220px;
-        background: #2a2a2a; overflow: hidden;
-      }
-      .carousel-track {
-        display: flex; height: 100%;
-        transition: transform 0.3s ease;
-      }
-      .carousel-slide {
-        min-width: 100%; height: 100%;
-        object-fit: cover; display: block;
-      }
-      .carousel-btn {
-        position: absolute; top: 50%; transform: translateY(-50%);
-        background: rgba(0,0,0,0.55); border: none; color: #fff;
-        font-size: 1.2rem; padding: 8px 13px; cursor: pointer;
-        border-radius: 6px; backdrop-filter: blur(3px); z-index: 2;
-      }
-      .carousel-btn:hover { background: rgba(0,0,0,0.8); }
-      .carousel-prev { left: 8px; }
-      .carousel-next { right: 8px; }
-      .carousel-counter {
-        position: absolute; bottom: 8px; right: 10px;
-        background: rgba(0,0,0,0.55); color: #ddd;
-        font-size: 0.75rem; padding: 2px 8px; border-radius: 12px;
-        backdrop-filter: blur(3px); z-index: 2;
-      }
-      .carousel-no-img {
-        width: 100%; height: 220px; background: #2a2a2a;
-        display: flex; align-items: center; justify-content: center;
-        color: #555; font-size: 0.85rem;
-      }
-
-      .listing-body { padding: 14px 16px; }
-      .listing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-      .listing-header h3 { font-size: 1rem; color: #fff; margin: 0; }
-      .listing-body .location { font-size: 0.82rem; color: #888; margin-bottom: 10px; }
-
-      .listing-meta {
-        display: flex; flex-wrap: wrap; gap: 10px;
-        font-size: 0.85rem; color: #ccc; margin-bottom: 10px;
-      }
-      .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
-      .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
-
-      .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
-      .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
-
-      .listing-actions { display: flex; gap: 10px; margin-top: 10px; }
-      .action-btn {
-        flex: 1; padding: 8px; border: none; border-radius: 6px;
-        font-family: "Poppins", sans-serif; font-size: 0.82rem;
-        cursor: pointer; transition: opacity 0.2s; text-align: center;
-      }
-      .action-btn:hover { opacity: 0.85; }
-      .remove-btn { background: #3a1a1a; color: #ff8888; }
-      .view-btn { background: #1a2a3a; color: #7eb8f7; text-decoration: none; }
-
-      .reno-badge {
-        position: absolute; top: 10px; left: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        backdrop-filter: blur(6px);
-      }
-      .reno-badge.high   { background: rgba(26,90,26,0.9); color: #69db7c; }
-      .reno-badge.medium { background: rgba(90,70,10,0.9); color: #ffd43b; }
-      .reno-badge.low    { background: rgba(60,60,60,0.85); color: #aaa; }
-
-      .reno-summary {
-        font-size: 0.78rem; color: #aaa; margin-bottom: 8px;
-        padding: 6px 10px; background: #252525; border-radius: 6px;
-        border-left: 3px solid #444;
-      }
-      .reno-summary.high   { border-left-color: #69db7c; }
-      .reno-summary.medium { border-left-color: #ffd43b; }
-      .reno-summary.low    { border-left-color: #555; }
-      .reno-cost { font-weight: 600; color: #ccc; }
-
-      .floor-plan-link { font-size: 0.78rem; color: #888; margin-bottom: 8px; }
-      .floor-plan-link a { color: #7eb8f7; text-decoration: none; }
-      .floor-plan-link a:hover { text-decoration: underline; }
-
-      .listing-map { width: 100%; height: 150px; border-radius: 8px; margin-bottom: 8px; z-index: 1; }
-      .days-badge { position: absolute; bottom: 10px; right: 10px; z-index: 3; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; background: rgba(0,0,0,0.7); color: #aaa; backdrop-filter: blur(6px); }
-
-      .new-badge {
-        position: absolute; top: 10px; right: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        background: rgba(59,130,246,0.9); color: #fff;
-        backdrop-filter: blur(6px);
-      }
-
-      .profit-badge {
-        position: absolute; top: 10px; right: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        backdrop-filter: blur(6px);
-      }
-      .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
-      .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
-      .profit-badge.neutral { background: rgba(70,70,70,0.9); color: #ddd; }
-      .profit-badge.cautious { background: rgba(80,65,20,0.9); color: #ffd43b; }
-
-      .reno-detail { display: none; margin-bottom: 8px; }
-      .reno-detail.open { display: block; }
-      .reno-detail-toggle { font-size: 0.78rem; color: #7eb8f7; background: none; border: none; font-family: "Poppins", sans-serif; cursor: pointer; padding: 4px 0; margin-bottom: 8px; }
-      .reno-detail-toggle:hover { color: #aad4ff; }
-      .reno-room { background: #252525; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid #333; }
-      .reno-room.needs-work { border-left-color: #ffd43b; }
-      .reno-room.good { border-left-color: #69db7c; }
-      .reno-room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-      .reno-room-header h5 { font-size: 0.82rem; color: #fff; text-transform: capitalize; }
-      .reno-room-header .room-cost { font-size: 0.78rem; color: #ff8888; font-weight: 600; }
-      .reno-room-header .room-cost.none { color: #69db7c; }
-      .reno-room .condition { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
-      .reno-room .indicators { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
-      .reno-room .indicators li { margin-left: 14px; margin-bottom: 2px; }
-          /* FLEX-WRAP-MOBILE-NAV: wrap the menu instead of overflowing right on narrow screens */
-      .nav-menu { flex-wrap: wrap; }
     </style>
   </head>
   <body>
@@ -212,57 +86,60 @@
       <div id="feed"></div>
     </div>
 
+    <!-- Shared modals (styled by /card.css, driven by the card's buttons) -->
+    <div class="login-prompt" id="login-prompt">
+      <div class="login-box">
+        <h3>Sign in to save preferences</h3>
+        <p>Track properties you like or want to skip, saved across all your devices.</p>
+        <a href="/auth/google?returnTo=/favorites" class="google-btn">
+          <img src="https://www.google.com/favicon.ico" alt="" /> Sign in with Google
+        </a>
+        <br/>
+        <button class="dismiss" onclick="document.getElementById('login-prompt').classList.remove('visible')">Maybe later</button>
+      </div>
+    </div>
+
+    <div class="share-modal" id="share-modal" onclick="if(event.target===this)this.classList.remove('visible')">
+      <div class="share-box">
+        <h3>Send this listing</h3>
+        <p>Edit the message if you like, then tap Copy and paste it into Messenger, WhatsApp or a text.</p>
+        <textarea id="share-text" rows="4" aria-label="Message to send"></textarea>
+        <button class="share-copy-btn" id="share-copy-btn">Copy message &amp; link</button>
+        <button class="dismiss" onclick="document.getElementById('share-modal').classList.remove('visible')">Close</button>
+      </div>
+    </div>
+
     <script src="/profitability.js"></script>
+    <script src="/card.js"></script>
     <script>
       let currentUser = null;
 
-      function renoClass(score) {
-        if (score >= 7) return "high";
-        if (score >= 4) return "medium";
-        return "low";
+      function showLoginPrompt() {
+        document.getElementById("login-prompt").classList.add("visible");
       }
 
-      function renoLabel(score) {
-        if (score >= 7) return "High potential";
-        if (score >= 4) return "Some potential";
-        return "Move-in ready";
+      // Share-link modal: populate the editable message + link and open it.
+      function openShareModal(text) {
+        const modal = document.getElementById("share-modal");
+        const ta = document.getElementById("share-text");
+        const btn = document.getElementById("share-copy-btn");
+        ta.value = text;
+        btn.textContent = "Copy message & link";
+        btn.classList.remove("copied");
+        modal.classList.add("visible");
+        setTimeout(() => { ta.focus(); ta.select(); }, 50);
       }
-
-      function formatSEK(n) {
-        if (!n) return null;
-        return n.toLocaleString("sv-SE") + " kr";
-      }
-
-      function translateRooms(str) {
-        if (!str) return null;
-        return str.replace("rum", "rooms");
-      }
-
-      function translateFloor(str) {
-        if (!str) return null;
-        return str.replace(/^vån\s*/i, "Floor ");
-      }
-
-      function translateFee(str) {
-        if (!str) return null;
-        return str.replace("kr/mån", "kr/mo");
-      }
-
-      function isApartmentType(str) {
-        if (!str) return false;
-        return /lägenhet|bostadsrätt/i.test(str);
-      }
-
-      function translateLocation(str) {
-        if (!str) return str;
-        return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
-      }
-
-      function formatSEKShort(n) {
-        if (!n) return "—";
-        if (n >= 1000000) return (n / 1000000).toFixed(1) + "M kr";
-        return Math.round(n / 1000) + "K kr";
-      }
+      document.getElementById("share-copy-btn").addEventListener("click", async function () {
+        const ta = document.getElementById("share-text");
+        ta.select();
+        try {
+          await navigator.clipboard.writeText(ta.value);
+        } catch (e) {
+          try { document.execCommand("copy"); } catch (e2) {}
+        }
+        this.textContent = "Copied ✓ — now paste it in your message";
+        this.classList.add("copied");
+      });
 
       async function removeFromFavorites(listingId, cardEl) {
         await fetch("/api/preference", {
@@ -282,6 +159,14 @@
         }, 300);
       }
 
+      async function reloadFavorites() {
+        const favRes = await fetch("/api/favorites");
+        renderListings(await favRes.json());
+      }
+
+      // Render the saved listings with the SAME shared card as the main dashboard
+      // (window.FlipCard), so styling and every info panel match exactly. Favorites
+      // add a Remove button (onRemoved) on top of the standard dashboard buttons.
       function renderListings(data) {
         const statsEl = document.getElementById("stats");
         const feedEl = document.getElementById("feed");
@@ -295,157 +180,20 @@
         statsEl.innerHTML = `<strong>${data.total}</strong> saved ${data.total === 1 ? "property" : "properties"}`;
 
         data.listings.forEach((listing) => {
-          const div = document.createElement("div");
-          div.className = "listing";
-          div.dataset.id = listing.id;
-
-          const imgs = listing.images && listing.images.length ? listing.images : (listing.thumbnail ? [listing.thumbnail] : []);
-
-          const carouselHtml = imgs.length
-            ? `<div class="carousel" data-idx="0">
-                <div class="carousel-track" style="transform:translateX(0)">
-                  ${imgs.map(url => `<img class="carousel-slide" src="${url}" loading="lazy" />`).join("")}
-                </div>
-                ${imgs.length > 1 ? `<button class="carousel-btn carousel-prev">&#8249;</button><button class="carousel-btn carousel-next">&#8250;</button><div class="carousel-counter">1 / ${imgs.length}</div>` : ""}
-              </div>`
-            : `<div class="carousel-no-img">No image</div>`;
-
-          const renoCls = listing.renovationScore != null ? renoClass(listing.renovationScore) : null;
-          const renoBadgeHtml = listing.renovationScore != null
-            ? `<div class="reno-badge ${renoCls}">${listing.renovationScore}/10 — ${renoLabel(listing.renovationScore)}</div>`
-            : "";
-          const renoSummaryHtml = listing.renovationSummary
-            ? `<div class="reno-summary ${renoCls}">
-                ${listing.renovationSummary}
-                ${listing.totalEstimatedCostSEK ? `<br/><span class="reno-cost">Est. renovation: ${formatSEK(listing.totalEstimatedCostSEK)}</span>` : ""}
-              </div>`
-            : "";
-
-          const isNew = listing.publishedAt && (Date.now() - new Date(listing.publishedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
-          const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
-          const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
-          const daysBadgeHtml = daysOnMarket != null ? `<div class="days-badge">${daysOnMarket}d on market</div>` : "";
-          const badgeModel = listing.askingPriceNum ? formatProfitBadgeModel(listing) : null;
-          const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${badgeModel.label}</div>` : "";
-
-          const floorPlanHtml = listing.hasFloorPlan === true
-            ? `<div class="floor-plan-link">Floor plan: <a href="${listing.link}" target="_blank">View on Hemnet</a></div>`
-            : `<div class="floor-plan-link">Floor plan: None provided</div>`;
-
-          div.innerHTML = `
-            <div style="position:relative">
-              ${carouselHtml}
-              ${renoBadgeHtml}
-              ${newBadgeHtml}
-              ${profitBadgeHtml}
-              ${daysBadgeHtml}
-            </div>
-            <div class="listing-body">
-              <div class="listing-header">
-                <h3>${listing.streetAddress}</h3>
-              </div>
-              <div class="location">${translateLocation(listing.locationDescription)}</div>
-              <div class="listing-meta">
-                <span class="price-tag">${listing.askingPrice}</span>
-                ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
-                ${listing.size ? `<span>${listing.size}</span>` : ""}
-                ${listing.housingForm && !isApartmentType(listing.housingForm) ? `<span>${listing.housingForm}</span>` : ""}
-                ${listing.fee ? `<span>Fee ${translateFee(listing.fee)}</span>` : ""}
-                ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
-                ${listing.squareMeterPrice ? `<span>${listing.squareMeterPrice}</span>` : ""}
-              </div>
-              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
-              ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
-              ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
-              ${renoSummaryHtml}
-              ${listing.renovationRooms?.length ? `
-                <button class="reno-detail-toggle" data-target="reno-${listing.id}">Show room-by-room breakdown ▾</button>
-                <div class="reno-detail" id="reno-${listing.id}">
-                  ${listing.renovationRooms.map(r => `
-                    <div class="reno-room ${r.estimatedCostSEK ? 'needs-work' : 'good'}">
-                      <div class="reno-room-header">
-                        <h5>${r.type}</h5>
-                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? Math.round(r.estimatedCostSEK/1000) + 'K kr' : 'No work needed'}</span>
-                      </div>
-                      <div class="condition">${r.condition === 'original' || r.condition === 'dated' ? 'Needs full renovation' : r.condition === 'fair' ? 'Needs cosmetic update' : 'Good condition'}</div>
-                      ${r.indicators?.length ? `<div class="indicators"><strong style="color:#ccc;">Work needed:</strong><ul>${r.indicators.map(i => '<li>Replace/update: ' + i.replace(/^(Old|Dated|Worn|Original|Basic)\\s*/i, '') + '</li>').join('')}</ul></div>` : ''}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ""}
-              ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
-              ${floorPlanHtml}
-              <div class="listing-actions">
-                <button class="action-btn remove-btn">Remove</button>
-                ${currentUser && currentUser.role === "admin" ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
-                <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet</a>
-              </div>
-            </div>
-          `;
-
-          div.querySelector(".remove-btn").addEventListener("click", () => removeFromFavorites(listing.id, div));
-
-          const reanalyzeBtn = div.querySelector(".reanalyze-btn");
-          if (reanalyzeBtn) {
-            reanalyzeBtn.addEventListener("click", async function() {
-              if (this.disabled) return;
-              const orig = this.textContent;
-              this.disabled = true;
-              this.style.opacity = "0.7";
-              this.textContent = "↻ Reanalyzing with Opus… (~20s)";
-              try {
-                const res = await fetch(`/api/admin/reanalyze/${listing.id}`, { method: "POST" });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                  alert(data.detail || data.error || "Reanalysis failed");
-                  this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
-                  return;
-                }
-                // Re-score may change the score/badge/photos — reload the saved
-                // list so the corrected card shows.
-                this.textContent = "Updated ✓"; this.style.color = "#69db7c";
-                const favRes = await fetch("/api/favorites");
-                renderListings(await favRes.json());
-              } catch (err) {
-                alert("Reanalysis failed: " + err.message);
-                this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
-              }
-            });
-          }
-
-          const renoToggle = div.querySelector(".reno-detail-toggle");
-          if (renoToggle) {
-            renoToggle.addEventListener("click", function() {
-              const detail = document.getElementById(this.dataset.target);
-              const open = detail.classList.toggle("open");
-              this.textContent = open ? "Hide room-by-room breakdown ▴" : "Show room-by-room breakdown ▾";
-            });
-          }
-
-          const carousel = div.querySelector(".carousel");
-          if (carousel && imgs.length > 1) {
-            const track = carousel.querySelector(".carousel-track");
-            const counter = carousel.querySelector(".carousel-counter");
-            let idx = 0;
-            function goTo(n) {
-              idx = (n + imgs.length) % imgs.length;
-              track.style.transform = `translateX(-${idx * 100}%)`;
-              counter.textContent = `${idx + 1} / ${imgs.length}`;
-            }
-            carousel.querySelector(".carousel-prev").addEventListener("click", () => goTo(idx - 1));
-            carousel.querySelector(".carousel-next").addEventListener("click", () => goTo(idx + 1));
-          }
-
-          feedEl.appendChild(div);
-
-          if (listing.coordinates?.lat) {
-            const mapEl = document.getElementById("map-" + listing.id);
-            if (mapEl) {
-              const map = L.map(mapEl, { scrollWheelZoom: false, dragging: false, zoomControl: false }).setView([listing.coordinates.lat, listing.coordinates.lng], 14);
-              L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(map);
-              L.marker([listing.coordinates.lat, listing.coordinates.lng]).addTo(map);
-            }
-          }
+          // Everything here is saved, so mark it so the card shows the green
+          // (saved) treatment and an active heart, just like on the dashboard.
+          if (!listing.preferenceStatus) listing.preferenceStatus = "saved";
+          const card = FlipCard.buildListingCard(listing, {
+            currentUser,
+            friendsView: false,
+            view: "deals",
+            onReanalyzed: reloadFavorites,
+            onRemoved: (l, el) => removeFromFavorites(l.id, el),
+            openShareModal,
+            showLoginPrompt,
+          });
+          feedEl.appendChild(card);
+          FlipCard.mountMap(card, listing);
         });
       }
 
@@ -469,7 +217,7 @@
           renderListings(favData);
         } else {
           document.getElementById("stats").innerHTML =
-            "<div class='login-msg'><a href='/auth/google'>Sign in with Google</a> to see your saved properties.</div>";
+            "<div class='login-msg'><a href='/auth/google?returnTo=/favorites'>Sign in with Google</a> to see your saved properties.</div>";
         }
       }
 
