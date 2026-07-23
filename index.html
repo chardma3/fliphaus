@@ -423,8 +423,15 @@
             const x = r.result || {};
             if (r.status === "failed") return r.error || "failed";
             if (r.job === "active-scrape") {
-              const failed = (x.failedAreas && x.failedAreas.length) || 0;
-              return `${x.total ?? "?"} listings${failed ? `, ${failed} area(s) failed` : ""}`;
+              const scraped = (x.scrapedAreas && x.scrapedAreas.length) || 0;
+              const failedNames = x.failedAreas || [];
+              const totalAreas = scraped + failedNames.length;
+              // "8/10 areas" makes coverage explicit — a clean run reads "10/10 areas",
+              // a blocked one names exactly which areas to re-check. Older run rows
+              // predate scrapedAreas/failedAreas, so fall back to no tally when absent.
+              const areaTally = totalAreas ? ` · ${scraped}/${totalAreas} areas` : "";
+              const failNote = failedNames.length ? ` — ${failedNames.join(", ")} failed` : "";
+              return `${x.total ?? "?"} listings${areaTally}${failNote}`;
             }
             if (r.job === "sold-scrape") return `${x.total ?? "?"} sold${x.new != null ? `, ${x.new} new` : ""}`;
             if (r.job === "image-analysis") return `${x.analyzed ?? "?"} analysed${x.failed ? `, ${x.failed} failed` : ""}`;
