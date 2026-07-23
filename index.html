@@ -6,6 +6,7 @@
     <title>FlipHaus</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/card.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -78,158 +79,10 @@
 
       #feed { width: 100%; display: flex; flex-direction: column; align-items: center; }
 
-      .listing {
-        background: #1e1e1e; border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        width: 100%; max-width: 700px;
-        margin-bottom: 12px; overflow: hidden;
-        position: relative;
-      }
-      .listing.rejected { background: #2e1a1a; }
-      .listing.rejected .carousel,
-      .listing.rejected .carousel-no-img,
-      .listing.rejected .listing-meta,
-      .listing.rejected .listing-agency,
-      .listing.rejected .listing-showing,
-      .listing.rejected .floor-plan-link,
-      .listing.rejected .listing-actions,
-      .listing.rejected .reno-summary,
-      .listing.rejected .reno-badge,
-      .listing.rejected .new-badge,
-      .listing.rejected .days-badge,
-      .listing.rejected .invest-calc,
-      .listing.rejected .brf-intel,
-      .listing.rejected .listing-map { display: none; }
-      .listing.rejected .listing-body {
-        position: relative;
-        min-height: 64px;
-        padding: 10px 96px 14px 16px;
-      }
-      .listing.rejected .listing-header { display: block; }
-      .listing.rejected .listing-header-actions {
-        position: absolute;
-        right: 16px;
-        bottom: 10px;
-      }
-      .listing.rejected .location { font-size: 0.78rem; color: #666; margin-bottom: 2px; }
-      .listing.rejected .listing-header h3 { font-size: 0.88rem; color: #888; }
-      .rejected-summary { display: none; font-size: 0.78rem; color: #666; }
-      .listing.rejected .rejected-summary { display: block; }
-      .listing.saved    { background: #1a2e1f; }
-
-      /* Carousel */
-      .carousel {
-        position: relative; width: 100%; height: 220px;
-        background: #2a2a2a; overflow: hidden;
-      }
-      .carousel-track {
-        display: flex; height: 100%;
-        transition: transform 0.3s ease;
-      }
-      .carousel-slide {
-        min-width: 100%; height: 100%;
-        object-fit: cover; display: block;
-      }
-      .carousel-btn {
-        position: absolute; top: 50%; transform: translateY(-50%);
-        background: rgba(0,0,0,0.55); border: none; color: #fff;
-        font-size: 1.2rem; padding: 8px 13px; cursor: pointer;
-        border-radius: 6px; backdrop-filter: blur(3px); z-index: 2;
-      }
-      .carousel-btn:hover { background: rgba(0,0,0,0.8); }
-      .carousel-prev { left: 8px; }
-      .carousel-next { right: 8px; }
-      .carousel-counter {
-        position: absolute; bottom: 8px; right: 10px;
-        background: rgba(0,0,0,0.55); color: #ddd;
-        font-size: 0.75rem; padding: 2px 8px; border-radius: 12px;
-        backdrop-filter: blur(3px); z-index: 2;
-      }
-      .carousel-no-img {
-        width: 100%; height: 220px; background: #2a2a2a;
-        display: flex; align-items: center; justify-content: center;
-        color: #555; font-size: 0.85rem;
-      }
-
-      .listing-body { padding: 14px 16px; }
-      .listing-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-      .listing-header h3 { font-size: 1rem; color: #fff; margin: 0; }
-      .listing-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
-      .listing-body .location { font-size: 0.82rem; color: #888; margin-bottom: 10px; }
-
-      .listing-meta {
-        display: flex; flex-wrap: wrap; gap: 10px;
-        font-size: 0.85rem; color: #ccc; margin-bottom: 10px;
-      }
-      .listing-meta span { background: #2a2a2a; padding: 3px 10px; border-radius: 20px; }
-      .price-tag { background: #1a3a1a !important; color: #69db7c !important; font-weight: 600; }
       #currency-toggle { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
       #currency-toggle select { background: #1e1e1e; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 6px 8px; font-size: 0.82rem; cursor: pointer; }
       #fx-note { color: #666; font-size: 0.62rem; line-height: 1.2; text-align: right; max-width: 160px; }
       #fx-note:empty { display: none; }
-
-      .listing-agency { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
-      .listing-showing { font-size: 0.78rem; color: #ffa94d; margin-bottom: 8px; }
-
-      .listing-actions {
-        display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;
-      }
-      .action-btn {
-        flex: 1 1 auto; min-width: 130px; text-align: center; padding: 8px; border: none; border-radius: 6px;
-        font-family: "Poppins", sans-serif; font-size: 0.82rem;
-        cursor: pointer; transition: opacity 0.2s;
-      }
-      .action-btn:hover { opacity: 0.85; }
-      .reject-btn { background: #3a1a1a; color: #ff8888; }
-      .reject-btn.active { background: #5a1a1a; color: #ff6b6b; }
-      .save-btn-action { background: #1a3a1a; color: #69db7c; }
-      .save-btn-action.active { background: #1a5a1a; color: #40c057; }
-      .view-btn { background: #1a2a3a; color: #7eb8f7; text-decoration: none; text-align: center; }
-      .floor-plan-link { font-size: 0.78rem; color: #888; margin-bottom: 8px; }
-      .floor-plan-link a { color: #7eb8f7; text-decoration: none; }
-      .floor-plan-link a:hover { text-decoration: underline; }
-
-      /* Renovation score badge */
-      .reno-badge {
-        position: absolute; top: 10px; left: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        backdrop-filter: blur(6px);
-      }
-      .reno-badge.high   { background: rgba(26,90,26,0.9); color: #69db7c; }
-      .reno-badge.medium { background: rgba(90,70,10,0.9); color: #ffd43b; }
-      .reno-badge.low    { background: rgba(60,60,60,0.85); color: #aaa; }
-
-      .new-badge {
-        position: absolute; top: 10px; right: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        background: rgba(59,130,246,0.9); color: #fff;
-        backdrop-filter: blur(6px);
-      }
-
-      .days-badge {
-        position: absolute; bottom: 10px; right: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        background: rgba(0,0,0,0.7); color: #aaa;
-        backdrop-filter: blur(6px);
-      }
-      /* Stale-listing signal: a listing sitting on the market a long time is
-         a flag (priced wrong / stuck), so escalate the days badge's colour. */
-      .days-badge.slow  { background: rgba(120,70,10,0.92); color: #ffd43b; }
-      .days-badge.stale { background: rgba(120,20,20,0.92); color: #ff8787; }
-
-      /* Triage-gated signal: the cheap first pass judged both wet rooms already
-         renovated and skipped full scoring, so the score is a low-potential
-         stand-in rather than a deep analysis. */
-      .gated-badge {
-        position: absolute; bottom: 10px; left: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        background: rgba(45,45,70,0.88); color: #9aa7c7;
-        backdrop-filter: blur(6px);
-      }
 
       /* Top-level view tabs: Deals (strong flips) vs Move-in ready (browse) */
       .view-tabs { display: flex; gap: 8px; margin: 18px 0 6px; justify-content: center; flex-wrap: wrap; }
@@ -243,47 +96,6 @@
       /* Sort toggle reuses the tab look but in blue, so it reads as a different control from the view tabs */
       .sort-tab { padding: 7px 16px; font-size: 0.85rem; }
       .sort-tab.active { background: rgba(26,54,90,0.9); color: #7eb8f7; border-color: #2a5a8a; }
-
-      .invest-calc {
-        background: #252525; border-radius: 8px; padding: 12px; margin-bottom: 8px;
-        border-left: 3px solid #69db7c;
-      }
-      .brf-intel {
-        background: #202634; border-radius: 8px; padding: 12px; margin-bottom: 8px;
-        border-left: 3px solid #7eb8f7;
-      }
-      .invest-calc h5, .brf-intel h5 { font-size: 0.82rem; color: #fff; margin-bottom: 8px; }
-      .intel-note { color: #aaa; font-size: 0.74rem; line-height: 1.35; margin-top: 6px; }
-      .calc-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.78rem; }
-      .calc-row .calc-label { color: #888; }
-      .calc-row .calc-value { color: #ccc; }
-      .calc-row.total { border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; font-weight: 600; }
-      .calc-row.total .calc-label { color: #fff; }
-      .calc-row.total .calc-value { color: #fff; }
-      .calc-row.profit .calc-value { color: #69db7c; font-weight: 600; }
-      .calc-row.profit .calc-label { color: #69db7c; }
-      .calc-row.loss .calc-value { color: #ff8888; }
-      .calc-row.loss .calc-label { color: #ff8888; }
-      .calc-row.sale .calc-value { color: #7eb8f7; font-weight: 600; }
-      .calc-divider { border-top: 1px solid #333; margin: 6px 0; }
-
-      .listing-map { width: 100%; height: 150px; border-radius: 8px; margin-bottom: 8px; z-index: 1; }
-
-      .reno-summary {
-        font-size: 0.78rem; color: #aaa; margin-bottom: 8px;
-        padding: 6px 10px; background: #252525; border-radius: 6px;
-        border-left: 3px solid #444;
-      }
-      .reno-summary.high   { border-left-color: #69db7c; }
-      .reno-summary.medium { border-left-color: #ffd43b; }
-      .reno-summary.low    { border-left-color: #555; }
-      .reno-cost { font-weight: 600; color: #ccc; }
-      .coverage-warn {
-        font-size: 0.74rem; color: #ffd43b; margin-bottom: 8px;
-        padding: 5px 10px; background: rgba(120,70,10,0.25); border-radius: 6px;
-        border-left: 3px solid #ffd43b;
-      }
-      .listing.rejected .coverage-warn { display: none; }
 
       /* Filter buttons */
       .filter-bar {
@@ -300,69 +112,6 @@
       .filter-btn:hover { border-color: #555; color: #ccc; }
       .filter-btn.active { background: #2a4a2a; border-color: #69db7c; color: #69db7c; }
 
-      .cb-btn {
-        background: rgba(0,0,0,0.3); border: none; border-radius: 6px;
-        padding: 5px 9px; cursor: pointer; font-size: 1rem;
-      }
-      .cb-btn.active-reject { background: rgba(90,26,26,0.9); }
-      .cb-btn.active-save   { background: rgba(26,90,26,0.9); }
-
-      .reno-detail { display: none; margin-bottom: 8px; }
-      .reno-detail.open { display: block; }
-      .reno-detail-toggle {
-        font-size: 0.78rem; color: #7eb8f7; background: none; border: none;
-        font-family: "Poppins", sans-serif; cursor: pointer; padding: 4px 0; margin-bottom: 8px;
-      }
-      .reno-detail-toggle:hover { color: #aad4ff; }
-      .reno-room {
-        background: #252525; border-radius: 6px; padding: 10px 12px; margin-bottom: 6px;
-        border-left: 3px solid #333;
-      }
-      .reno-room.needs-work { border-left-color: #ffd43b; }
-      .reno-room.good { border-left-color: #69db7c; }
-      .reno-room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-      .reno-room-header h5 { font-size: 0.82rem; color: #fff; text-transform: capitalize; }
-      .reno-room-header .room-cost { font-size: 0.78rem; color: #ff8888; font-weight: 600; }
-      .reno-room-header .room-cost.none { color: #69db7c; }
-      .reno-room .condition { font-size: 0.75rem; color: #888; margin-bottom: 4px; text-transform: capitalize; }
-      .reno-room .indicators { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
-      .reno-room .indicators li { margin-left: 14px; margin-bottom: 2px; }
-
-      .profit-badge {
-        position: absolute; top: 10px; right: 10px; z-index: 3;
-        padding: 4px 10px; border-radius: 6px;
-        font-size: 0.75rem; font-weight: 600;
-        backdrop-filter: blur(6px);
-      }
-      .profit-badge.positive { background: rgba(26,90,26,0.9); color: #69db7c; }
-      .profit-badge.negative { background: rgba(90,26,26,0.9); color: #ff8888; }
-      .profit-badge.neutral { background: rgba(70,70,70,0.9); color: #ddd; }
-      .profit-badge.cautious { background: rgba(80,65,20,0.9); color: #ffd43b; }
-
-      /* Login modal */
-      .login-prompt {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.7); z-index: 100;
-        align-items: center; justify-content: center;
-      }
-      .login-prompt.visible { display: flex; }
-      .login-box {
-        background: #1e1e1e; border-radius: 12px;
-        padding: 32px 28px; text-align: center; max-width: 340px; width: 90%;
-      }
-      .login-box h3 { color: #fff; margin-bottom: 8px; font-size: 1.1rem; }
-      .login-box p  { color: #888; font-size: 0.88rem; margin-bottom: 20px; }
-      .dismiss { margin-top: 12px; background: none; border: none; color: #555; font-size: 0.85rem; cursor: pointer; }
-      .dismiss:hover { color: #888; }
-      /* Share-link modal — a clear "copy this, then paste it" flow (no OS prompt / share sheet) */
-      .share-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
-      .share-modal.visible { display: flex; }
-      .share-box { background: #1e1e1e; border-radius: 12px; padding: 24px; max-width: 440px; width: 100%; box-sizing: border-box; }
-      .share-box h3 { color: #fff; margin-bottom: 6px; font-size: 1.1rem; }
-      .share-box p { color: #888; font-size: 0.85rem; margin-bottom: 14px; line-height: 1.45; }
-      .share-box textarea { width: 100%; box-sizing: border-box; background: #141414; color: #eee; border: 1px solid #333; border-radius: 8px; padding: 11px; font-size: 0.9rem; font-family: inherit; line-height: 1.4; resize: vertical; }
-      .share-copy-btn { display: block; width: 100%; margin-top: 14px; background: #69db7c; color: #06210f; border: none; border-radius: 9px; padding: 13px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
-      .share-copy-btn.copied { background: #2a7d43; color: #fff; }
           /* FLEX-WRAP-MOBILE-NAV: wrap the menu instead of overflowing right on narrow screens */
       .nav-menu { flex-wrap: wrap; }
       /* Loading state — the feed can take up to ~a minute on a cold sold-comp
@@ -474,6 +223,7 @@
     </div>
 
     <script src="/profitability.js"></script>
+    <script src="/card.js"></script>
     <script>
       let currentUser = null;
       let allListingsData = null;
@@ -487,43 +237,13 @@
       // byte-identical for admin). The toggle persists per device. Extensible:
       // add a currency here + a rate branch in loadFx() to scale to EUR/GBP/etc.
       const CURRENCIES = { SEK: { label: "kr SEK" }, AUD: { label: "A$ AUD" } };
-      let displayCurrency = "SEK";
-      let fxRate = 1;    // multiply a SEK amount to get the display currency
-      let fxInfo = null; // { rate, asOf, source } — powers the "rate as of…" note
-      async function loadFx() {
-        // SEK is the base; only non-SEK needs a rate. /api/fx/sek-aud is a daily
-        // Frankfurter rate (cached), shape { rate, asOf, source }.
-        if (displayCurrency === "SEK") { fxRate = 1; return; }
-        try {
-          fxInfo = await (await fetch("/api/fx/sek-aud")).json();
-          fxRate = fxInfo && fxInfo.rate ? fxInfo.rate : 1;
-        } catch { fxInfo = null; fxRate = 1; }
-      }
-      // Per-m² price in the display currency.
-      function perSqm(sek) {
-        const v = Math.round((sek || 0) * fxRate);
-        return displayCurrency === "SEK" ? v.toLocaleString("sv-SE") + " kr/m²" : "A$ " + v.toLocaleString("en-AU") + "/m²";
-      }
-      // Asking price: keep Hemnet's exact SEK text in SEK mode, convert otherwise.
-      function priceStr(l) {
-        if (displayCurrency === "SEK") return l.askingPrice || "—";
-        return l.askingPriceNum ? formatSEK(l.askingPriceNum) : (l.askingPrice || "—");
-      }
-      // Convert "…kr / …K kr / …M kr" amounts inside a preformatted string (e.g. a
-      // profit-badge label) to the display currency. No-op in SEK mode.
-      function convertMoneyStr(str) {
-        if (displayCurrency === "SEK" || !str) return str;
-        return str.replace(/(\d[\d\s.,]*)\s*(M|K)?\s*kr\b/g, (m, num, unit) => {
-          let n = parseFloat(num.replace(/\s/g, "").replace(",", "."));
-          if (!isFinite(n)) return m;
-          if (unit === "M") n *= 1e6; else if (unit === "K") n *= 1e3;
-          return formatSEKShort(n);
-        });
-      }
+      // Currency state + money/text formatters live in card.js (window.FlipCard),
+      // shared with the favorites page. This page only drives the toggle.
       function updateFxNote() {
         const el = document.getElementById("fx-note");
         if (!el) return;
-        if (displayCurrency === "SEK" || !fxInfo || !fxInfo.rate) { el.textContent = ""; return; }
+        const fxInfo = FlipCard.getFxInfo();
+        if (FlipCard.getDisplayCurrency() === "SEK" || !fxInfo || !fxInfo.rate) { el.textContent = ""; return; }
         const when = fxInfo.asOf ? new Date(fxInfo.asOf).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "";
         const src = fxInfo.source === "fallback" ? "approx fixed rate" : "Frankfurter daily rate";
         el.textContent = `1 SEK ≈ ${fxInfo.rate.toFixed(4)} AUD · ${src}${when ? " · " + when : ""}`;
@@ -556,78 +276,6 @@
         this.textContent = "Copied ✓ — now paste it in your message";
         this.classList.add("copied");
       });
-
-      function renoClass(score) {
-        if (score >= 7) return "high";
-        if (score >= 4) return "medium";
-        return "low";
-      }
-
-      function renoLabel(score) {
-        if (score >= 7) return "High potential";
-        if (score >= 4) return "Some potential";
-        return "Move-in ready";
-      }
-
-      function formatSEK(n) {
-        if (!n) return null;
-        const v = Math.round(n * fxRate);
-        return displayCurrency === "SEK" ? v.toLocaleString("sv-SE") + " kr" : "A$ " + v.toLocaleString("en-AU");
-      }
-
-      function translateRooms(str) {
-        if (!str) return null;
-        return str.replace("rum", "rooms").replace("rooms", "rooms");
-      }
-
-      function translateFloor(str) {
-        if (!str) return null;
-        return str.replace(/^vån\s*/i, "Floor ");
-      }
-
-      function translateFee(str) {
-        if (!str) return null;
-        return str.replace("kr/mån", "kr/mo");
-      }
-
-      function isApartmentType(str) {
-        if (!str) return false;
-        return /lägenhet|bostadsrätt/i.test(str);
-      }
-
-      function translateLocation(str) {
-        if (!str) return str;
-        return str.replace(/s kommun/gi, "").replace(/kommun/gi, "").replace(/,\s*$/, "").trim();
-      }
-
-      function formatSEKShort(n) {
-        if (!n) return "—";
-        const v = n * fxRate, sign = v < 0 ? "-" : "", abs = Math.abs(v);
-        if (displayCurrency === "SEK") {
-          if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1) + "M kr";
-          return sign + Math.round(abs / 1000) + "K kr";
-        }
-        if (abs >= 1000000) return sign + "A$ " + (abs / 1000000).toFixed(2) + "M";
-        return sign + "A$ " + Math.round(abs).toLocaleString("en-AU");
-      }
-
-      // Friends-share button: label + styling reflect whether the listing is
-      // currently shared to the friends dashboard.
-      function shareBtnLabel(shared) {
-        return shared ? "★ Shared with friends" : "☆ Share with friends";
-      }
-      function styleShareBtn(btn, shared) {
-        btn.textContent = shareBtnLabel(shared);
-        btn.style.background = shared ? "#1a3a1a" : "#2a2a2a";
-        btn.style.color = shared ? "#69db7c" : "#bbb";
-      }
-
-      // A listing was gated by the cheap triage pass if the flag says so (set on
-      // listings analysed after the flag shipped) or, for older scores, if its
-      // summary carries the triage-gate stand-in text.
-      function isGated(l) {
-        return l.triageGated === true || (l.renovationSummary || "").startsWith("Triage gate:");
-      }
 
       // Does a listing match the active score filter? Deals use exact scores
       // (7/10…10/10, where the number genuinely separates good flips from great
@@ -692,14 +340,6 @@
         renderListings({ ...allListingsData, listings: filtered, total: filtered.length });
       }
 
-      async function savePreference(listingId, status) {
-        await fetch("/api/preference", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ listingId, status }),
-        });
-      }
-
       function renderListings(data) {
         const statsEl = document.getElementById("stats");
         const feedEl = document.getElementById("feed");
@@ -719,327 +359,16 @@
         statsEl.innerHTML = `<strong>${data.total}</strong> ${viewLabel} ${data.total === 1 ? "property" : "properties"} · ${sortLabel}`;
 
         data.listings.forEach((listing) => {
-          const isRejected = listing.preferenceStatus === "rejected";
-          const isSaved = listing.preferenceStatus === "saved";
-
-          const div = document.createElement("div");
-          div.className = `listing${isRejected ? " rejected" : ""}${isSaved ? " saved" : ""}`;
-          div.dataset.id = listing.id;
-
-          const imgs = listing.images && listing.images.length ? listing.images : (listing.thumbnail ? [listing.thumbnail] : []);
-
-          const carouselHtml = imgs.length
-            ? `<div class="carousel" data-idx="0">
-                <div class="carousel-track" style="transform:translateX(0)">
-                  ${imgs.map(url => `<img class="carousel-slide" src="${url}" loading="lazy" />`).join("")}
-                </div>
-                ${imgs.length > 1 ? `<button class="carousel-btn carousel-prev">&#8249;</button><button class="carousel-btn carousel-next">&#8250;</button><div class="carousel-counter">1 / ${imgs.length}</div>` : ""}
-              </div>`
-            : `<div class="carousel-no-img">No image</div>`;
-
-          const floorPlanHtml = listing.hasFloorPlan === true
-            ? `<div class="floor-plan-link">Floor plan: <a href="${listing.link}" target="_blank">View on Hemnet</a></div>`
-            : `<div class="floor-plan-link">Floor plan: None provided</div>`;
-
-          const renoCls = listing.renovationScore != null ? renoClass(listing.renovationScore) : null;
-          const renoBadgeHtml = listing.renovationScore != null
-            ? `<div class="reno-badge ${renoCls}">${listing.renovationScore}/10 — ${renoLabel(listing.renovationScore)}</div>`
-            : "";
-          const isNew = listing.publishedAt && (Date.now() - new Date(listing.publishedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
-          const newBadgeHtml = isNew ? `<div class="new-badge">NEW</div>` : "";
-          const daysOnMarket = listing.publishedAt ? Math.floor((Date.now() - new Date(listing.publishedAt).getTime()) / (1000*60*60*24)) : null;
-          // Stale-listing signal. Stockholm flats normally sell in weeks, so a
-          // listing on the market for months is a flag worth surfacing.
-          const SLOW_DAYS = 180, STALE_DAYS = 365;
-          let daysCls = "", daysNote = "on market";
-          if (daysOnMarket != null && daysOnMarket >= STALE_DAYS) { daysCls = " stale"; daysNote = "on market · stale"; }
-          else if (daysOnMarket != null && daysOnMarket >= SLOW_DAYS) { daysCls = " slow"; daysNote = "on market · slow"; }
-          const daysBadgeHtml = daysOnMarket != null
-            ? `<div class="days-badge${daysCls}" title="On the market ${daysOnMarket} days${daysCls ? " — unusually long; may be mispriced or stuck" : ""}">${daysOnMarket}d ${daysNote}</div>`
-            : "";
-          // No flip/profit badge on the New builds tab — they're new construction, not flips.
-          const badgeModel = (currentView !== "newbuild" && listing.askingPriceNum) ? formatProfitBadgeModel(listing) : null;
-          const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${convertMoneyStr(badgeModel.label)}</div>` : "";
-          const gatedBadgeHtml = isGated(listing)
-            ? `<div class="gated-badge" title="Gated by the cheap triage pass — kitchen & bathroom looked already renovated, so full scoring was skipped. Low renovation upside.">⚡ triage only</div>`
-            : "";
-          const renoSummaryHtml = listing.renovationSummary
-            ? `<div class="reno-summary ${renoCls}">
-                ${listing.renovationSummary}
-                ${listing.totalEstimatedCostSEK ? `<br/><span class="reno-cost">Est. renovation: ${formatSEK(listing.totalEstimatedCostSEK)}</span>` : ""}
-              </div>`
-            : "";
-          const missingRoom = listing.renovationScore != null && listing.imageCoverageComplete === false
-            ? (listing.kitchenPictured === false && listing.bathroomPictured === false ? "Kitchen & bathroom"
-              : listing.bathroomPictured === false ? "Bathroom"
-              : listing.kitchenPictured === false ? "Kitchen" : null)
-            : null;
-          // Suppress the provisional-coverage warning for new builds: projekt
-          // listings show staged renders, not real wet-room photos, and a new
-          // build needs no bathroom reno — so "Bathroom not pictured" is noise
-          // there. (New builds only appear under the newbuild view; the flip
-          // views exclude projekt listings.) Mirrors the profit-badge guard above.
-          const coverageWarnHtml = (missingRoom && currentView !== "newbuild")
-            ? `<div class="coverage-warn" title="A key room wasn't in the listing photos, so the renovation score is provisional.">⚠ ${missingRoom} not pictured — score provisional</div>`
-            : "";
-          const brfIntel = listing.brfIntelligence;
-          const arb = brfIntel?.renovationArbitrage;
-          const b = brfIntel?.brf;
-          // The one-line "BRF · Built · Pipe" summary above already covers name/year/stambyte.
-          // Only show the intelligence box when it adds something new: real debt data or
-          // real renovation-arbitrage signal. Empty rows stay hidden until the scraper fills them,
-          // so the box lights up automatically once that data starts coming in.
-          const hasStambyte = b?.stambyte?.status && b.stambyte.status !== "unknown";
-          const hasDebt = b && (b.debtPerSqm || (b.avgiftRisk && b.avgiftRisk !== "unknown"));
-          const hasArb = arb && arb.scope !== "none" && (arb.estimatedUpliftPerSqm != null || arb.totalComparableSales > 0);
-          const brfIntelHtml = (hasDebt || hasArb) ? `<div class="brf-intel">
-            <h5>BRF intelligence</h5>
-            ${b.name || b.buildYear ? `<div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${b.name || "Unknown"}${b.buildYear ? " · " + b.buildYear : ""}</span></div>` : ""}
-            ${hasStambyte ? `<div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${b.stambyte.status}${b.stambyte.year ? " " + b.stambyte.year : ""}</span></div>` : ""}
-            ${hasDebt ? `<div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${b.debtPerSqm ? perSqm(b.debtPerSqm) + " · " : ""}${b.avgiftRisk}</span></div>` : ""}
-            ${hasArb ? `
-            <div class="calc-divider"></div>
-            <div class="calc-row sale"><span class="calc-label">Renovated resale</span><span class="calc-value">${arb.estimatedRenovatedSqm ? perSqm(arb.estimatedRenovatedSqm) : "No sold comparables yet"}</span></div>
-            ${arb.estimatedUpliftTotal ? `<div class="calc-row profit"><span class="calc-label">Potential uplift for this flat</span><span class="calc-value">+${formatSEKShort(arb.estimatedUpliftTotal)}</span></div>` : ""}
-            <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : "Area-level"} · ${arb.totalComparableSales} sold · ${arb.confidence} confidence</span></div>
-            <div class="intel-note">${arb.summary}</div>` : ""}
-          </div>` : "";
-
-          div.innerHTML = `
-            <div style="position:relative">
-              ${carouselHtml}
-              ${renoBadgeHtml}
-              ${newBadgeHtml}
-              ${profitBadgeHtml}
-              ${daysBadgeHtml}
-              ${gatedBadgeHtml}
-            </div>
-            <div class="listing-body">
-              <div class="listing-header">
-                <h3>${listing.streetAddress}</h3>
-                <div class="listing-header-actions">
-                  <button class="cb-btn reject-cb${isRejected ? " active-reject" : ""}" title="Hide">❌</button>
-                  <button class="cb-btn save-cb${isSaved ? " active-save" : ""}" title="Save">💚</button>
-                </div>
-              </div>
-              <div class="location">${translateLocation(listing.locationDescription)}</div>
-              <div class="rejected-summary">${priceStr(listing)} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
-              <div class="listing-meta">
-                <span class="price-tag">${priceStr(listing)}</span>
-                ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}
-                ${listing.size ? `<span>${listing.size}</span>` : ""}
-                ${listing.housingForm && !isApartmentType(listing.housingForm) ? `<span>${listing.housingForm}</span>` : ""}
-                ${listing.fee ? `<span>Fee ${translateFee(listing.fee)}</span>` : ""}
-                ${listing.floor ? `<span>${translateFloor(listing.floor)}</span>` : ""}
-                ${listing.squareMeterPrice ? `<span>${displayCurrency === "SEK" ? listing.squareMeterPrice : (listing.askingPriceNum && listing.sizeNum ? perSqm(Math.round(listing.askingPriceNum / listing.sizeNum)) : listing.squareMeterPrice)}</span>` : ""}
-              </div>
-              ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
-              ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
-              ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
-              ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
-              ${renoSummaryHtml}
-              ${coverageWarnHtml}
-              ${brfIntelHtml}
-              ${listing.renovationRooms?.length ? `
-                <button class="reno-detail-toggle" data-target="reno-${listing.id}">Show room-by-room breakdown ▾</button>
-                <div class="reno-detail" id="reno-${listing.id}">
-                  ${listing.renovationRooms.map(r => `
-                    <div class="reno-room ${r.estimatedCostSEK ? 'needs-work' : 'good'}">
-                      <div class="reno-room-header">
-                        <h5>${r.type}</h5>
-                        <span class="room-cost ${r.estimatedCostSEK ? '' : 'none'}">${r.estimatedCostSEK ? formatSEKShort(r.estimatedCostSEK) : 'No work needed'}</span>
-                      </div>
-                      <div class="condition">${r.condition === 'original' || r.condition === 'dated' ? 'Needs full renovation' : r.condition === 'fair' ? 'Needs cosmetic update' : 'Good condition'}</div>
-                      ${r.indicators?.length ? `<div class="indicators"><strong style="color:#ccc;">Work needed:</strong><ul>${r.indicators.map(i => '<li>Replace/update: ' + i.replace(/^(Old|Dated|Worn|Original|Basic)\s*/i, '') + '</li>').join('')}</ul></div>` : ''}
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ""}
-              ${listing.askingPriceNum ? (() => {
-                const c = calcInvestment(listing);
-                const badge = formatProfitBadgeModel(listing);
-                // Move-in-ready "market gap" is a buy-and-resell profit, so it gets
-                // the same green profit + ROI headline as the renovation deals.
-                const hasResaleProfit = c.classification === "market-gap" && c.renovationProfit > 0;
-                const isProfitClass = c.classification === "renovation-upside" || hasResaleProfit;
-                const profitClass = isProfitClass ? "profit" : "loss";
-                const headline = c.classification === "renovation-upside"
-                  ? `Estimated renovation profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}`
-                  : hasResaleProfit
-                  ? `Estimated resale profit${c.roi > 0 ? ' (' + c.roi + '% ROI)' : ''}`
-                  : badge?.detail || "No strong renovation ROI signal";
-                return `<div class="invest-calc">
-                  <h5>Investment analysis</h5>
-                  <div class="calc-row"><span class="calc-label">Purchase price</span><span class="calc-value">${formatSEKShort(c.price)}</span></div>
-                  <div class="calc-row"><span class="calc-label">Deposit (10%)</span><span class="calc-value">${formatSEKShort(c.deposit)}</span></div>
-                  <div class="calc-row"><span class="calc-label">Renovation</span><span class="calc-value">${formatSEKShort(c.renoCost)}</span></div>
-                  <div class="calc-row"><span class="calc-label">Carrying cost (${c.months}mo × ${(c.feeNum/1000).toFixed(1)}K)</span><span class="calc-value">${formatSEKShort(c.carryingCost)}</span></div>
-                  <div class="calc-row total"><span class="calc-label">Total investment</span><span class="calc-value">${formatSEKShort(c.totalInvestment)}</span></div>
-                  <div class="calc-divider"></div>
-                  <div class="calc-row sale"><span class="calc-label">${c.estimateSource === "sold-comparables" ? "Sold comparables" : "Area benchmark"} (${(c.sqmPrice/1000).toFixed(1)}K/m² avg)</span><span class="calc-value">${formatSEKShort(c.estimatedRenovatedSalePrice)}</span></div>
-                  <div class="calc-row sale"><span class="calc-label">Market gap before costs</span><span class="calc-value">${c.grossMarketGap > 0 ? '+' : ''}${formatSEKShort(c.grossMarketGap)}</span></div>
-                  <div class="calc-row ${profitClass}"><span class="calc-label">${headline}</span><span class="calc-value">${isProfitClass ? '+' + formatSEKShort(c.renovationProfit) : convertMoneyStr(badge?.label || '—')}</span></div>
-                </div>`;
-              })() : ""}
-              ${listing.coordinates?.lat ? `<div class="listing-map" id="map-${listing.id}"></div>` : ""}
-              ${floorPlanHtml}
-              <div class="listing-actions">
-                <a href="${listing.link}" target="_blank" class="action-btn view-btn">View on Hemnet →</a>
-                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn send-builders-btn" data-id="${listing.id}" style="background:#2a2a1a;color:#ffd43b;">Send to builders</button>` : ""}
-                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn reanalyze-btn" data-id="${listing.id}" style="background:#1a2233;color:#7eb8f7;" title="Re-score this listing with Opus (strongest vision) — corrects a wrong score or kitchen/bathroom classification">↻ Reanalyze (Opus)</button>` : ""}
-                ${currentUser && currentUser.role === "admin" && !FRIENDS_VIEW ? `<button class="action-btn share-friends-btn" data-id="${listing.id}" data-shared="${listing.sharedWithFriends ? "1" : "0"}" title="Show or hide this listing on the friends dashboard">${shareBtnLabel(listing.sharedWithFriends)}</button>` : ""}
-                ${currentUser && (currentUser.role === "admin" || FRIENDS_VIEW) ? `<button class="action-btn share-link-btn" data-id="${listing.id}" style="background:#20261a;color:#8fd15a;" title="Copy a personal link to send this listing (e.g. on Messenger) — opens a preview, recipient signs in with Google to see it">📤 Send link</button>` : ""}
-              </div>
-            </div>
-          `;
-
-          div.querySelector(".reject-cb").addEventListener("click", async function () {
-            if (!currentUser) { showLoginPrompt(); return; }
-            const active = this.classList.toggle("active-reject");
-            div.classList.toggle("rejected", active);
-            if (active) {
-              div.querySelector(".save-cb").classList.remove("active-save");
-              div.classList.remove("saved");
-              await savePreference(listing.id, "rejected");
-            } else {
-              await savePreference(listing.id, null);
-            }
+          const card = FlipCard.buildListingCard(listing, {
+            currentUser,
+            friendsView: FRIENDS_VIEW,
+            view: currentView,
+            onReanalyzed: loadListings,
+            openShareModal,
+            showLoginPrompt,
           });
-
-          div.querySelector(".save-cb").addEventListener("click", async function () {
-            if (!currentUser) { showLoginPrompt(); return; }
-            const active = this.classList.toggle("active-save");
-            div.classList.toggle("saved", active);
-            if (active) {
-              div.querySelector(".reject-cb").classList.remove("active-reject");
-              div.classList.remove("rejected");
-              await savePreference(listing.id, "saved");
-            } else {
-              await savePreference(listing.id, null);
-            }
-          });
-
-          const renoToggle = div.querySelector(".reno-detail-toggle");
-          if (renoToggle) {
-            renoToggle.addEventListener("click", function() {
-              const detail = document.getElementById(this.dataset.target);
-              const open = detail.classList.toggle("open");
-              this.textContent = open ? "Hide room-by-room breakdown ▴" : "Show room-by-room breakdown ▾";
-            });
-          }
-
-          const sendBtn = div.querySelector(".send-builders-btn");
-          if (sendBtn) {
-            sendBtn.addEventListener("click", async function() {
-              const res = await fetch("/api/admin/builders");
-              const data = await res.json();
-              if (!data.builders?.length) { alert("No builders invited yet. Go to /builders to add some."); return; }
-              const names = data.builders.map((b,i) => `${i+1}. ${b.name} (${b.company || b.email})`).join("\n");
-              const pick = prompt("Send to which builders? Enter numbers separated by commas:\n\n" + names);
-              if (!pick) return;
-              const indices = pick.split(",").map(s => parseInt(s.trim(),10) - 1).filter(i => i >= 0 && i < data.builders.length);
-              if (!indices.length) return;
-              const builderIds = indices.map(i => data.builders[i]._id);
-              const note = prompt("Add a note for the builders (optional):") || "";
-              const assignRes = await fetch("/api/admin/assign", {
-                method: "POST", headers: {"Content-Type":"application/json"},
-                body: JSON.stringify({ listingId: listing.id, builderIds, note }),
-              });
-              if (assignRes.ok) {
-                this.textContent = "Sent!";
-                this.style.color = "#69db7c";
-                this.style.background = "#1a3a1a";
-              }
-            });
-          }
-
-          const shareBtn = div.querySelector(".share-friends-btn");
-          if (shareBtn) {
-            styleShareBtn(shareBtn, shareBtn.dataset.shared === "1");
-            shareBtn.addEventListener("click", async function () {
-              if (this.disabled) return;
-              const next = this.dataset.shared !== "1"; // toggle
-              this.disabled = true;
-              this.style.opacity = "0.7";
-              try {
-                const res = await fetch(`/api/admin/listings/${listing.id}/share`, {
-                  method: "POST", headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ shared: next }),
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) { alert(data.error || "Failed to update sharing"); return; }
-                this.dataset.shared = data.shared ? "1" : "0";
-                styleShareBtn(this, data.shared);
-              } catch (err) {
-                alert("Failed to update sharing: " + err.message);
-              } finally {
-                this.disabled = false; this.style.opacity = "1";
-              }
-            });
-          }
-
-          const shareLinkBtn = div.querySelector(".share-link-btn");
-          if (shareLinkBtn) {
-            shareLinkBtn.addEventListener("click", function() {
-              const url = `${location.origin}/l/${listing.id}`;
-              const price = listing.askingPrice ? ` — ${listing.askingPrice}` : "";
-              openShareModal(`Have a look at this Stockholm flip: ${listing.streetAddress}${price}\n${url}`);
-            });
-          }
-
-          const reanalyzeBtn = div.querySelector(".reanalyze-btn");
-          if (reanalyzeBtn) {
-            reanalyzeBtn.addEventListener("click", async function() {
-              if (this.disabled) return;
-              const orig = this.textContent;
-              this.disabled = true;
-              this.style.opacity = "0.7";
-              this.textContent = "↻ Reanalyzing with Opus… (~20s)";
-              try {
-                const res = await fetch(`/api/admin/reanalyze/${listing.id}`, { method: "POST" });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                  alert(data.detail || data.error || "Reanalysis failed");
-                  this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
-                  return;
-                }
-                // Re-score may move the listing between Deals/Move-in ready — reload
-                // the current view so the corrected score, badge and photos show.
-                this.textContent = "Updated ✓"; this.style.color = "#69db7c";
-                await loadListings();
-              } catch (err) {
-                alert("Reanalysis failed: " + err.message);
-                this.disabled = false; this.style.opacity = "1"; this.textContent = orig;
-              }
-            });
-          }
-
-          // Carousel navigation
-          const carousel = div.querySelector(".carousel");
-          if (carousel && imgs.length > 1) {
-            const track = carousel.querySelector(".carousel-track");
-            const counter = carousel.querySelector(".carousel-counter");
-            let idx = 0;
-            function goTo(n) {
-              idx = (n + imgs.length) % imgs.length;
-              track.style.transform = `translateX(-${idx * 100}%)`;
-              counter.textContent = `${idx + 1} / ${imgs.length}`;
-            }
-            carousel.querySelector(".carousel-prev").addEventListener("click", () => goTo(idx - 1));
-            carousel.querySelector(".carousel-next").addEventListener("click", () => goTo(idx + 1));
-          }
-
-          document.getElementById("feed").appendChild(div);
-
-          // Init map if coordinates exist
-          if (listing.coordinates?.lat) {
-            const mapEl = document.getElementById("map-" + listing.id);
-            if (mapEl) {
-              const map = L.map(mapEl, { scrollWheelZoom: false, dragging: false, zoomControl: false }).setView([listing.coordinates.lat, listing.coordinates.lng], 14);
-              L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(map);
-              L.marker([listing.coordinates.lat, listing.coordinates.lng]).addTo(map);
-            }
-          }
+          feedEl.appendChild(card);
+          FlipCard.mountMap(card, listing);
         });
       }
 
@@ -1347,7 +676,7 @@
         // Friends can pick a display currency — mount the toggle (next to the
         // profile icon), load the rate before the first render so amounts convert
         // immediately, and show the rate/source/date.
-        if (FRIENDS_VIEW) { mountCurrencyToggle(); await loadFx(); updateFxNote(); }
+        if (FRIENDS_VIEW) { mountCurrencyToggle(); await FlipCard.loadFx(); updateFxNote(); }
         loadListings();
         setAreaCount();
       }
@@ -1377,7 +706,7 @@
         // Currency choice is persisted per device (an Australian viewer sets it
         // once). Read it here so loadFx()/the first render use the right currency;
         // the toggle itself is mounted next to the profile icon (mountCurrencyToggle).
-        displayCurrency = localStorage.getItem("fh_currency") || "SEK";
+        FlipCard.setDisplayCurrency(localStorage.getItem("fh_currency") || "SEK");
       }
 
       // Currency toggle lives in the header next to the profile icon; the
@@ -1390,13 +719,13 @@
           wrap.id = "currency-toggle";
           // Select + the rate/source/date note stacked beneath it (small text).
           wrap.innerHTML = `<select id="currency-select" aria-label="Display currency" title="Show prices in this currency">
-            ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${code === displayCurrency ? "selected" : ""}>${c.label}</option>`).join("")}
+            ${Object.entries(CURRENCIES).map(([code, c]) => `<option value="${code}" ${code === FlipCard.getDisplayCurrency() ? "selected" : ""}>${c.label}</option>`).join("")}
           </select><span id="fx-note"></span>`;
           hr.insertBefore(wrap, hr.firstChild);
           document.getElementById("currency-select").addEventListener("change", async (e) => {
-            displayCurrency = e.target.value;
-            localStorage.setItem("fh_currency", displayCurrency);
-            await loadFx();
+            FlipCard.setDisplayCurrency(e.target.value);
+            localStorage.setItem("fh_currency", FlipCard.getDisplayCurrency());
+            await FlipCard.loadFx();
             updateFxNote();
             if (allListingsData) renderListings(allListingsData);
           });
