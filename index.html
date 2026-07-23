@@ -136,6 +136,14 @@
         border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 0.85rem;
       }
       .feed-error button:hover { background: #333; }
+
+      /* Friends showcase (/friends): a curated, read-only view. Hide the filter
+         bars entirely — the score filters ("All", 7/10, 8/10, …) and the profit
+         filters ("All", "Preliminary profitable") are internal triage controls, so
+         friends just browse the curated list without them. !important overrides the
+         inline display:flex that buildFilterBar() sets on #reno-filters. */
+      body.friends-mode #reno-filters,
+      body.friends-mode #profit-filters { display: none !important; }
     </style>
   </head>
   <body>
