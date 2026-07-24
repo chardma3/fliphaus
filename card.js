@@ -111,11 +111,24 @@
   }
 
   async function savePreference(listingId, status) {
-    await fetch("/api/preference", {
+    const res = await fetch("/api/preference", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listingId, status }),
     });
+    return res.json().catch(() => ({}));
+  }
+
+  // Hiding (❌) or un-saving (💚 off) a listing may have unshared it from the
+  // friends dashboard server-side (admin only). Reflect that on the card's
+  // ★ button immediately so it doesn't stay stale until reload.
+  function reflectUnshare(div, data) {
+    if (!data || !data.unshared) return;
+    const shareBtn = div.querySelector(".share-friends-btn");
+    if (shareBtn) {
+      shareBtn.dataset.shared = "0";
+      styleShareBtn(shareBtn, false);
+    }
   }
 
   // Build one listing card. ctx carries the page-specific bits so the same card
@@ -314,7 +327,7 @@
       if (active) {
         div.querySelector(".save-cb").classList.remove("active-save");
         div.classList.remove("saved");
-        await savePreference(listing.id, "rejected");
+        reflectUnshare(div, await savePreference(listing.id, "rejected"));
       } else {
         await savePreference(listing.id, null);
       }
@@ -329,7 +342,7 @@
         div.classList.remove("rejected");
         await savePreference(listing.id, "saved");
       } else {
-        await savePreference(listing.id, null);
+        reflectUnshare(div, await savePreference(listing.id, null));
       }
     });
 

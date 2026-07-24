@@ -35,6 +35,7 @@ const { buildVersionInfo } = require("./api/version");
 const { resolveRole, syncUserRole } = require("./api/roles");
 const { getSekToAud } = require("./api/fx");
 const { buildActiveFeedFilter, SITTING_MIN_DAYS } = require("./api/listings-query");
+const { shouldUnshareOnPreference } = require("./api/friends-share");
 const { AREA_NAMES } = require("./api/hemnet-refresh-safety");
 
 const app = express();
@@ -339,6 +340,9 @@ app.get("/api/listings/:listingId/brf-intelligence", async (req, res) => {
 app.post("/api/preference", requireAuth, async (req, res) => {
   try {
     const { listingId, status } = req.body;
+    // Remember the prior preference so we can tell an "unsave" (saved → none)
+    // apart from an "un-reject" (rejected → none): both arrive here as null.
+    const prev = await Preference.findOne({ userId: req.user.id, listingId });
     if (!status) {
       await Preference.deleteOne({ userId: req.user.id, listingId });
     } else {
@@ -348,7 +352,19 @@ app.post("/api/preference", requireAuth, async (req, res) => {
         { upsert: true }
       );
     }
-    res.json({ ok: true });
+    // When Claire (admin) hides a listing (❌) or removes it from her saved set
+    // (💚 off), it should also drop off the friends dashboard. See
+    // api/friends-share.js for the exact rule (admin-only; un-rejecting is not
+    // an unsave). `unshared` is echoed so the card can flip its ★ button live.
+    let unshared = false;
+    if (shouldUnshareOnPreference(req.user.role, status, prev?.status)) {
+      const upd = await Listing.updateOne(
+        { id: listingId, sharedWithFriends: true },
+        { $set: { sharedWithFriends: false } }
+      );
+      unshared = upd.modifiedCount > 0;
+    }
+    res.json({ ok: true, unshared });
   } catch (err) {
     res.status(500).json({ error: "Failed to save preference" });
   }
