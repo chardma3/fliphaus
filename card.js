@@ -269,8 +269,8 @@
         <div class="listing-header">
           <h3>${listing.streetAddress}</h3>
           <div class="listing-header-actions">
-            <button class="cb-btn reject-cb${isRejected ? " active-reject" : ""}" title="Hide">❌</button>
-            <button class="cb-btn save-cb${isSaved ? " active-save" : ""}" title="Save">💚</button>
+            ${friendsView ? "" : `<button class="cb-btn reject-cb${isRejected ? " active-reject" : ""}" title="Hide">❌</button>
+            <button class="cb-btn save-cb${isSaved ? " active-save" : ""}" title="Save">💚</button>`}
           </div>
         </div>
         <div class="location">${translateLocation(listing.locationDescription)}</div>
@@ -320,7 +320,12 @@
       </div>
     `;
 
-    div.querySelector(".reject-cb").addEventListener("click", async function () {
+    // The friends showcase is read-only — the ❌/💚 triage buttons aren't
+    // rendered there, so guard the wiring (querySelector would be null). This
+    // also stops a friend's (or Claire-previewing-/friends) triage from ever
+    // writing preferences that leak onto the admin dashboard.
+    const rejectCb = div.querySelector(".reject-cb");
+    if (rejectCb) rejectCb.addEventListener("click", async function () {
       if (!currentUser) { ctx.showLoginPrompt?.(); return; }
       const active = this.classList.toggle("active-reject");
       div.classList.toggle("rejected", active);
@@ -333,7 +338,8 @@
       }
     });
 
-    div.querySelector(".save-cb").addEventListener("click", async function () {
+    const saveCb = div.querySelector(".save-cb");
+    if (saveCb) saveCb.addEventListener("click", async function () {
       if (!currentUser) { ctx.showLoginPrompt?.(); return; }
       const active = this.classList.toggle("active-save");
       div.classList.toggle("saved", active);
