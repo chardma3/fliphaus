@@ -1010,8 +1010,16 @@ app.get("/api/daily-digest", async (req, res) => {
       { firstSeenAt: null, publishedAt: { $gte: since } },
       { firstSeenAt: { $exists: false }, publishedAt: { $gte: since } },
     ] };
+    // Label each listing by its REAL district (first part of Hemnet's per-listing
+    // locationDescription, e.g. "Gärdet, Stockholms kommun" -> "Gärdet"), NOT the
+    // coarse scrape-catchment `area` tag — a Hemnet location_id is a broad catchment
+    // (Östermalm's node also pulls in Gärdet/Kungsholmen/Vasastan and even Nacka), so
+    // `area` mislabels district. The cards already use locationDescription; this makes
+    // the digest match. Falls back to `area` only when there's no location text.
+    const districtOf = (l) =>
+      (l.locationDescription ? l.locationDescription.split(",")[0].trim() : "") || l.area;
     const project = (l) => ({
-      id: l.id, address: l.streetAddress, area: l.area, price: l.askingPrice,
+      id: l.id, address: l.streetAddress, area: districtOf(l), price: l.askingPrice,
       rooms: l.rooms, size: l.size, score: l.renovationScore, slug: l.slug, link: l.link,
     });
     // "Newly sitting" = crossed the SITTING_MIN_DAYS on-market threshold within the
