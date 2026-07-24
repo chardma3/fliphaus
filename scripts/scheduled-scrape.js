@@ -101,6 +101,28 @@ async function stage(job, label, fn) {
       }
       return { rounds, analyzed };
     });
+
+    // Dedicated WET-ROOM coverage drain. `coverageOnly` targets ONLY already-scored
+    // listings whose stored photos still miss a kitchen/bathroom, re-hydrating the
+    // gallery so a deal scored blind to the bathroom gets corrected. This replaces
+    // the retired hourly web-box coverage sweep (ENABLE_COVERAGE_SWEEP). It runs as
+    // its OWN stage with its OWN round budget so wet-room healing can't be starved
+    // by unscored new listings competing for the general self-heal budget above.
+    // Tune with SCRAPE_COVERAGE_ROUNDS.
+    const coverageRounds = Number(process.env.SCRAPE_COVERAGE_ROUNDS) || selfHealRounds;
+    await stage("wetroom-coverage", "Wetroom coverage re-check", async () => {
+      let analyzed = 0;
+      let rounds = 0;
+      let queued = 0;
+      for (let i = 0; i < coverageRounds; i++) {
+        const r = await analyzeListingImagesRefresh({ dataset: "active", coverageOnly: true, limit: analyzeLimit });
+        rounds += 1;
+        analyzed += r.active?.analyzed || 0;
+        queued = r.active?.queued || 0; // remaining backlog after this round
+        if ((r.active?.analyzed || 0) === 0) break; // nothing left to heal this run
+      }
+      return { rounds, analyzed, queued };
+    });
     // Rebuild stored resale estimates from the fresh comps.
     await stage("precompute-estimates", "Precompute resale estimates", () =>
       precomputeEstimates({ Listing, SoldListing }));

@@ -443,6 +443,7 @@
             }
             if (r.job === "sold-scrape") return `${x.total ?? "?"} sold${x.new != null ? `, ${x.new} new` : ""}`;
             if (r.job === "image-analysis") return `${x.analyzed ?? "?"} analysed${x.failed ? `, ${x.failed} failed` : ""}`;
+            if (r.job === "wetroom-coverage") return `${x.analyzed ?? 0} re-checked${x.queued ? `, ${x.queued} still queued` : ""}`;
             return "done";
           };
           const statusMark = { success: ["✓", "#69db7c"], partial: ["⚠", "#ffd43b"], failed: ["✗", "#ff8888"] };
@@ -459,16 +460,26 @@
               }).join("")
             : `<span style="color:#666;">No runs recorded yet.</span>`;
 
-          // Wetroom re-checks = the coverage self-heal sweep (re-fetches photos for
-          // listings missing a kitchen/bathroom and re-scores them). The cadence is
-          // the REAL configured interval (sweep.config.minutes), not a hardcoded
-          // guess — defaults to 60 min unless COVERAGE_SWEEP_MINUTES overrides it.
-          const sweepMins = sweep.config && sweep.config.minutes ? sweep.config.minutes : null;
-          const cadence = sweepMins ? `every ${sweepMins} min` : "self-heal";
+          // Wetroom re-checks re-fetch photos for listings whose stored gallery is
+          // missing a kitchen/bathroom and re-score them, so a deal scored blind to
+          // the bathroom gets corrected. This now runs as a dedicated stage in the
+          // daily scan (job "wetroom-coverage"); the old hourly in-process web-box
+          // sweep is retired. Prefer the daily stage's status (falling back to the
+          // gallery self-heal, which also heals wet rooms); only show the in-process
+          // sweep if it's somehow still enabled.
+          const wetroomRun = runs.find((r) => r.job === "wetroom-coverage")
+            || runs.find((r) => r.job === "self-heal");
           let sweepText;
-          if (!sweep.enabled) {
-            sweepText = `<span style="color:#ff8888;">Wetroom re-checks: off</span>`;
-          } else if (sweep.lastRun) {
+          if (wetroomRun) {
+            const x = wetroomRun.result || {};
+            const detail = wetroomRun.status === "failed" ? `error: ${wetroomRun.error || "failed"}`
+              : (x.analyzed || 0) === 0 ? "queue empty — nothing to heal"
+              : `${x.analyzed} re-checked${x.queued ? ` · ${x.queued} still queued` : ""}`;
+            const colour = wetroomRun.status === "failed" ? "#ff8888" : "#69db7c";
+            sweepText = `<span style="color:${colour};">Wetroom re-checks: daily in the scan · last ${fmtWhen(wetroomRun.startedAt)} — ${detail}</span>`;
+          } else if (sweep.enabled && sweep.lastRun) {
+            const sweepMins = sweep.config && sweep.config.minutes ? sweep.config.minutes : null;
+            const cadence = sweepMins ? `every ${sweepMins} min` : "self-heal";
             const r = sweep.lastRun;
             const detail = r.error ? `error: ${r.error}`
               : r.deferred ? "deferred (a scrape was running)"
@@ -476,7 +487,7 @@
               : `${r.analyzed || 0} re-checked · ${r.queued} still queued`;
             sweepText = `Wetroom re-checks: ${cadence} · last ${fmtWhen(r.at)} — ${detail}`;
           } else {
-            sweepText = `Wetroom re-checks: ${cadence} · waiting for first run…`;
+            sweepText = `<span style="color:#888;">Wetroom re-checks: run daily in the scan · waiting for the next run…</span>`;
           }
 
           healthEl.style.display = "flex";
