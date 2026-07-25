@@ -11,6 +11,12 @@ const DEAL_MIN_SCORE = 6;
 // adjacent area's catchment (e.g. Solna).
 const EXCLUDED_LOCATIONS = /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i;
 
+// 1-room apartments (studios / "1:a") are not flip candidates — Claire's rule is
+// to not source them. Matches "1 rum" (the Hemnet format) but deliberately NOT
+// "1,5 rum" (comma) or "10 rum"/"11 rum". Listings with no rooms string are kept
+// ($not on a regex also matches missing/null), so unscraped rooms don't vanish.
+const ONE_ROOM_RUM = /^1\s+rum/i;
+
 // Days on the market at or beyond which a listing counts as "sitting" — long
 // enough that the usual Stockholm visning/bidding cycle should have cleared it,
 // so it may be mispriced or have a problem, which is negotiating room.
@@ -95,6 +101,10 @@ function buildActiveFeedFilter({
   const filter = {
     status,
     locationDescription: { $not: exclusionRegex(compsOnlyNames) },
+    // Never surface 1-room apartments in any view (deals, move-in, sitting,
+    // newbuild, friends) — applied on the base filter so it carries into the
+    // early-returning branches too.
+    rooms: { $not: ONE_ROOM_RUM },
   };
   // Applied on the base filter so it carries into every view, including the
   // newbuild and sitting branches that return early below.
@@ -161,4 +171,4 @@ function buildActiveFeedFilter({
   return filter;
 }
 
-module.exports = { buildActiveFeedFilter, activeAreaConstraints, DEAL_MIN_SCORE, SITTING_MIN_DAYS };
+module.exports = { buildActiveFeedFilter, activeAreaConstraints, DEAL_MIN_SCORE, SITTING_MIN_DAYS, ONE_ROOM_RUM };

@@ -9,10 +9,24 @@ test("deals view shows scored strong flips (>=6) only — unscored and new-build
   assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
+    rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
     streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 6 },
   });
+});
+
+test("1-room apartments are excluded from every view, but 1,5-room and larger are kept", () => {
+  const { ONE_ROOM_RUM } = require("../api/listings-query");
+  for (const view of ["deals", "moveinready", "sitting", "newbuild"]) {
+    const f = buildActiveFeedFilter({ view, sittingBefore: new Date("2026-06-12T00:00:00Z"), areaConstraints: [] });
+    assert.deepEqual(f.rooms, { $not: ONE_ROOM_RUM }, `${view} excludes 1-room`);
+  }
+  // Regex sanity: "1 rum" is excluded; "1,5 rum" / "10 rum" / larger are kept.
+  assert.ok(ONE_ROOM_RUM.test("1 rum"));
+  assert.ok(!ONE_ROOM_RUM.test("1,5 rum"));
+  assert.ok(!ONE_ROOM_RUM.test("10 rum"));
+  assert.ok(!ONE_ROOM_RUM.test("2 rum"));
 });
 
 test("deals are NOT hidden when a wet room wasn't pictured — they show flagged instead", () => {
@@ -35,6 +49,7 @@ test("new-build view shows only projekt listings (name-only address), no score f
   assert.deepEqual(f, {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
+    rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
     streetAddress: /^[^0-9]+$/,
   });
@@ -157,6 +172,7 @@ test("with no active area constraints, no $nor clause is added (additive wiring)
   assert.deepEqual(buildActiveFeedFilter({ view: "deals", maxPrice: 4000000, areaConstraints: [] }), {
     status: "active",
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
+    rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
     streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 6 },

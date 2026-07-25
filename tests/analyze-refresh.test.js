@@ -30,6 +30,7 @@ test("active image analysis query self-heals incomplete-coverage listings, bound
       "images.0": { $exists: true },
       streetAddress: { $not: /^[^0-9]+$/ },
       status: "active",
+      rooms: { $not: /^1\s+rum/i },
       $or: [
         { renovationScore: null },
         { renovationScore: { $exists: false } },
