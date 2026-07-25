@@ -1,4 +1,5 @@
 const { PROJECT_ADDRESS } = require("./project-listing");
+const { ONE_ROOM_RUM } = require("./listings-query");
 
 // Self-heal bounds. A listing whose gallery hydration failed (so its photos are
 // missing the kitchen/bathroom) is retried on later runs — but at most
@@ -23,6 +24,11 @@ function buildAnalysisQuery({ onlyMissing = true, status, requireAnalyzedAt = fa
     query.$or = [{ id: target }, { slug: target }];
     return query;
   }
+  // Don't pay to score 1-room apartments in the ACTIVE feed — they're filtered
+  // out of every view anyway (see listings-query ONE_ROOM_RUM). Scoped to active
+  // so sold-comp image analysis is untouched; the target branch above bypasses
+  // it, so a manual reanalyze of a 1-room still works.
+  if (status === "active") query.rooms = { $not: ONE_ROOM_RUM };
   if (coverageOnly) {
     // Fast coverage self-heal: ONLY already-scored listings whose persisted photos
     // miss a wet room (kitchen or bathroom). Bypasses the unscored-listing clauses

@@ -27,6 +27,14 @@
     } catch { fxInfo = null; fxRate = 1; }
   }
 
+  // The Swedish "BRF" (bostadsrättsförening) has no exact AU equivalent; on the
+  // A$ (Australian) toggle show "Strata", the concept Aussie buyers know. SEK
+  // keeps "BRF". Baked in at render time like the money strings, so it updates
+  // when the currency toggle re-renders the cards.
+  function brfTerm() {
+    return displayCurrency === "SEK" ? "BRF" : "Strata";
+  }
+
   // ---- money formatters (currency-aware) ----
   function perSqm(sek) {
     const v = Math.round((sek || 0) * fxRate);
@@ -210,15 +218,15 @@
     const hasDebt = b && (b.debtPerSqm || (b.avgiftRisk && b.avgiftRisk !== "unknown"));
     const hasArb = arb && arb.scope !== "none" && (arb.estimatedUpliftPerSqm != null || arb.totalComparableSales > 0);
     const brfIntelHtml = (hasDebt || hasArb) ? `<div class="brf-intel">
-      <h5>BRF intelligence</h5>
-      ${b.name || b.buildYear ? `<div class="calc-row"><span class="calc-label">BRF / built</span><span class="calc-value">${b.name || "Unknown"}${b.buildYear ? " · " + b.buildYear : ""}</span></div>` : ""}
+      <h5>${brfTerm()} intelligence</h5>
+      ${b.name || b.buildYear ? `<div class="calc-row"><span class="calc-label">${brfTerm()} / built</span><span class="calc-value">${b.name || "Unknown"}${b.buildYear ? " · " + b.buildYear : ""}</span></div>` : ""}
       ${hasStambyte ? `<div class="calc-row"><span class="calc-label">Pipe replacement</span><span class="calc-value">${b.stambyte.status}${b.stambyte.year ? " " + b.stambyte.year : ""}</span></div>` : ""}
-      ${hasDebt ? `<div class="calc-row"><span class="calc-label">BRF debt risk</span><span class="calc-value">${b.debtPerSqm ? perSqm(b.debtPerSqm) + " · " : ""}${b.avgiftRisk}</span></div>` : ""}
+      ${hasDebt ? `<div class="calc-row"><span class="calc-label">${brfTerm()} debt risk</span><span class="calc-value">${b.debtPerSqm ? perSqm(b.debtPerSqm) + " · " : ""}${b.avgiftRisk}</span></div>` : ""}
       ${hasArb ? `
       <div class="calc-divider"></div>
       <div class="calc-row sale"><span class="calc-label">Renovated resale</span><span class="calc-value">${arb.estimatedRenovatedSqm ? perSqm(arb.estimatedRenovatedSqm) : "No sold comparables yet"}</span></div>
       ${arb.estimatedUpliftTotal ? `<div class="calc-row profit"><span class="calc-label">Potential uplift for this flat</span><span class="calc-value">+${formatSEKShort(arb.estimatedUpliftTotal)}</span></div>` : ""}
-      <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same BRF" : "Area-level"} · ${arb.totalComparableSales} sold · ${arb.confidence} confidence</span></div>
+      <div class="calc-row"><span class="calc-label">Evidence</span><span class="calc-value">${arb.scope === "same_brf" ? "Same " + brfTerm() : "Area-level"} · ${arb.totalComparableSales} sold · ${arb.confidence} confidence</span></div>
       <div class="intel-note">${arb.summary}</div>` : ""}
     </div>` : "";
 
@@ -287,7 +295,7 @@
         ${listing.transitMinutes ? `<div class="listing-agency">${listing.nearestStation} · ${listing.transitLine ? listing.transitLine.replace('T-bana','metro') + ' · ' : ''}${listing.transitMinutes} min to T-Centralen</div>` : ""}
         ${listing.brokerAgencyName ? `<div class="listing-agency">${listing.brokerAgencyName}</div>` : ""}
         ${listing.nextShowing ? `<div class="listing-showing">${listing.nextShowing}</div>` : ""}
-        ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? 'BRF ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
+        ${listing.brfName || listing.buildYear || listing.stambyteStatus ? `<div class="listing-agency">${listing.brfName ? brfTerm() + ' ' + listing.brfName : ''}${listing.buildYear ? ' · Built ' + listing.buildYear : ''}${listing.stambyteStatus ? ' · Pipe replacement: ' + listing.stambyteStatus : ''}</div>` : ""}
         ${renoSummaryHtml}
         ${coverageWarnHtml}
         ${brfIntelHtml}
