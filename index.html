@@ -447,7 +447,18 @@
             return "done";
           };
           const statusMark = { success: ["✓", "#69db7c"], partial: ["⚠", "#ffd43b"], failed: ["✗", "#ff8888"] };
-          const runs = health.recentRuns || [];
+          const allRuns = health.recentRuns || [];
+          // Show only the CURRENT daily run's health — the latest run of each
+          // stage — not a multi-day history. recentRuns is newest-first, so the
+          // first time a job appears is its most recent run; drop older repeats
+          // (including previous days', so a past blip's ⚠ doesn't linger).
+          const seenJobs = new Set();
+          const runs = allRuns.filter((r) => {
+            const key = r.job || r.label;
+            if (seenJobs.has(key)) return false;
+            seenJobs.add(key);
+            return true;
+          });
           const runsRows = runs.length
             ? runs.map((r) => {
                 const [icon, colour] = statusMark[r.status] || statusMark.success;
@@ -499,7 +510,7 @@
               ${scheduleRows}
             </div>
             <div style="display:flex; flex-direction:column; gap:3px; margin-top:8px;">
-              <strong style="color:#ffd43b;">Completed scrapes (most recent first):</strong>
+              <strong style="color:#ffd43b;">Latest daily run — health by stage:</strong>
               ${runsRows}
             </div>
             <span style="margin-top:4px;">${sweepText}</span>
