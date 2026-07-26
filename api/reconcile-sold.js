@@ -136,6 +136,8 @@ async function reconcileSoldListings({ Listing, SoldListing, threshold = 80 } = 
 module.exports = {
   normalizeText,
   parseNumber,
+  firstAreaToken,
+  tokenOverlap,
   scoreSoldMatch,
   findBestSoldMatch,
   reconcileSoldListings,
