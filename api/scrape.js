@@ -4,6 +4,8 @@ const Listing = require("./listing.model");
 const { resolveActiveScrapeTargets, assertHemnetPageUsable, assertNonEmptyRefreshResult, buildAreaDisappearanceQuery, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions, buildListingUpsert } = require("./scrape-options");
+const { blockingKey } = require("./listing-fingerprint");
+const { sourceEntry } = require("./listing-ingest");
 
 puppeteer.use(StealthPlugin());
 
@@ -296,10 +298,17 @@ module.exports = async (options = {}) => {
     // images is owned by $setOnInsert alone.
     const scrapedImages = update.images;
     delete update.images;
+    // Canonical dedup bucket, refreshed every run so existing docs pick it up too
+    // (multi-source groundwork — see api/listing-fingerprint.js). No behaviour
+    // change for Hemnet, which keeps keying on its own `id` below.
+    update.fingerprintKey = blockingKey(update) || null;
     // Stamp firstSeenAt only on first insert (drives the daily digest's "new
     // listings"); $setOnInsert leaves it untouched on later scrapes.
     const upsert = buildListingUpsert(update, scrapedImages);
     upsert.$setOnInsert.firstSeenAt = new Date();
+    // Record Hemnet as this flat's source #1 on first insert, so a future Booli
+    // merge appends to a populated sources[] rather than starting empty.
+    upsert.$setOnInsert.sources = [sourceEntry("hemnet", l.id, update.link)];
     await Listing.findOneAndUpdate({ id: l.id }, upsert, { upsert: true, returnDocument: "after" });
   }
 
