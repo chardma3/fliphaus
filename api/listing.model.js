@@ -96,6 +96,28 @@ const listingSchema = new mongoose.Schema({
   // Phase 1 is a single global shared set; per-recipient targeting comes later.
   sharedWithFriends: { type: Boolean, default: false, index: true },
   sharedAt: { type: Date, default: null },
+  // Multi-source provenance. Each source that carries this same physical flat
+  // (Hemnet, Booli, a broker site) adds an entry, so we keep ONE canonical
+  // listing instead of a duplicate per portal. The top-level `id` stays the
+  // primary key (Hemnet's id today); this records who else has it + their URLs.
+  // Populated on Hemnet ingest ($setOnInsert) and by the cross-source merge
+  // (api/listing-ingest.js). See api/listing-fingerprint.js for the matcher.
+  sources: {
+    type: [
+      {
+        _id: false,
+        source: String, // "hemnet" | "booli" | ...
+        sourceId: String, // that source's own id for this flat
+        url: String,
+        firstSeen: Date,
+      },
+    ],
+    default: [],
+  },
+  // Coarse dedup bucket (area|size|rooms, api/listing-fingerprint.js blockingKey).
+  // Indexed so a second source can fetch just the plausible candidates for the
+  // same flat and confirm with sameListing(), instead of scanning the whole DB.
+  fingerprintKey: { type: String, default: null, index: true },
 });
 
 module.exports = mongoose.model("Listing", listingSchema);
