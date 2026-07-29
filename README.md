@@ -275,6 +275,62 @@ If data is stale and the scrape failed:
 4. **`Could not find Chrome`** = the cron job didn't install the browser — set Build Command to `npm install && npx puppeteer browsers install chrome` + `PUPPETEER_CACHE_DIR=/opt/render/project/src/.cache/puppeteer`, then **Clear build cache & deploy** (a plain Trigger Run won't rebuild).
 5. **Trigger Run** again after checking the source site is reachable, or run `node scripts/scheduled-scrape.js active` from the cron job's Shell.
 
+### Second source: Booli sold comps (opt-in, not yet in the cron)
+
+Booli is a second source for *sold* comps, because sold prices are what the resale
+estimate — and therefore every profit badge — is computed from. It is **run by hand
+for now**; the daily cron is untouched.
+
+**How Booli is read.** Its GraphQL only accepts *persisted* queries (GET + a
+sha256 hash), so our own queries get a 403 Cloudflare challenge. Instead the
+server-rendered sold-search page embeds the whole result set in `__NEXT_DATA__` →
+`__APOLLO_STATE__`, with `objectType` and `page` honoured off the URL — the same
+technique the Hemnet scraper uses. `api/booli.js` is pure (URLs, mapping,
+pagination); `api/booli-transport.js` is the only network-facing part.
+
+⚠️ **Areas must be resolved, never guessed.** Booli ignores `?q=<name>` and silently
+falls back to areaId `77104` = *"Sverige"* (2.9M sold rows). A wrong areaId doesn't
+error — it quietly floods the comp set with the whole country. Verified ids live in
+`BOOLI_AREA_IDS` (Årsta = `874649`); anything else is resolved live and treated as
+fatal if lookup fails.
+
+**Order of operations** — the migration is a prerequisite, not a cleanup:
+
+```bash
+node scripts/migrate-sold-sources.js            # report what it would change
+node scripts/migrate-sold-sources.js --commit   # then apply
+node scripts/booli-sold-ingest.js               # dry run: what would insert/merge
+node scripts/booli-sold-ingest.js --commit      # then write
+```
+
+The migration (a) drops the non-sparse unique `hemnetId_1` index so a Booli-only
+sale (which has no Hemnet id) can be stored at all, and (b) backfills
+`fingerprintKey` on existing sold records. Without (b) dedup is **blind** — every
+Booli record looks new and duplicates a sale we already hold, double-weighting it
+in the kr/m² percentile. `booli-sold-ingest.js` refuses to run if nothing is
+fingerprinted. Both scripts are dry-run by default.
+
+`models/sold.model.js` sets `autoIndex: false`: production carries the old
+non-sparse index, so letting every boot retry the changed definition would fail
+with an `IndexOptionsConflict`. Index changes on this collection go through the
+migration's `syncIndexes()`.
+
+**How duplicate sales are detected** (`api/sold-ingest.js`). Identity is *same flat
+**and** same sale event* — the same apartment genuinely sells more than once, and
+those are separate comps that must both survive. On top of the fingerprint matcher:
+
+- a **known floor mismatch** disqualifies (real Årsta case: floors 4 and 7 at one
+  address matched on every other signal);
+- **prices must agree within 0.5%** — two sources report one transaction to the
+  krona, so a 2% window merged two different flats sold weeks apart;
+- **two records from the same source are never merged**: within one source,
+  different ids mean different sales by definition. Booli's own Årsta data contains
+  distinct flats identical on every comparable attribute, which no amount of
+  attribute matching can separate.
+
+A merge only ever *fills blanks* (floor, coordinates, days-on-market) and appends a
+`sources[]` entry. Hemnet's values and our renovation analysis are never overwritten.
+
 ### Dashboard data endpoints (read-only, no auth)
 
 - `/api/areas` → `{ areas: [...] }` — the live area names from `LOCATION_IDS`. The account-page area picker and the areas-page cards/intro read this, so they never drift from what's actually scraped.
