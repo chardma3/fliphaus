@@ -412,6 +412,11 @@
           const fmtWhen = (iso) => iso
             ? new Date(iso).toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", dateStyle: "short", timeStyle: "short" })
             : "—";
+          // Failure text is a raw error message (URLs, quotes, angle brackets from
+          // an error page) going into innerHTML — escape it.
+          const esc = (value) => String(value == null ? "" : value)
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
           const staleText = active.isStale
             ? "This data may be stale; the daily refresh hasn't completed recently."
@@ -459,6 +464,22 @@
             seenJobs.add(key);
             return true;
           });
+          // A failed stage's own message is usually the zero-listing GUARD — a
+          // symptom. `failureSummary` (classified server-side from the per-area
+          // errors) is the actionable cause, so it's shown directly under the row
+          // with the raw message kept for reference.
+          const failureRows = (r) => {
+            const summary = r.failureSummary;
+            if (!summary) return "";
+            const groups = (summary.groups || []).map((g) => `
+              <div style="color:#c88; padding-left:24px; font-size:0.92em;">
+                ⤷ ${g.count} area${g.count === 1 ? "" : "s"}${g.areas && g.areas.length && g.count <= 4 ? ` (${esc(g.areas.join(", "))})` : ""}:
+                <code style="color:#a99;">${esc(g.message)}</code>
+              </div>`).join("");
+            return `
+              <div style="padding-left:24px; color:#ffb3b3;">↳ <strong>Likely cause:</strong> ${esc(summary.text)}</div>
+              ${groups}`;
+          };
           const runsRows = runs.length
             ? runs.map((r) => {
                 const [icon, colour] = statusMark[r.status] || statusMark.success;
@@ -467,9 +488,18 @@
                     <span style="color:${colour}; min-width:14px;">${icon}</span>
                     <span style="color:#888; min-width:104px;">${fmtWhen(r.startedAt)}</span>
                     <span>${r.label || r.job}<span style="color:#666;"> · ${runSummary(r)}</span></span>
-                  </div>`;
+                  </div>
+                  ${failureRows(r)}`;
               }).join("")
             : `<span style="color:#666;">No runs recorded yet.</span>`;
+
+          // When the newest active scrape failed, say why at the TOP of the panel
+          // next to the staleness warning — the whole point is not having to read
+          // down to the stage list (or the cron log) to learn the refresh is broken.
+          const failedActive = runs.find((r) => r.job === "active-scrape" && r.status !== "success");
+          const causeBanner = failedActive && failedActive.failureSummary
+            ? `<span style="color:#ffb3b3;"><strong>Why the refresh is stalled:</strong> ${esc(failedActive.failureSummary.text)}</span>`
+            : "";
 
           // Wetroom re-checks re-fetch photos for listings whose stored gallery is
           // missing a kitchen/bathroom and re-score them, so a deal scored blind to
@@ -505,6 +535,7 @@
           healthEl.innerHTML = `
             <span><strong style="color:#ffd43b;">Last updated:</strong> ${formatHealthDate(lastUpdated)} — ${staleText}</span>
             <span>${todayText}</span>
+            ${causeBanner}
             <div style="display:flex; flex-direction:column; gap:3px; margin-top:4px;">
               <strong style="color:#ffd43b;">Automatic refresh (weekdays, Stockholm time):</strong>
               ${scheduleRows}

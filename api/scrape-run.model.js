@@ -20,6 +20,10 @@ const scrapeRunSchema = new mongoose.Schema({
   result: { type: mongoose.Schema.Types.Mixed, default: null },
   // Error message when status === "failed".
   error: { type: String, default: null },
+  // Per-area causes [{ area, attempts, message }] behind a failed/partial run.
+  // The `error` above is often the zero-listing GUARD message — a symptom — so
+  // this is what makes the health panel diagnosable instead of just red.
+  areaFailures: { type: mongoose.Schema.Types.Mixed, default: null },
 });
 
 // One index does double duty: a TTL that expires runs older than 180 days, and
@@ -45,6 +49,9 @@ async function recordScrapeRun(entry) {
       durationMs: finishedAt.getTime() - startedAt.getTime(),
       result: entry.result ?? null,
       error: entry.error ?? null,
+      // Accept them either passed explicitly (failure path) or already inside the
+      // result object (a partial run that still returned).
+      areaFailures: entry.areaFailures ?? entry.result?.areaFailures ?? null,
     });
   } catch (err) {
     console.error("⚠️  Failed to record scrape run:", err.message);

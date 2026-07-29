@@ -27,6 +27,7 @@ const { buildAreaTrends } = require("./api/sold-trends");
 const { buildAreaIntelligence, buildAllAreaIntelligence } = require("./api/area-intelligence");
 const { reconcileSoldListings } = require("./api/reconcile-sold");
 const { buildScrapeHealth } = require("./api/scrape-health");
+const { describeScrapeFailure } = require("./api/scrape-failures");
 const { recordScrapeRun, getRecentScrapeRuns } = require("./api/scrape-run.model");
 const { presentListingForFeed } = require("./api/listing-presenter");
 const { buildActiveScrapeOptions, buildImageAnalysisOptions, buildSoldScrapeOptions } = require("./api/scrape-options");
@@ -718,7 +719,7 @@ app.get("/api/scrape", requireRefreshToken, async (req, res) => {
     res.json({ message: "Scrape complete", ...result });
   } catch (err) {
     console.error("❌ Scrape error:", err);
-    await recordScrapeRun({ job: "active-scrape", label, status: "failed", startedAt, error: err.message });
+    await recordScrapeRun({ job: "active-scrape", label, status: "failed", startedAt, error: err.message, areaFailures: err.areaFailures || null });
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Refusing to persist zero active listings/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Scraping failed", detail: err.message });
   } finally {
@@ -785,7 +786,7 @@ app.get("/api/scrape-sold", requireRefreshToken, async (req, res) => {
     res.json({ message: "Sold scrape complete", ...result });
   } catch (err) {
     console.error("❌ Sold scrape error:", err);
-    await recordScrapeRun({ job: "sold-scrape", label, status: "failed", startedAt, error: err.message });
+    await recordScrapeRun({ job: "sold-scrape", label, status: "failed", startedAt, error: err.message, areaFailures: err.areaFailures || null });
     const status = /Hemnet bot protection|missing __NEXT_DATA__|Unknown sold scrape area/.test(err.message) ? 502 : 500;
     res.status(status).json({ error: "Sold scraping failed", detail: err.message });
   }
@@ -971,7 +972,19 @@ app.get("/api/scrape-health", async (req, res) => {
   try {
     const activeListings = await Listing.find({}, { scrapeDate: 1, lastSeenAt: 1, status: 1, brfIntelligenceAt: 1 }).lean();
     const soldListings = await SoldListing.find({}, { scrapedAt: 1, soldDate: 1 }).lean();
-    const recentRuns = await getRecentScrapeRuns(20);
+    const rawRuns = await getRecentScrapeRuns(20);
+    // Classify each failed/partial run's per-area causes server-side, so the
+    // dashboard shows the actionable cause ("the proxy isn't connecting") instead
+    // of the guard's symptom message, and the patterns live in one place.
+    const recentRuns = rawRuns.map((run) => {
+      const failures = run.areaFailures || run.result?.areaFailures || null;
+      if (!failures || !failures.length) return run;
+      const scraped = run.result?.scrapedAreas?.length || 0;
+      return {
+        ...run,
+        failureSummary: describeScrapeFailure(failures, { totalAreas: scraped + failures.length }),
+      };
+    });
 
     // Precomputed-estimate freshness: of the ACTIVE listings, how many have a
     // stored estimate (brfIntelligenceAt is stamped when precomputed), and the

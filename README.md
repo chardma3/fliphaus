@@ -267,6 +267,15 @@ Use `/api/scrape-health` to inspect:
 - `recentRuns` — the last 20 scrape/analysis runs that actually executed, with per-run status and result counts (see *Run history* above)
 - `estimates` — precomputed-estimate freshness: `precomputed` / `missing` counts over active listings and the `oldestAt` stamp. If `missing` climbs or `oldestAt` ages past a day, the daily precompute isn't running (`scripts/diagnose-precomputed-estimates.js` breaks it down per area). See *Backend architecture → Feed*.
 
+**The dashboard names the cause itself.** When a stage fails, the health panel shows
+a *Likely cause* line (and a *Why the refresh is stalled* banner at the top) derived
+from the per-area errors, not just the guard's message. `Refusing to persist zero
+active listings` is the guard working correctly — a symptom, not a diagnosis — so
+`api/scrape-failures.js` classifies the underlying per-area failures into proxy /
+blocked / parser / timeout / network / browser, each with the next action. Those
+reasons are stored on the run record (`areaFailures`), so a failure stays
+diagnosable after the fact instead of only existing in the cron log.
+
 If data is stale and the scrape failed:
 
 1. Open the **cron job's run log** (Render → the scrape cron job → Logs / Runs) and identify which stage failed.
