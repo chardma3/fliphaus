@@ -6,7 +6,13 @@ const soldSchema = new mongoose.Schema({
   // SECOND one would violate the unique index. Changing this definition does NOT
   // rebuild the existing index — run scripts/migrate-sold-sources.js once.
   hemnetId: { type: String, unique: true, sparse: true },
-  booliId: { type: String, default: null, unique: true, sparse: true },
+  // NO `default: null`, and uniqueness is enforced by a PARTIAL index declared
+  // below rather than `unique + sparse` here. A sparse index only skips documents
+  // where the field is ABSENT — a stored `booliId: null` is still indexed, so with
+  // a default of null the second Hemnet-only sale collides:
+  //   E11000 duplicate key … index: booliId_1 dup key: { booliId: null }
+  // That is exactly how the first migration attempt failed in production.
+  booliId: { type: String },
   streetAddress: String,
   locationDescription: String,
   area: String,
@@ -64,6 +70,15 @@ const soldSchema = new mongoose.Schema({
 
 soldSchema.index({ area: 1, soldDate: -1 });
 soldSchema.index({ brfName: 1, soldDate: -1 });
+
+// Unique per Booli id, but ONLY over documents that actually have a string one.
+// A partial filter (unlike sparse) also excludes documents that already store
+// `booliId: null` from earlier writes, so this can be built over the existing
+// ~9.8k Hemnet-only records without a duplicate-key failure.
+soldSchema.index(
+  { booliId: 1 },
+  { unique: true, partialFilterExpression: { booliId: { $type: "string" } } }
+);
 
 // Index management for THIS collection is explicit (scripts/migrate-sold-sources.js
 // → syncIndexes), not automatic on boot. Reason: production already carries a
