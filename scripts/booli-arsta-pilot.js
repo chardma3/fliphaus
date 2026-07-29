@@ -2,52 +2,49 @@
 /**
  * Booli ÅRSTA verification harness (read-only, prints only — writes NOTHING).
  *
- * Booli's GraphQL is behind the same Cloudflare protection as Hemnet, so this
- * reuses the scraper's proxy + Puppeteer browser: navigate to booli.se to clear
- * the challenge, then POST the searchSold query FROM the page context (a plain
- * axios POST gets challenged; an in-page fetch reuses the cleared same-origin
- * session).
+ * VERIFIED LIVE 2026-07-29. What the first run established, and why this script
+ * now looks the way it does:
  *
- * Its job is to prove the transport works and DUMP a real sold response, so we
- * can confirm the exact result field names + Årsta's Booli areaId against
- * reality and then finalize api/booli.js. GraphQL field errors are printed
- * verbatim (they tell us precisely which names in SOLD_QUERY to fix).
+ *  - `POST /graphql` with our own query is 403 + Cloudflare, even from a cleared
+ *    page context. Booli's client only sends *persisted* queries (GET, sha256
+ *    hash, `api-client: booli.se`), so composing our own query is not an option.
+ *  - The sold search page is server-rendered and embeds the entire result set in
+ *    `__NEXT_DATA__` → `__APOLLO_STATE__` as `SoldProperty` entities, with
+ *    `objectType` + `page` honoured straight off the URL. That is the transport.
+ *  - `?q=Årsta` is NOT resolved server-side: it silently falls back to areaId
+ *    77104 = "Sverige" (2.9M sold records, villas in Norrtälje). Årsta,
+ *    Stockholms kommun is areaId 874649 (8,336 sold apartments) and must come
+ *    from Booli's areaSuggestionSearch — which is why an unresolved name is
+ *    treated as fatal here rather than as an empty result.
  *
- * Run on Render (needs HEMNET_PROXY_* — same env as the scrape cron):
+ * Re-run this whenever Booli redesigns: it re-resolves the areaId, re-harvests
+ * page 1, and prints the raw + normalized record so a shape change is obvious.
+ *
+ * Run locally (a residential IP clears Cloudflare) or on Render (uses
+ * HEMNET_PROXY_* like the scrape cron):
  *   node scripts/booli-arsta-pilot.js [areaId]
- *   BOOLI_AREA_ID=76401 node scripts/booli-arsta-pilot.js
+ *   BOOLI_AREA_ID=874649 node scripts/booli-arsta-pilot.js
  */
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("../api/puppeteer-options");
-const { SOLD_QUERY, normalizeBooliSold } = require("../api/booli");
+const {
+  buildPuppeteerLaunchOptions,
+  authenticateProxyPage,
+  logProxyStatus,
+} = require("../api/puppeteer-options");
+const { BOOLI_AREA_IDS, buildSoldSearchUrl, normalizeBooliSold, collectBooliSold } = require("../api/booli");
+const { openBooliSession, fetchNextDataWith, resolveAreaId } = require("../api/booli-transport");
 
 puppeteer.use(StealthPlugin());
 
-const BOOLI = "https://www.booli.se";
+const AREA = "Årsta";
+const MAX_PAGES = Number(process.env.BOOLI_MAX_PAGES || 2);
 
-function looksChallenged(text) {
-  return /just a moment|attention required|cf-browser-verification|enable javascript/i.test(text || "");
-}
-
-// POST a GraphQL query from the page context so it reuses the Cloudflare-cleared
-// same-origin session. Returns { status, json, textSample }.
-async function gql(page, query, variables) {
-  return page.evaluate(
-    async (q, v) => {
-      const res = await fetch("/graphql", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, variables: v }),
-      });
-      const text = await res.text();
-      let json = null;
-      try { json = JSON.parse(text); } catch { /* leave null */ }
-      return { status: res.status, json, textSample: text.slice(0, 400) };
-    },
-    query,
-    variables
-  );
+function median(values) {
+  const sorted = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
 (async () => {
@@ -58,62 +55,84 @@ async function gql(page, query, variables) {
   await page.setViewport({ width: 1280, height: 800 });
 
   try {
-    console.log(`\n▶ Navigating to ${BOOLI} to clear Cloudflare…`);
-    await page.goto(BOOLI, { waitUntil: "networkidle2", timeout: 45000 });
-    const title = await page.title();
-    const bodyText = await page.evaluate(() => document.body?.innerText?.slice(0, 200) || "");
-    console.log(`   title="${title}"`);
-    if (looksChallenged(`${title}\n${bodyText}`)) {
-      console.error("   ✗ Still on the Cloudflare challenge — this proxy exit was blocked. Re-run for a fresh IP (or check HEMNET_PROXY_*).");
-      process.exit(2);
-    }
-    console.log("   ✓ Real page — Cloudflare cleared.");
+    console.log("\n▶ Opening a Booli session (clearing Cloudflare)…");
+    const session = await openBooliSession(page);
+    console.log(`   ✓ title="${session.title}"`);
 
-    // Resolve Årsta's Booli areaId (explicit arg/env wins; else try the URL of a
-    // sold-search and dump __NEXT_DATA__ so we can read the id + page shape).
     let areaId = process.argv[2] || process.env.BOOLI_AREA_ID || null;
-    if (!areaId) {
-      console.log("\n▶ No areaId given — resolving 'Årsta' from a sold-search page…");
-      await page.goto(`${BOOLI}/sok/slutpriser?q=${encodeURIComponent("Årsta")}`, { waitUntil: "networkidle2", timeout: 45000 });
-      console.log(`   landed on: ${page.url()}`);
-      const m = page.url().match(/areaIds?[=\/](\d+)/i);
-      if (m) { areaId = m[1]; console.log(`   ✓ areaId from URL: ${areaId}`); }
-      const next = await page.evaluate(() => {
-        const el = document.getElementById("__NEXT_DATA__");
-        if (!el) return { hasNext: false };
-        return { hasNext: true, sample: (el.textContent || "").slice(0, 1800) };
-      });
-      console.log(`   __NEXT_DATA__ present: ${next.hasNext}`);
-      if (next.sample) console.log(`   __NEXT_DATA__ head: ${next.sample}`);
-      await page.goto(BOOLI, { waitUntil: "domcontentloaded", timeout: 45000 });
+    if (areaId) {
+      console.log(`\n▶ Using areaId from argument/env: ${areaId}`);
+    } else {
+      console.log(`\n▶ Resolving "${AREA}" via areaSuggestionSearch…`);
+      const picked = await resolveAreaId(page, AREA, { municipality: "Stockholm" });
+      if (picked) {
+        areaId = picked.areaId;
+        console.log(`   ✓ ${picked.name} (${picked.type}) → areaId ${areaId}`);
+        if (BOOLI_AREA_IDS[AREA] && BOOLI_AREA_IDS[AREA] !== areaId) {
+          console.warn(
+            `   ⚠ Booli now returns ${areaId} for ${AREA} but api/booli.js pins ${BOOLI_AREA_IDS[AREA]} — update BOOLI_AREA_IDS.`
+          );
+        }
+      } else {
+        areaId = BOOLI_AREA_IDS[AREA] || null;
+        console.warn(
+          `   ⚠ Suggestion lookup failed (persisted-query hash may have rotated) — falling back to the pinned id ${areaId}.`
+        );
+      }
     }
     if (!areaId) {
-      console.error("\n✗ Could not resolve an areaId. Once we know Årsta's Booli id, pass it: node scripts/booli-arsta-pilot.js <areaId>");
+      console.error(`\n✗ No areaId for ${AREA}. Refusing to continue: an unresolved area silently means "Sverige" (77104).`);
       process.exit(3);
     }
 
-    console.log(`\n▶ POST searchSold(areaId=${areaId}, page=1, objectType=Lägenhet)…`);
-    const resp = await gql(page, SOLD_QUERY, { areaId: String(areaId), page: 1, objectType: "Lägenhet" });
-    console.log(`   HTTP ${resp.status}`);
-    if (!resp.json) {
-      console.error(`   ✗ Non-JSON response (Cloudflare on /graphql?): ${resp.textSample}`);
-      process.exit(4);
-    }
-    if (resp.json.errors) {
-      console.error(`   ⚠ GraphQL errors — field names in SOLD_QUERY to fix:\n${JSON.stringify(resp.json.errors, null, 2)}`);
-    }
-    const sold = resp.json.data && resp.json.data.searchSold;
-    if (!sold) {
-      console.error(`   ✗ No searchSold in data: ${JSON.stringify(resp.json).slice(0, 800)}`);
+    const url = buildSoldSearchUrl({ areaId, page: 1 });
+    console.log(`\n▶ Harvesting sold apartments from ${url}`);
+    const fetchNextData = fetchNextDataWith(page);
+    const { sold, pages, totalCount } = await collectBooliSold({
+      fetchNextData,
+      areaId,
+      area: AREA,
+      maxPages: MAX_PAGES,
+    });
+    console.log(`   pages=${pages}, totalCount=${totalCount}, harvested=${sold.length} (maxPages=${MAX_PAGES})`);
+
+    if (!sold.length) {
+      console.error("   ✗ No records harvested — Booli's page shape may have changed (check __APOLLO_STATE__).");
       process.exit(5);
     }
-    console.log(`   pages=${sold.pages}, page-1 result count=${(sold.result || []).length}`);
-    const first = (sold.result || [])[0];
-    console.log(`\n── RAW first sold record ──\n${JSON.stringify(first, null, 2)}`);
-    console.log(`\n── NORMALIZED (api/booli.normalizeBooliSold) ──\n${JSON.stringify(first ? normalizeBooliSold(first) : null, null, 2)}`);
-    console.log("\n✅ Harness done. Paste this output back: if the raw fields look right we wire the sold-comp merge next; if GraphQL listed field errors I'll fix SOLD_QUERY to match.");
+
+    // Raw first record, so a field rename is visible rather than silent.
+    const rawPage = await fetchNextData(url);
+    const apollo = rawPage?.props?.pageProps?.__APOLLO_STATE__ || {};
+    const firstRef = Object.keys(apollo).find((k) => k.startsWith("SoldProperty:"));
+    console.log(`\n── RAW first sold record ──\n${JSON.stringify(apollo[firstRef], null, 2)}`);
+    console.log(
+      `\n── NORMALIZED ──\n${JSON.stringify(normalizeBooliSold(apollo[firstRef], { area: AREA }), null, 2)}`
+    );
+
+    // Sanity checks: wrong-area and wrong-type contamination are the failure modes
+    // that would quietly poison the resale estimate, so assert on them explicitly.
+    const offType = sold.filter((s) => s.housingForm && s.housingForm !== "Lägenhet");
+    const offArea = sold.filter((s) => s.municipality && s.municipality !== "Stockholm");
+    const missingPrice = sold.filter((s) => !s.soldPrice);
+    const missingSize = sold.filter((s) => !s.sizeNum);
+    console.log("\n── SANITY ──");
+    console.log(`   non-Lägenhet rows: ${offType.length}`);
+    console.log(`   non-Stockholm rows: ${offArea.length}`);
+    console.log(`   missing soldPrice: ${missingPrice.length} | missing size: ${missingSize.length}`);
+    console.log(`   districts: ${[...new Set(sold.map((s) => s.locationDescription))].join(", ")}`);
+    console.log(`   median kr/m²: ${median(sold.map((s) => s.soldPriceSqm))}`);
+    console.log(`   median sold price: ${median(sold.map((s) => s.soldPrice))}`);
+    console.log(`   sold-date range: ${sold.map((s) => s.soldDate).sort()[0]} … ${sold.map((s) => s.soldDate).sort().slice(-1)[0]}`);
+
+    const clean = !offType.length && !offArea.length && !missingPrice.length && !missingSize.length;
+    console.log(
+      clean
+        ? "\n✅ Harness clean — transport + mapping verified. Next: merge these into the sold store (dedup vs Hemnet via api/listing-fingerprint.js)."
+        : "\n⚠ Harness ran but flagged contamination above — fix the filter/mapping before merging into the sold store."
+    );
   } catch (err) {
-    console.error("Harness failed:", err.message);
+    console.error(`Harness failed${err.code ? ` [${err.code}]` : ""}: ${err.message}`);
     process.exitCode = 1;
   } finally {
     await browser.close();
