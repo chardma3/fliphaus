@@ -52,7 +52,7 @@ async function stage(job, label, fn) {
     return true;
   } catch (err) {
     console.error(`✗ ${label} failed:`, err.message);
-    await recordScrapeRun({ job, label, status: "failed", startedAt, error: err.message });
+    await recordScrapeRun({ job, label, status: "failed", startedAt, error: err.message, areaFailures: err.areaFailures || null });
     return false;
   }
 }

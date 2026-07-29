@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const Listing = require("./listing.model");
+const { withAreaFailures } = require("./scrape-failures");
 const { resolveActiveScrapeTargets, assertHemnetPageUsable, assertNonEmptyRefreshResult, buildAreaDisappearanceQuery, buildStaleListingQuery, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
 const { buildActiveScrapeOptions, buildListingUpsert } = require("./scrape-options");
@@ -143,6 +144,8 @@ module.exports = async (options = {}) => {
   const allListings = [];
   const scrapedAreas = [];
   const failedAreas = [];
+  // Per-area {area, attempts, message} — the diagnosable cause behind failedAreas.
+  const areaFailures = [];
 
   // The residential proxy pool is mixed: some exits are datacenter IPs that
   // Hemnet blocks with Cloudflare bot-protection, and the provider can't
@@ -183,7 +186,14 @@ module.exports = async (options = {}) => {
         if (attempt < MAX_AREA_ATTEMPTS) await retryBackoff(attempt, PACING.retryBaseMs);
       }
     }
-    if (lastErr) failedAreas.push(area);
+    if (lastErr) {
+      failedAreas.push(area);
+      // Keep WHY, not just which. The zero-listing guard below fires after this
+      // loop, so without capturing the message here the only record of the cause
+      // is a console line in the cron log — which is how a broken refresh went
+      // four days undiagnosed on the dashboard.
+      areaFailures.push({ area, attempts: MAX_AREA_ATTEMPTS, message: lastErr.message });
+    }
   }
 
   const scrapeDate = new Date().toLocaleDateString("sv-SE");
@@ -197,7 +207,14 @@ module.exports = async (options = {}) => {
   });
   if (unique.length === 0) {
     await browser.close();
-    assertNonEmptyRefreshResult({ total: unique.length, dataset: "active listings" });
+    try {
+      assertNonEmptyRefreshResult({ total: unique.length, dataset: "active listings" });
+    } catch (err) {
+      // The guard message says the scrape was refused, not why every area failed.
+      // Carry the per-area causes on the error so the run log — and the dashboard
+      // health panel — can show something actionable.
+      throw withAreaFailures(err, areaFailures);
+    }
   }
 
   if (includeDetails) {
@@ -372,5 +389,6 @@ module.exports = async (options = {}) => {
     partial: failedAreas.length > 0,
     scrapedAreas,
     failedAreas,
+    areaFailures,
   };
 };

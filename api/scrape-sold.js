@@ -3,6 +3,7 @@ const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const SoldListing = require("../models/sold.model");
 const Listing = require("./listing.model");
 const { reconcileSoldListings } = require("./reconcile-sold");
+const { withAreaFailures } = require("./scrape-failures");
 const { analyzeListingImages } = require("./analyze");
 const { assertHemnetPageUsable, resolveSoldScrapeTargets, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
@@ -225,6 +226,7 @@ module.exports = async (options = {}) => {
   await page.setViewport({ width: 1280, height: 800 });
 
   const allSold = [];
+  const areaFailures = [];
 
   // GLOBAL map of hemnetId → stored soldPrice, built once for the whole run so
   // scrapeSoldArea can stop at the already-stored tail (see SOLD_FULL_WALK note).
@@ -248,9 +250,13 @@ module.exports = async (options = {}) => {
     } catch (err) {
       if (isHemnetSafetyError(err)) {
         await browser.close();
-        throw err;
+        throw withAreaFailures(err, [...areaFailures, { area, message: err.message }]);
       }
       console.error(`  ✗ Failed ${area}:`, err.message);
+      // Sold has no zero-result guard (a genuinely quiet day yields 0 new), so
+      // "0 sold, 0 new" is indistinguishable from a total failure unless the
+      // reasons ride along on the result.
+      areaFailures.push({ area, message: err.message });
     }
     await jitteredSleep(PACING.areaDelayMs); // pace between areas (jittered)
   }
@@ -339,7 +345,10 @@ module.exports = async (options = {}) => {
   return {
     total: allSold.length,
     new: newCount,
+    partial: areaFailures.length > 0,
     areas: targets.map((target) => target.area),
+    failedAreas: areaFailures.map((f) => f.area),
+    areaFailures,
     detailLimit,
     detailsScraped: includeDetails ? Math.min(allSold.length, detailLimit) : 0,
     analysisEnabled: includeAnalysis,
