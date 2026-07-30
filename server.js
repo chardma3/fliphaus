@@ -263,6 +263,10 @@ app.get("/api/listings", async (req, res) => {
       // Best renovation opportunity first; newest within the same score.
       // Unscored listings (renovationScore null) sort last in descending order.
       sortOrder = { renovationScore: -1, publishedAt: -1 };
+    } else if (req.query.view === "kommande") {
+      // Pre-market listings have no asking price to sort by, and recency IS the
+      // value here — the edge is reaching an agent before bidding opens.
+      sortOrder = { publishedAt: -1 };
     } else {
       sortOrder = { askingPriceNum: 1 };
     }

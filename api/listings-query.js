@@ -30,8 +30,11 @@ const SITTING_MIN_DAYS = 14;
 //                 no street number). Market data, not flips — no score filter.
 //   kommande    — PRE-MARKET listings (Booli's "kommande"), which have no asking
 //                 price yet. Own view because a card with no price can't carry a
-//                 profit badge or be ranked by ROI; shown at any score, since
-//                 early sight of them is the point.
+//                 profit badge or be ranked by ROI. Curated as a SHORTLIST worth a
+//                 phone call: budget-capped on the VALUATION, with listings we've
+//                 already assessed and rejected (scored below dealMinScore) removed
+//                 but UNSCORED ones kept, since those are the newest and seeing a
+//                 flat before bidding opens is the whole point.
 //   sitting     — real apartments on the market a while (any score, incl.
 //                 unscored), where a motivated seller may take an offer below
 //                 asking. Sitting takes precedence: a listing that's been
@@ -122,9 +125,24 @@ function buildActiveFeedFilter({
   // matches documents predating the field.
   if (view === "kommande") {
     filter.isUpcoming = true;
-    // Any renovation score, including unscored: seeing a pre-market flat EARLY is
-    // the whole point, and waiting for analysis would defeat it.
     filter.streetAddress = { $not: PROJECT_ADDRESS };
+
+    // The budget ceiling has to apply to the VALUATION, because these listings have
+    // no asking price. Leaving the base askingPriceNum clause in place would match
+    // NOTHING (Mongo's $lte doesn't match null/missing), i.e. a permanently empty
+    // tab — and the default maxPrice is 4M, so that would have been the normal case.
+    delete filter.askingPriceNum;
+    if (maxPrice != null) {
+      // A listing with no valuation yet is kept rather than assumed unaffordable.
+      filter.$or = [{ sourceEstimateNum: { $lte: maxPrice } }, { sourceEstimateNum: null }];
+    }
+
+    // SHORTLIST, not a feed. Drop only what we've assessed and REJECTED — scored
+    // 1..dealMinScore-1, i.e. already renovated or too little upside. Unscored
+    // listings deliberately stay IN: they're the newest arrivals, and the entire
+    // point of a pre-market view is seeing a flat before bidding opens, which
+    // waiting for the analysis queue would defeat.
+    filter.renovationScore = { $not: { $gte: 1, $lte: dealMinScore - 1 } };
     return filter;
   }
   filter.isUpcoming = { $ne: true };

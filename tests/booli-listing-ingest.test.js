@@ -159,11 +159,29 @@ test("ingest writes nothing on a dry run", async () => {
 
 // ── feed placement ──────────────────────────────────────────────────────────────
 
-test("the kommande view selects only pre-market listings, at any score", () => {
-  const filter = buildActiveFeedFilter({ view: "kommande" });
+test("the kommande view is a shortlist: rejected scores out, UNSCORED kept", () => {
+  const filter = buildActiveFeedFilter({ view: "kommande", dealMinScore: 6 });
   assert.equal(filter.isUpcoming, true);
   assert.equal(filter.status, "active");
-  assert.equal("renovationScore" in filter, false, "early sight is the point — don't wait for analysis");
+  // Only assessed-and-rejected listings (1..5 = already renovated / no upside) are
+  // dropped. $not over the range also matches null/missing, so freshly harvested
+  // unscored listings still appear — they're the newest, and early sight is the
+  // whole point of a pre-market view.
+  assert.deepEqual(filter.renovationScore, { $not: { $gte: 1, $lte: 5 } });
+});
+
+test("the kommande budget cap applies to the VALUATION, not the absent asking price", () => {
+  // Mongo's $lte doesn't match null, so leaving the base askingPriceNum clause here
+  // would match nothing at all — and maxPrice defaults to 4M, so the tab would have
+  // been permanently empty.
+  const filter = buildActiveFeedFilter({ view: "kommande", maxPrice: 4000000 });
+  assert.equal("askingPriceNum" in filter, false, "a price cap cannot apply to a price-less listing");
+  assert.deepEqual(filter.$or, [{ sourceEstimateNum: { $lte: 4000000 } }, { sourceEstimateNum: null }]);
+});
+
+test("a kommande listing with no valuation yet is kept, not assumed unaffordable", () => {
+  const filter = buildActiveFeedFilter({ view: "kommande", maxPrice: 4000000 });
+  assert.ok(filter.$or.some((clause) => clause.sourceEstimateNum === null));
 });
 
 test("every other view EXCLUDES pre-market listings", () => {
