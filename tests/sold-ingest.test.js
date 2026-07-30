@@ -288,3 +288,24 @@ test("ingestBooliSold re-run is idempotent once provenance is recorded", async (
   assert.equal(summary.merged, 0);
   assert.equal(model.calls.updated.length, 0);
 });
+
+test("a Hemnet sold record as scrape-sold stores it CAN be fingerprinted", () => {
+  // The fields api/scrape-sold.js writes must be enough to produce a blocking key —
+  // otherwise newly scraped sales land unfingerprinted and are invisible to Booli
+  // dedup, so the same sale gets stored twice and double-weighted in the kr/m²
+  // percentile. Observed drift before the scraper stamped it: 9852 stored, 9838 keyed.
+  const asStored = {
+    streetAddress: "Årstavägen 70",
+    locationDescription: "Årsta",
+    area: "Årsta",
+    rooms: "2 rum",
+    size: "55 m²",
+    sizeNum: 55,
+    soldPrice: 3600000,
+  };
+  assert.equal(blockingKey(asStored), "arsta|55|2");
+
+  // And a sale missing the area still degrades honestly to null rather than
+  // bucketing wrongly (ingest then inserts instead of risking a loose merge).
+  assert.equal(blockingKey({ ...asStored, locationDescription: null, area: null }), null);
+});

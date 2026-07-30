@@ -4,6 +4,8 @@ const SoldListing = require("../models/sold.model");
 const Listing = require("./listing.model");
 const { reconcileSoldListings } = require("./reconcile-sold");
 const { withAreaFailures } = require("./scrape-failures");
+const { blockingKey } = require("./listing-fingerprint");
+const { soldSourceEntry } = require("./sold-ingest");
 const { analyzeListingImages } = require("./analyze");
 const { assertHemnetPageUsable, resolveSoldScrapeTargets, isHemnetSafetyError } = require("./hemnet-refresh-safety");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage, logProxyStatus } = require("./puppeteer-options");
@@ -331,9 +333,23 @@ module.exports = async (options = {}) => {
       scrapedAt: new Date(),
     };
 
+    // Cross-source dedup (api/sold-ingest.js) finds duplicates by fingerprintKey
+    // bucket, so an unfingerprinted sale is INVISIBLE to it and a Booli record for
+    // the same sale would insert alongside it — double-weighting that sale in the
+    // kr/m² percentile the resale estimates rest on. The one-off migration keyed the
+    // existing rows; without stamping it here too, every newly scraped sale
+    // reintroduces the blind spot (observed: 9852 stored vs 9838 keyed, one day on).
+    // Mirrors api/scrape.js for active listings.
+    update.fingerprintKey = blockingKey(update) || null;
+
     const result = await SoldListing.findOneAndUpdate(
       { hemnetId: l.hemnetId },
-      update,
+      {
+        $set: update,
+        // Provenance is written once, on insert, so it records when WE first saw the
+        // sale and later scrapes don't keep rewriting firstSeen.
+        $setOnInsert: { sources: [soldSourceEntry("hemnet", l.hemnetId, update.link)] },
+      },
       { upsert: true, returnDocument: "after", rawResult: true }
     );
     if (result.lastErrorObject?.upserted) newCount++;
