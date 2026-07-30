@@ -96,6 +96,21 @@ const listingSchema = new mongoose.Schema({
   // Phase 1 is a single global shared set; per-recipient targeting comes later.
   sharedWithFriends: { type: Boolean, default: false, index: true },
   sharedAt: { type: Date, default: null },
+  // ── Second-source (Booli) fields ────────────────────────────────────────────
+  // Which source this document originated from. Absent/"hemnet" for everything
+  // scraped from Hemnet; "booli" for listings Booli carries that Hemnet doesn't.
+  source: { type: String, default: null },
+  booliId: { type: String, default: null },
+  // "Kommande" — a pre-market listing, announced before open-market bidding. These
+  // have NO asking price, which is why they get their own dashboard section: every
+  // profit/ROI figure keys off askingPriceNum, so they can't carry a profit badge.
+  isUpcoming: { type: Boolean, default: false },
+  // The source's OWN valuation (Booli's `estimate`). Context for a pre-market
+  // listing — deliberately NOT written into askingPriceNum, which must only ever
+  // hold a real asking price.
+  sourceEstimateNum: { type: Number, default: null },
+  feeNum: { type: Number, default: null },
+
   // Multi-source provenance. Each source that carries this same physical flat
   // (Hemnet, Booli, a broker site) adds an entry, so we keep ONE canonical
   // listing instead of a duplicate per portal. The top-level `id` stays the

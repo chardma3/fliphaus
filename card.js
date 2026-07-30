@@ -41,7 +41,10 @@
     return displayCurrency === "SEK" ? v.toLocaleString("sv-SE") + " kr/m²" : "A$ " + v.toLocaleString("en-AU") + "/m²";
   }
   // Asking price: keep Hemnet's exact SEK text in SEK mode, convert otherwise.
+  // A "kommande" (pre-market) listing genuinely has no asking price yet, so say so
+  // rather than showing a bare dash that reads like missing data.
   function priceStr(l) {
+    if (!l.askingPriceNum && !l.askingPrice && l.isUpcoming) return "No asking price yet";
     if (displayCurrency === "SEK") return l.askingPrice || "—";
     return l.askingPriceNum ? formatSEK(l.askingPriceNum) : (l.askingPrice || "—");
   }
@@ -191,6 +194,15 @@
     // No flip/profit badge on the New builds tab — they're new construction, not flips.
     const badgeModel = (view !== "newbuild" && listing.askingPriceNum) ? formatProfitBadgeModel(listing) : null;
     const profitBadgeHtml = badgeModel ? `<div class="profit-badge ${badgeModel.cssClass}" title="${badgeModel.detail}">${convertMoneyStr(badgeModel.label)}</div>` : "";
+    // Pre-market listings carry Booli's valuation instead of a price. Labelled as a
+    // valuation, and never fed into the profit maths (formatProfitBadgeModel above
+    // already skips them because askingPriceNum is null).
+    const upcomingHtml = listing.isUpcoming
+      ? `<div class="upcoming-badge" title="Announced before open-market bidding (Booli 'kommande'). No asking price has been set yet, so no profit estimate is possible.">🔜 pre-market</div>`
+      : "";
+    const valuationHtml = listing.isUpcoming && listing.sourceEstimateNum
+      ? `<div class="calc-row"><span class="calc-label">Booli valuation (not an asking price)</span><span class="calc-value">≈ ${formatSEKShort(listing.sourceEstimateNum)}</span></div>`
+      : "";
     const gatedBadgeHtml = isGated(listing)
       ? `<div class="gated-badge" title="Gated by the cheap triage pass — kitchen & bathroom looked already renovated, so full scoring was skipped. Low renovation upside.">⚡ triage only</div>`
       : "";
@@ -272,6 +284,7 @@
         ${profitBadgeHtml}
         ${daysBadgeHtml}
         ${gatedBadgeHtml}
+        ${upcomingHtml}
       </div>
       <div class="listing-body">
         <div class="listing-header">
@@ -283,6 +296,7 @@
         </div>
         <div class="location">${translateLocation(listing.locationDescription)}</div>
         <div class="rejected-summary">${priceStr(listing)} · ${listing.rooms ? listing.rooms.replace('rum','rooms') : ''} · ${listing.size || ''}</div>
+        ${valuationHtml ? `<div class="calc-box upcoming-calc">${valuationHtml}</div>` : ""}
         <div class="listing-meta">
           <span class="price-tag">${priceStr(listing)}</span>
           ${listing.rooms ? `<span>${translateRooms(listing.rooms)}</span>` : ""}

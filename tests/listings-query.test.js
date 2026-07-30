@@ -11,6 +11,9 @@ test("deals view shows scored strong flips (>=6) only — unscored and new-build
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
+    // Pre-market (Booli "kommande") listings have no asking price, so they're
+    // confined to their own view and excluded here.
+    isUpcoming: { $ne: true },
     streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 6 },
   });
@@ -51,6 +54,7 @@ test("new-build view shows only projekt listings (name-only address), no score f
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
+    isUpcoming: { $ne: true },
     streetAddress: /^[^0-9]+$/,
   });
   assert.equal(f.renovationScore, undefined);
@@ -174,6 +178,7 @@ test("with no active area constraints, no $nor clause is added (additive wiring)
     locationDescription: { $not: /husby|rinkeby|vällingby|akalla|rissne|hallonbergen/i },
     rooms: { $not: /^1\s+rum/i },
     askingPriceNum: { $lte: 4000000 },
+    isUpcoming: { $ne: true },
     streetAddress: { $not: /^[^0-9]+$/ },
     renovationScore: { $gte: 6 },
   });

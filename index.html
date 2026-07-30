@@ -212,6 +212,7 @@
         <button class="view-tab active" data-view="deals">🔨 Deals (7–10)</button>
         <button class="view-tab" data-view="moveinready">🛋 Move-in ready</button>
         <button class="view-tab" data-view="newbuild" title="New-build / projekt listings — market reference, not flips">🏗 New builds</button>
+        <button class="view-tab" data-view="kommande" title="Pre-market listings (Booli 'kommande') — announced before open-market bidding. No asking price yet, so no profit estimate; the point is seeing them early.">🔜 Kommande</button>
         <button class="view-tab" data-view="sitting" title="On the market 14+ days — the visning/bidding cycle should have cleared by now, so these may be mispriced or have problems: room to make an offer">⏳ Sitting (14d+)</button>
       </div>
 
@@ -235,7 +236,7 @@
     <script>
       let currentUser = null;
       let allListingsData = null;
-      let currentView = "deals"; // "deals" (7-10), "moveinready" (1-6), or "newbuild" (projekt listings)
+      let currentView = "deals"; // "deals" (7-10), "moveinready" (1-6), "newbuild" (projekt), "sitting" (14d+), "kommande" (pre-market)
       let activeFilter = null;
       // "Friend mode": this same dashboard served at /friends. Curated shared-only
       // feed, friend nav, admin action buttons hidden — otherwise identical.
@@ -300,7 +301,7 @@
         const bar = document.getElementById("reno-filters");
         // No score filter on New builds (already-renovated by definition) or
         // Sitting (the lens there is time on market, not renovation score).
-        if (currentView === "newbuild" || currentView === "sitting") { bar.style.display = "none"; bar.innerHTML = ""; return; }
+        if (currentView === "newbuild" || currentView === "sitting" || currentView === "kommande") { bar.style.display = "none"; bar.innerHTML = ""; return; }
 
         bar.innerHTML = "";
         const addBtn = (label, filter, active = false, title = "") => {
@@ -360,7 +361,7 @@
 
         // Name the active tab + sort so it's clear the count is scoped to this
         // view (e.g. "Move-in ready, cheapest first"), not the whole catalogue.
-        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds", sitting: "Sitting 14d+" }[currentView] || "Listings";
+        const viewLabel = { deals: "Deals", moveinready: "Move-in ready", newbuild: "New builds", sitting: "Sitting 14d+", kommande: "Kommande (pre-market)" }[currentView] || "Listings";
         const sortLabel = sortMode === "cheapest"
           ? "cheapest first"
           : (currentView === "deals" ? "highest profit first" : (currentView === "sitting" ? "longest on market first" : "newest first"));

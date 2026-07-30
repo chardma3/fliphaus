@@ -40,6 +40,7 @@ const Listing = require("../api/listing.model");
 const SoldListing = require("../models/sold.model");
 const { recordScrapeRun } = require("../api/scrape-run.model");
 const { runBooliSoldIngest } = require("../api/booli-sold-run");
+const { runBooliListingsIngest } = require("../api/booli-listings-run");
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("../api/puppeteer-options");
@@ -152,6 +153,25 @@ async function stage(job, label, fn) {
           area: booliArea,
           maxPages: booliPages,
           commit,
+        }));
+    }
+
+    // OPT-IN second source for the FEED (Booli for-sale + "kommande" pre-market).
+    // Off unless BOOLI_LISTINGS is "dry" or "commit". Runs after the sold stage so
+    // a freshly-inserted Booli listing is estimated against the fullest comp set.
+    const booliFeedMode = String(process.env.BOOLI_LISTINGS || "").toLowerCase();
+    if (booliFeedMode === "dry" || booliFeedMode === "commit") {
+      const feedArea = process.env.BOOLI_LISTINGS_AREA || process.env.BOOLI_SOLD_AREA || "Årsta";
+      const feedPages = Number(process.env.BOOLI_LISTINGS_PAGES) || 5;
+      const commitFeed = booliFeedMode === "commit";
+      await stage("booli-listings", `Booli for-sale listings — ${feedArea}${commitFeed ? "" : " (dry run)"}`, () =>
+        runBooliListingsIngest({
+          Listing,
+          launchBrowser: () => puppeteer.launch(buildPuppeteerLaunchOptions()),
+          authenticatePage: authenticateProxyPage,
+          area: feedArea,
+          maxPages: feedPages,
+          commit: commitFeed,
         }));
     }
   }
