@@ -340,6 +340,45 @@ those are separate comps that must both survive. On top of the fingerprint match
 A merge only ever *fills blanks* (floor, coordinates, days-on-market) and appends a
 `sources[]` entry. Hemnet's values and our renovation analysis are never overwritten.
 
+### Second source: Booli for-sale listings + "Kommande" (opt-in)
+
+Booli also feeds the DASHBOARD, not just the comp set. Opt in per mode on the scrape
+cron service:
+
+```
+BOOLI_LISTINGS=dry      # report what it would insert/merge, write nothing
+BOOLI_LISTINGS=commit   # merge Booli's for-sale listings into the feed
+BOOLI_LISTINGS_AREA=Årsta      # optional, defaults to Årsta
+BOOLI_LISTINGS_PAGES=5         # optional, 35 listings per page
+```
+
+Two thirds of Booli's for-sale inventory is **"kommande"** — announced before
+open-market bidding, with **no asking price yet** (47 of 70 sampled in Årsta). That's
+the real sourcing edge, so those listings are surfaced, but:
+
+- `askingPriceNum` stays **null**. Every profit/ROI figure keys off it, so Booli's own
+  valuation is stored separately as `sourceEstimateNum` and shown labelled "not an
+  asking price". A valuation dressed as a price would fake precision on the numbers
+  that go to builders and investors.
+- They get their own **🔜 Kommande** view (`/api/listings?view=kommande`) and are
+  excluded from Deals / Move-in ready / Sitting / New builds (`isUpcoming: {$ne:true}`
+  on those filters) — a price-less card can't be ranked by ROI or carry a profit badge.
+- They're shown at **any** renovation score, including unscored: seeing a pre-market
+  flat early is the point, and waiting for analysis defeats it.
+
+**Photos.** Booli's `Image` entities carry no URL; it's derived from the id
+(`https://bcdn.se/images/cache/{id}_1024x0.jpg`), so no per-listing detail fetch is
+needed. Only 5 photos per listing (Hemnet gives 10), but Booli LABELS them, so
+`orderImagesByRoom` puts kitchen and wet room first — the rooms that decide a
+renovation estimate. Note only ~6 in 35 listings include a bathroom shot at all, so
+Booli scores are more often provisional (`imageCoverageComplete` false) than Hemnet's.
+
+**Dedup.** Same rule as the sold side: a Booli listing merges into the Hemnet listing
+for the same flat (filling blanks only — Hemnet's price, photos and our analysis are
+never overwritten), but **two records from the same source never merge**. A live Årsta
+run into an empty store produced 6 same-source merges before that guard existed;
+unlike a skewed statistic, that failure makes a card disappear from the dashboard.
+
 ### Dashboard data endpoints (read-only, no auth)
 
 - `/api/areas` → `{ areas: [...] }` — the live area names from `LOCATION_IDS`. The account-page area picker and the areas-page cards/intro read this, so they never drift from what's actually scraped.

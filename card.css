@@ -273,3 +273,24 @@
 }
 .google-btn:hover { background: #f0f0f0; }
 .google-btn img { width: 16px; height: 16px; }
+
+
+/* "Kommande" (pre-market) listings: announced before open-market bidding, so they
+   have no asking price and deliberately carry no profit badge. The badge and the
+   valuation row exist to make that state obvious rather than looking like missing
+   data. */
+.upcoming-badge {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  background: rgba(90, 60, 160, 0.92);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+.calc-box.upcoming-calc {
+  border-left: 3px solid rgba(90, 60, 160, 0.9);
+}

@@ -271,7 +271,7 @@ app.get("/api/listings", async (req, res) => {
     // flips + pending) and the "moveinready" browse view. Only currently-
     // available listings are returned; anything that left Hemnet is handled by
     // the sold view. See api/listings-query.js.
-    const view = ["moveinready", "newbuild", "sitting"].includes(req.query.view) ? req.query.view : "deals";
+    const view = ["moveinready", "newbuild", "sitting", "kommande"].includes(req.query.view) ? req.query.view : "deals";
     // The SITTING_MIN_DAYS cutoff (listings published at least that long ago).
     // Computed here (not in the pure query builder) so the builder stays
     // deterministic/testable. The sitting view uses it to SELECT; deals and

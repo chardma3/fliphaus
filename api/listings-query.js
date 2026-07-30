@@ -28,6 +28,10 @@ const SITTING_MIN_DAYS = 14;
 //                 already-renovated 1-3 plus partial-reno 4-5, for browsing.
 //   newbuild    — new-build / projekt listings (addressed by development name,
 //                 no street number). Market data, not flips — no score filter.
+//   kommande    — PRE-MARKET listings (Booli's "kommande"), which have no asking
+//                 price yet. Own view because a card with no price can't carry a
+//                 profit badge or be ranked by ROI; shown at any score, since
+//                 early sight of them is the point.
 //   sitting     — real apartments on the market a while (any score, incl.
 //                 unscored), where a motivated seller may take an offer below
 //                 asking. Sitting takes precedence: a listing that's been
@@ -110,6 +114,20 @@ function buildActiveFeedFilter({
   // newbuild and sitting branches that return early below.
   if (sharedOnly) filter.sharedWithFriends = true;
   if (maxPrice != null) filter.askingPriceNum = { $lte: maxPrice };
+
+  // "Kommande" (pre-market, Booli) listings have NO asking price, so every
+  // profit/ROI figure and the per-area price caps are meaningless for them. They
+  // get their own view and are excluded from all the others — otherwise they'd sit
+  // in Deals as price-less cards that can't be ranked or assessed. $ne:true also
+  // matches documents predating the field.
+  if (view === "kommande") {
+    filter.isUpcoming = true;
+    // Any renovation score, including unscored: seeing a pre-market flat EARLY is
+    // the whole point, and waiting for analysis would defeat it.
+    filter.streetAddress = { $not: PROJECT_ADDRESS };
+    return filter;
+  }
+  filter.isUpcoming = { $ne: true };
 
   // Each capped area adds a "NOT (in this area AND over its cap)" clause, so a
   // listing outside the capped areas is never affected and an over-cap listing
