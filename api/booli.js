@@ -97,11 +97,15 @@ function rawNum(value) {
 // "65 500 kr/m²"). Order matters: match kr/m² before m², and skip "… m² tomt"
 // (plot area on houses) so it can never be read as living area.
 function parseDataPoints(dataPoints = []) {
-  const out = { sizeNum: null, rooms: null, floor: null, soldPriceSqm: null };
+  const out = { sizeNum: null, rooms: null, floor: null, soldPriceSqm: null, feeNum: null };
   for (const dp of dataPoints) {
     const text = (dp && dp.value && dp.value.plainText) || "";
     if (!text) continue;
-    if (/kr\s*\/\s*m²/i.test(text)) {
+    // For-sale rows carry the monthly BRF fee here ("4 594 kr/mån"); sold rows
+    // carry kr/m² instead. Check the fee first — both contain "kr/".
+    if (/kr\s*\/\s*m(å|a)n/i.test(text)) {
+      if (out.feeNum == null) out.feeNum = parseNumber(text);
+    } else if (/kr\s*\/\s*m²/i.test(text)) {
       if (out.soldPriceSqm == null) out.soldPriceSqm = parseNumber(text);
     } else if (/tomt/i.test(text)) {
       continue;
