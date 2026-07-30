@@ -39,6 +39,12 @@ const { precomputeEstimates } = require("../api/precompute-estimates");
 const Listing = require("../api/listing.model");
 const SoldListing = require("../models/sold.model");
 const { recordScrapeRun } = require("../api/scrape-run.model");
+const { runBooliSoldIngest } = require("../api/booli-sold-run");
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const { buildPuppeteerLaunchOptions, authenticateProxyPage } = require("../api/puppeteer-options");
+
+puppeteer.use(StealthPlugin());
 
 // Run fn(), recording a scrapeRun row either way; never throws so the next stage
 // still runs. Returns true on success.
@@ -126,6 +132,28 @@ async function stage(job, label, fn) {
     // Rebuild stored resale estimates from the fresh comps.
     await stage("precompute-estimates", "Precompute resale estimates", () =>
       precomputeEstimates({ Listing, SoldListing }));
+
+    // OPT-IN second source. Off unless BOOLI_SOLD_INGEST is set:
+    //   dry     — report what it would insert/merge, write nothing
+    //   commit  — actually merge Booli's sold comps in
+    // Running it here rather than from a shell is deliberate: Render's interactive
+    // shell drops long connections, and this path records a ScrapeRun row that
+    // /api/scrape-health exposes, so the result survives without anyone watching.
+    const booliMode = String(process.env.BOOLI_SOLD_INGEST || "").toLowerCase();
+    if (booliMode === "dry" || booliMode === "commit") {
+      const booliArea = process.env.BOOLI_SOLD_AREA || "Årsta";
+      const booliPages = Number(process.env.BOOLI_SOLD_PAGES) || 5;
+      const commit = booliMode === "commit";
+      await stage("booli-sold", `Booli sold comps — ${booliArea}${commit ? "" : " (dry run)"}`, () =>
+        runBooliSoldIngest({
+          SoldListing,
+          launchBrowser: () => puppeteer.launch(buildPuppeteerLaunchOptions()),
+          authenticatePage: authenticateProxyPage,
+          area: booliArea,
+          maxPages: booliPages,
+          commit,
+        }));
+    }
   }
 
   console.log(`\n✅ Scheduled scrape finished at ${new Date().toISOString()}`);

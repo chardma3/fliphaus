@@ -11,11 +11,16 @@
  *   node scripts/booli-sold-ingest.js --area Årsta --pages 5
  *   node scripts/booli-sold-ingest.js --commit               # actually write
  *
- * PREREQUISITE: run scripts/migrate-sold-sources.js --commit first. Without its
- * fingerprintKey backfill, dedup is blind and every Booli record inserts as new.
+ * The summary is ALSO written to the ScrapeRun log, so it survives a dropped shell
+ * connection and shows up on /api/scrape-health — Render's interactive shell
+ * disconnects on long jobs, and a run you can't watch is useless unless its result
+ * is recorded somewhere. To avoid the shell entirely, set BOOLI_SOLD_INGEST=dry
+ * (or =commit) on the cron service and use Trigger Run: scripts/scheduled-scrape.js
+ * runs the same code as a managed stage.
  *
- * Needs MONGO_URI. A residential IP clears Booli's Cloudflare with no proxy;
- * on Render it uses HEMNET_PROXY_* like the scrape cron.
+ * PREREQUISITE: scripts/migrate-sold-sources.js --commit (fingerprintKey backfill).
+ * Needs MONGO_URI. A residential IP clears Booli's Cloudflare with no proxy; on
+ * Render it uses HEMNET_PROXY_* like the scrape cron.
  */
 const mongoose = require("mongoose");
 const puppeteer = require("puppeteer-extra");
@@ -26,9 +31,8 @@ const {
   authenticateProxyPage,
   logProxyStatus,
 } = require("../api/puppeteer-options");
-const { BOOLI_AREA_IDS, collectBooliSold } = require("../api/booli");
-const { openBooliSession, fetchNextDataWith, resolveAreaId, installResourceBlocking } = require("../api/booli-transport");
-const { ingestBooliSold } = require("../api/sold-ingest");
+const { runBooliSoldIngest } = require("../api/booli-sold-run");
+const { recordScrapeRun } = require("../api/scrape-run.model");
 
 puppeteer.use(StealthPlugin());
 
@@ -49,79 +53,47 @@ const MAX_PAGES = Number(arg("--pages", 5));
   console.log(COMMIT ? "MODE: --commit (writing)" : "MODE: dry run (no writes) — pass --commit to apply");
 
   await mongoose.connect(process.env.MONGO_URI);
-
-  // Refuse to run before the migration: without fingerprintKey, dedup silently
-  // fails open and duplicates every sale we already hold.
-  const total = await SoldListing.countDocuments({});
-  const keyed = await SoldListing.countDocuments({ fingerprintKey: { $ne: null } });
-  console.log(`\nSold store: ${total} records, ${keyed} fingerprinted.`);
-  if (total > 0 && keyed === 0) {
-    console.error(
-      "✗ No sold record has a fingerprintKey — dedup would be blind and duplicate everything.\n" +
-        "  Run: node scripts/migrate-sold-sources.js --commit"
-    );
-    await mongoose.disconnect();
-    process.exit(2);
-  }
-
-  const browser = await puppeteer.launch(buildPuppeteerLaunchOptions());
-  const page = await browser.newPage();
-  await authenticateProxyPage(page);
-  await page.setViewport({ width: 1280, height: 800 });
-  // Skip images/media/fonts/CSS: we only read the embedded JSON, and those bytes
-  // are both the slowest part over the proxy and the expensive part (metered by GB).
-  await installResourceBlocking(page);
+  const startedAt = new Date();
+  const label = `Booli sold comps — ${AREA}${COMMIT ? "" : " (dry run)"}`;
 
   try {
-    await openBooliSession(page);
-    let areaId = BOOLI_AREA_IDS[AREA] || null;
-    const resolved = await resolveAreaId(page, AREA, { municipality: "Stockholm" });
-    if (resolved) areaId = resolved.areaId;
-    if (!areaId) {
-      // Never fall through: an unresolved area means Booli serves "Sverige"
-      // (areaId 77104) and we'd pollute the comp set with the whole country.
-      console.error(`✗ Could not resolve a Booli areaId for "${AREA}" — refusing to harvest.`);
-      process.exit(3);
-    }
-    console.log(`Area: ${AREA} → Booli areaId ${areaId}`);
-
-    const { sold, totalCount } = await collectBooliSold({
-      fetchNextData: fetchNextDataWith(page),
-      areaId,
+    const summary = await runBooliSoldIngest({
+      SoldListing,
+      launchBrowser: () => puppeteer.launch(buildPuppeteerLaunchOptions()),
+      authenticatePage: authenticateProxyPage,
       area: AREA,
       maxPages: MAX_PAGES,
+      commit: COMMIT,
     });
-    console.log(`Harvested ${sold.length} sold apartments (Booli holds ${totalCount} for this area).`);
 
-    const offArea = sold.filter((s) => s.municipality && s.municipality !== "Stockholm");
-    if (offArea.length) {
-      console.warn(`⚠ ${offArea.length} record(s) outside Stockholm kommun — check the areaId before committing.`);
-    }
-
-    const summary = await ingestBooliSold({ records: sold, SoldListing, dryRun: !COMMIT });
     console.log("\n── INGEST ──");
     console.log(`   considered: ${summary.considered}`);
-    console.log(`   would insert: ${summary.inserted}`);
-    console.log(`   would merge into an existing Hemnet sale: ${summary.merged}`);
+    console.log(`   ${COMMIT ? "inserted" : "would insert"}: ${summary.inserted}`);
+    console.log(`   ${COMMIT ? "merged" : "would merge"} into an existing Hemnet sale: ${summary.merged}`);
     console.log(`   already complete (no change): ${summary.unchanged}`);
     console.log(`   skipped (missing price/size/date/address): ${summary.skipped}`);
     console.log(`\n   samples: ${JSON.stringify(summary.samples, null, 2)}`);
-
-    // The merge count is the headline number: it's the overlap between Booli and
-    // Hemnet, i.e. evidence the dedup is working. Near-zero overlap in an area we
-    // already scrape usually means matching is failing, not that Booli is unique.
-    if (summary.merged === 0 && total > 0) {
+    if (summary.dedupSuspect) {
       console.warn(
         "\n⚠ Zero merges. In an area we already scrape, expect meaningful overlap — " +
           "verify the fingerprint backfill ran and that addresses/sizes line up before committing."
       );
     }
     console.log(COMMIT ? "\n✅ Written." : "\nNo changes written. Re-run with --commit to apply.");
+
+    // Durable copy: readable from /api/scrape-health even if this shell died.
+    await recordScrapeRun({
+      job: "booli-sold",
+      label,
+      status: summary.dedupSuspect ? "partial" : "success",
+      startedAt,
+      result: summary,
+    });
   } catch (err) {
     console.error(`Failed${err.code ? ` [${err.code}]` : ""}: ${err.message}`);
+    await recordScrapeRun({ job: "booli-sold", label, status: "failed", startedAt, error: err.message });
     process.exitCode = 1;
   } finally {
-    await browser.close();
     await mongoose.disconnect();
   }
 })();
