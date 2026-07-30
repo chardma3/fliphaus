@@ -78,7 +78,8 @@ test("parseDataPoints reads size, rooms, floor and sqm price from display string
   const points = parseDataPoints(
     realRecord['displayAttributes({"queryContext":"SERP_LIST_LISTING"})'].dataPoints
   );
-  assert.deepEqual(points, { sizeNum: 55, rooms: 2, floor: 5, soldPriceSqm: 65500 });
+  // feeNum is null on sold rows: they carry kr/m², while for-sale rows carry kr/mån
+  assert.deepEqual(points, { sizeNum: 55, rooms: 2, floor: 5, soldPriceSqm: 65500, feeNum: null });
 });
 
 test("parseDataPoints never reads plot area as living area", () => {
