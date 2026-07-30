@@ -21,27 +21,88 @@ function looksChallenged(text) {
   return CHALLENGE_RE.test(text || "");
 }
 
+// Navigation budget. Through the residential proxy, Booli is far slower than it is
+// from a home connection, so these are generous and env-tunable.
+const NAV_TIMEOUT_MS = Math.max(5000, Number(process.env.BOOLI_NAV_TIMEOUT_MS) || 90000);
+const NAV_ATTEMPTS = Math.max(1, Number(process.env.BOOLI_NAV_ATTEMPTS) || 3);
+// How long to keep waiting for a Cloudflare interstitial to resolve itself.
+const CHALLENGE_SETTLE_MS = Math.max(0, Number(process.env.BOOLI_CHALLENGE_SETTLE_MS) || 20000);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// We only ever need the HTML (the embedded __NEXT_DATA__) — never the pictures.
+// Dropping images/media/fonts/stylesheets is what makes this viable over a metered
+// residential proxy: those bytes are the bulk of a Booli page, they're billed by
+// the gigabyte, and waiting on them is what blew the old 45s navigation budget.
+// Scripts and XHR are deliberately ALLOWED: Cloudflare's challenge needs JS to run.
+async function installResourceBlocking(page) {
+  if (typeof page.setRequestInterception !== "function") return false;
+  await page.setRequestInterception(true);
+  page.on("request", (req) => {
+    const type = typeof req.resourceType === "function" ? req.resourceType() : "";
+    if (["image", "media", "font", "stylesheet"].includes(type)) req.abort().catch(() => {});
+    else req.continue().catch(() => {});
+  });
+  return true;
+}
+
+// Navigate with retries. A residential proxy pool is wildly uneven — one slow exit
+// shouldn't end a harvest, and the next attempt usually draws a different IP.
+async function gotoWithRetry(page, url, { timeout = NAV_TIMEOUT_MS, attempts = NAV_ATTEMPTS } = {}) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      // domcontentloaded, NOT networkidle2: Booli keeps ad/analytics connections
+      // open, so "network is quiet" may never arrive through a slow proxy — the
+      // cause of the 45s timeouts. The HTML is all we need, and it's there at DCL.
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < attempts) await sleep(1500 * attempt);
+    }
+  }
+  const err = new Error(`Booli navigation failed after ${attempts} attempt(s): ${lastErr && lastErr.message}`);
+  err.code = "BOOLI_NAV_FAILED";
+  throw err;
+}
+
 // Land on Booli once so Cloudflare issues its clearance cookie for this session.
-// Throws a named error on a challenge page — a silent fallthrough would otherwise
-// look identical to "this area has no sold listings".
-async function openBooliSession(page, { timeout = 45000 } = {}) {
-  await page.goto(BOOLI_BASE, { waitUntil: "networkidle2", timeout });
-  const title = await page.title();
-  const body = await page.evaluate(() => document.body?.innerText?.slice(0, 200) || "");
-  if (looksChallenged(`${title}\n${body}`)) {
+// Throws a named error if the challenge never clears — a silent fallthrough would
+// otherwise look identical to "this area has no sold listings".
+async function openBooliSession(page, { timeout = NAV_TIMEOUT_MS, settleMs = CHALLENGE_SETTLE_MS } = {}) {
+  await gotoWithRetry(page, BOOLI_BASE, { timeout });
+
+  // Because we now stop at domcontentloaded, we can arrive DURING the interstitial.
+  // Poll until it resolves itself (it redirects once its JS finishes) rather than
+  // declaring a block that isn't one.
+  const readState = async () => {
+    const title = await page.title();
+    const body = await page.evaluate(() => document.body?.innerText?.slice(0, 200) || "");
+    return { title, combined: `${title}\n${body}` };
+  };
+
+  let state = await readState();
+  const deadline = Date.now() + settleMs;
+  while (looksChallenged(state.combined) && Date.now() < deadline) {
+    await sleep(1000);
+    state = await readState();
+  }
+
+  if (looksChallenged(state.combined)) {
     const err = new Error(
-      "Booli served a Cloudflare challenge — this exit IP is blocked. Retry for a fresh proxy IP (check HEMNET_PROXY_*)."
+      "Booli served a Cloudflare challenge that didn't clear — this exit IP is blocked. Retry for a fresh proxy IP (check HEMNET_PROXY_*)."
     );
     err.code = "BOOLI_CHALLENGED";
     throw err;
   }
-  return { title };
+  return { title: state.title };
 }
 
 // Read the parsed __NEXT_DATA__ out of a server-rendered Booli page.
-function fetchNextDataWith(page, { timeout = 45000 } = {}) {
+function fetchNextDataWith(page, { timeout = NAV_TIMEOUT_MS, attempts = NAV_ATTEMPTS } = {}) {
   return async function fetchNextData(url) {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+    await gotoWithRetry(page, url, { timeout, attempts });
     return page.evaluate(() => {
       const el = document.getElementById("__NEXT_DATA__");
       if (!el) return null;
@@ -87,6 +148,8 @@ async function resolveAreaId(page, name, { municipality = "Stockholm" } = {}) {
 
 module.exports = {
   looksChallenged,
+  installResourceBlocking,
+  gotoWithRetry,
   openBooliSession,
   fetchNextDataWith,
   resolveAreaId,
