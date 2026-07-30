@@ -363,8 +363,19 @@ the real sourcing edge, so those listings are surfaced, but:
 - They get their own **🔜 Kommande** view (`/api/listings?view=kommande`) and are
   excluded from Deals / Move-in ready / Sitting / New builds (`isUpcoming: {$ne:true}`
   on those filters) — a price-less card can't be ranked by ROI or carry a profit badge.
-- They're shown at **any** renovation score, including unscored: seeing a pre-market
-  flat early is the point, and waiting for analysis defeats it.
+- It's a **shortlist worth a phone call**, not a feed. Listings already assessed and
+  rejected (scored below `DEAL_MIN_SCORE` — renovated already / too little upside) are
+  dropped, but **unscored ones are kept**: those are the newest arrivals, and waiting
+  for the analysis queue would defeat the timing edge the view exists for.
+- The budget ceiling applies to the **valuation** (`sourceEstimateNum`), NOT
+  `askingPriceNum`. Mongo's `$lte` doesn't match null, so applying a price cap to a
+  price-less listing matches nothing — and `maxPrice` defaults to 4M, which would make
+  the tab permanently empty. Listings with no valuation yet are kept.
+- Sorted **newest first**: recency is the value, since the edge is reaching an agent
+  before bidding opens.
+- Judge it on one question: did it ever prompt you to contact an agent? If not, set
+  `BOOLI_LISTINGS` back to `dry`/unset — `commit` still brings in the ~1/3 of Booli
+  listings that DO have a price, and those slot into Deals with full profit maths.
 
 **Photos.** Booli's `Image` entities carry no URL; it's derived from the id
 (`https://bcdn.se/images/cache/{id}_1024x0.jpg`), so no per-listing detail fetch is
