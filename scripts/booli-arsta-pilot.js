@@ -33,7 +33,7 @@ const {
   logProxyStatus,
 } = require("../api/puppeteer-options");
 const { BOOLI_AREA_IDS, buildSoldSearchUrl, normalizeBooliSold, collectBooliSold } = require("../api/booli");
-const { openBooliSession, fetchNextDataWith, resolveAreaId } = require("../api/booli-transport");
+const { openBooliSession, fetchNextDataWith, resolveAreaId, installResourceBlocking } = require("../api/booli-transport");
 
 puppeteer.use(StealthPlugin());
 
@@ -53,6 +53,9 @@ function median(values) {
   const page = await browser.newPage();
   await authenticateProxyPage(page);
   await page.setViewport({ width: 1280, height: 800 });
+  // Skip images/media/fonts/CSS: we only read the embedded JSON, and those bytes
+  // are both the slowest part over the proxy and the expensive part (metered by GB).
+  await installResourceBlocking(page);
 
   try {
     console.log("\n▶ Opening a Booli session (clearing Cloudflare)…");
