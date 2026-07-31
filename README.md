@@ -284,11 +284,24 @@ If data is stale and the scrape failed:
 4. **`Could not find Chrome`** = the cron job didn't install the browser — set Build Command to `npm install && npx puppeteer browsers install chrome` + `PUPPETEER_CACHE_DIR=/opt/render/project/src/.cache/puppeteer`, then **Clear build cache & deploy** (a plain Trigger Run won't rebuild).
 5. **Trigger Run** again after checking the source site is reachable, or run `node scripts/scheduled-scrape.js active` from the cron job's Shell.
 
-### Second source: Booli sold comps (opt-in, not yet in the cron)
+### Second source: Booli sold comps (LIVE since 2026-07-31)
 
 Booli is a second source for *sold* comps, because sold prices are what the resale
-estimate — and therefore every profit badge — is computed from. It is **run by hand
-for now**; the daily cron is untouched.
+estimate — and therefore every profit badge — is computed from. It runs as a stage of
+the daily cron, gated by `BOOLI_SOLD_INGEST` (currently `commit` on the scrape
+service).
+
+Steady state looks like this in `/api/scrape-health` (`job: "booli-sold"`) — note the
+second row recognising almost everything as already held rather than duplicating it:
+
+```
+2026-07-31 08:16  commit=True  harvested=175  inserted=77  merged=98  unchanged=0
+2026-07-31 11:37  commit=True  harvested=175  inserted=1   merged=1   unchanged=173
+```
+
+The **merged** count is the health signal: it's the Booli↔Hemnet overlap. Near-zero
+merges in an area we already scrape means matching is failing, not that Booli's
+inventory is unique — the run warns when it sees that (`dedupSuspect`).
 
 **How Booli is read.** Its GraphQL only accepts *persisted* queries (GET + a
 sha256 hash), so our own queries get a 403 Cloudflare challenge. Instead the
@@ -303,7 +316,9 @@ error — it quietly floods the comp set with the whole country. Verified ids li
 `BOOLI_AREA_IDS` (Årsta = `874649`); anything else is resolved live and treated as
 fatal if lookup fails.
 
-**Order of operations** — the migration is a prerequisite, not a cleanup:
+**Order of operations** — the migration is a prerequisite, not a cleanup. Already run
+in production (2026-07-31: 9,838 records fingerprinted), so this is for a fresh
+environment or a re-check:
 
 ```bash
 node scripts/migrate-sold-sources.js            # report what it would change
@@ -311,6 +326,14 @@ node scripts/migrate-sold-sources.js --commit   # then apply
 node scripts/booli-sold-ingest.js               # dry run: what would insert/merge
 node scripts/booli-sold-ingest.js --commit      # then write
 ```
+
+⚠️ **Render's interactive shell serves a STALE checkout** — it snapshots the commit
+from when the session started, so a fix you just merged isn't there. Always run
+`git log --oneline -1` in a shell before trusting its output; two rounds of "the fix
+isn't working" turned out to be this. `git fetch --depth 1 origin main && git reset
+--hard FETCH_HEAD` updates it in place. Better still, prefer the cron stages below:
+they run in a managed container and record their result to `/api/scrape-health`, so a
+dropped shell connection can't cost you the answer.
 
 The migration (a) drops the non-sparse unique `hemnetId_1` index so a Booli-only
 sale (which has no Hemnet id) can be stored at all, and (b) backfills
@@ -343,7 +366,8 @@ A merge only ever *fills blanks* (floor, coordinates, days-on-market) and append
 ### Second source: Booli for-sale listings + "Kommande" (opt-in)
 
 Booli also feeds the DASHBOARD, not just the comp set. Opt in per mode on the scrape
-cron service:
+cron service (`BOOLI_SOLD_INGEST` and `BOOLI_LISTINGS` are independent — the sold
+stage is live; the feed stage is opt-in):
 
 ```
 BOOLI_LISTINGS=dry      # report what it would insert/merge, write nothing
@@ -389,6 +413,20 @@ for the same flat (filling blanks only — Hemnet's price, photos and our analys
 never overwritten), but **two records from the same source never merge**. A live Årsta
 run into an empty store produced 6 same-source merges before that guard existed;
 unlike a skewed statistic, that failure makes a card disappear from the dashboard.
+
+### Booli environment variables (all on the scrape cron service)
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `BOOLI_SOLD_INGEST` | unset (off) | `dry` = report only, `commit` = merge Booli sold comps. **Currently `commit`.** |
+| `BOOLI_SOLD_AREA` | `Årsta` | Which area's sold comps to harvest. |
+| `BOOLI_SOLD_PAGES` | `5` | Pages of sold comps (35/page). 5 = 175 of the ~8,300 Booli holds for Årsta. |
+| `BOOLI_LISTINGS` | unset (off) | `dry` / `commit` for the for-sale + Kommande feed. |
+| `BOOLI_LISTINGS_AREA` | `BOOLI_SOLD_AREA` then `Årsta` | Area for the feed stage. |
+| `BOOLI_LISTINGS_PAGES` | `5` | Pages of for-sale listings (35/page). |
+| `BOOLI_NAV_TIMEOUT_MS` | `90000` | Per-navigation budget. Booli through the proxy is slow. |
+| `BOOLI_NAV_ATTEMPTS` | `3` | Navigation retries — a residential pool is uneven and a retry draws a new exit. |
+| `BOOLI_CHALLENGE_SETTLE_MS` | `20000` | How long to let a Cloudflare interstitial resolve before calling it a block. |
 
 ### Dashboard data endpoints (read-only, no auth)
 

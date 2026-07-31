@@ -1,73 +1,108 @@
 # FlipHaus Handoff
 
-Last updated: 2026-05-24 13:32 CEST
-Project path: `/Users/clairehardman/fliphaus`
+Last updated: 2026-07-31
+Project path: `/Users/clairehardman/fliphaus` (the active clone — what deploys to Render)
 Git remote: `https://github.com/chardma3/fliphaus.git`
-Current HEAD: pending commit for Hemnet refresh safety
-Working tree at handoff creation: contains Hemnet refresh safety changes until committed
+Current HEAD: `5b891f7` — Fix the cast error that killed the Booli listings stage (#149)
+Working tree: clean · `npm test` → **298 pass, 0 fail**
 
 ## Purpose of this file
 
-This file is the continuity source of truth for long FlipHaus sessions. If the WhatsApp/Hermes chat is reset, read this file first before searching old session history.
+Continuity source of truth for long FlipHaus sessions. Read this first before
+searching old session history.
 
-## Operating agreement with Claire
+## Where things stand (2026-07-31)
 
-Before building or changing code, Hermes should briefly answer with:
-- what the task appears to be
-- what will be checked or changed
-- likely risk
-- whether Claire needs to approve anything
+The daily refresh is **healthy** and Booli is live as a second source for sold comps.
 
-During long work, Hermes should:
-- work in bounded chunks
-- update this file before/after meaningful coding chunks
-- update this file before risky changes, long tests/builds, or reset/context warnings
-- report back after each chunk with what changed, what was verified, and what remains
-- avoid relying on old chat history when this file has the needed context
+```
+ACTIVE: 2630 listings · lastScrapeDate 2026-07-31 · ranToday true · stale false
+SOLD:   9948 comps
+booli-sold  2026-07-31 11:37  commit=True  harvested=175  inserted=1  merged=1  unchanged=173
+```
 
-## Current objective
+That last row is the shape to want: the run recognises nearly everything as already
+held instead of duplicating it.
 
-Make the Hemnet refresh pipeline reliable and safe: fail clearly on bot-protection/parser failures, never let a zero active-listing scrape mark existing listings as disappeared, split long sold-data refreshes into shorter bounded requests, keep the daily cron, and document operations in the README.
+### Two live things worth knowing
 
-## Current known plan
+1. **`BOOLI_SOLD_INGEST=commit`** is set on the scrape cron service. Booli sold comps
+   merge into the sold store daily. The **merged** count in `/api/scrape-health`
+   (`job: "booli-sold"`) is the health signal — near-zero merges in an area we already
+   scrape would mean matching is failing, not that Booli is unique.
+2. **`BOOLI_LISTINGS` is NOT set yet.** The for-sale + Kommande feed is built and
+   fixed but has never completed a run. Setting it to `dry` then `commit` is the next
+   action (see below).
 
-Implementation plan exists at:
+## Immediate next steps
 
-`/Users/clairehardman/fliphaus/docs/plans/fix-profit-roi-and-sold-status.md`
+1. **Turn on the Booli feed.** Set `BOOLI_LISTINGS=dry` on the scrape cron service,
+   Trigger Run, and read `/api/scrape-health` (`job: "booli-listings"`). Expect ~70
+   Årsta listings: ~47 pre-market, ~23 priced. Then `commit`.
+   - Its first attempt (08:17 today) failed on a `nextShowing` cast error; fixed in
+     #149 but **not yet re-run**.
+2. **Judge Kommande after a fortnight** on one question: did it ever prompt Claire to
+   contact an agent? If not, set `BOOLI_LISTINGS` back to `dry`/unset — `commit` still
+   brings in the ~1/3 of Booli listings that have a real price, and those slot into
+   Deals with full profit maths. The tab is a shortlist, not a feed, by design.
+3. **Task #1 — Booli sold depth.** At `BOOLI_SOLD_PAGES=5` we take 175 of the ~8,300
+   sold apartments Booli holds for Årsta alone. Deeper coverage is the real
+   resale-estimate win; it costs proxy GB and cron runtime. Decide a depth per area.
+4. **Scoring backlog.** Photo analysis is capped at 10/run (`SCRAPE_ANALYZE_LIMIT`).
+   Committing the Booli feed adds ~70 Årsta listings to that queue.
 
-Priority from that plan:
-1. Finish/verify Tasks 1-4 first: shared profitability logic, suppress misleading renovation ROI, separate renovation upside from market-gap upside, and use BRF/sold-comparable confidence before showing strong profit claims.
-2. Then Tasks 5-6: improve sold-status semantics and sold-listing reconciliation.
-3. Add regression tests before deployment where possible.
+## Hard-won operational facts (do not re-derive)
 
-## Known bug context
+- **Render's interactive shell serves a STALE checkout.** It snapshots the commit from
+  when the session started, so a just-merged fix isn't there. Always run
+  `git log --oneline -1` in a shell before trusting its output — two rounds of "your
+  fix isn't working" were this. `git fetch --depth 1 origin main && git reset --hard
+  FETCH_HEAD` fixes it in place. It also drops long connections, which is why both
+  Booli runs exist as **cron stages** that record to `/api/scrape-health`.
+- **The 2026-07-25 → 07-29 outage was proxy quota**, not Hemnet and not the scraper.
+  Claire topped up the residential proxy and the 13:00 run recovered on its own
+  (22/22 areas, 0 failed). Hemnet was verified healthy throughout by hitting the real
+  scrape URL from a home IP and parsing 50 listings.
+- **`Refusing to persist zero active listings` is a SYMPTOM, not a diagnosis.** It's
+  the guard working after every area already failed. The dashboard now classifies the
+  real per-area cause (proxy / blocked / parser / timeout / network / browser) via
+  `api/scrape-failures.js` — see the health panel's "Why the refresh is stalled".
+- **Hemnet and Booli can both be scraped LOCALLY** from Claire's residential IP with
+  no proxy (`npm install` first; `~/fliphaus` has no `.env`). This is the fastest way
+  to separate a source problem from a transport problem.
+- **Booli specifics.** Its GraphQL rejects our own queries (403); the data comes from
+  the server-rendered page's `__NEXT_DATA__`. `?q=<name>` is silently ignored and
+  falls back to areaId `77104` = *"Sverige"* (2.9M rows) — an unresolved area must
+  always be treated as fatal. Årsta = `874649`.
+- **No `MONGO_URI` locally**, so DB-touching scripts can only be run from Render.
 
-Problem listing: Skrakgränd 3, Hemnet id `21672135`.
+## What NOT to repeat
 
-Previous issue:
-- The AI/property analysis correctly identified the apartment as substantially renovated / move-in ready / low renovation upside.
-- The frontend profit badge nevertheless calculated roughly +1.0m profit because it used area renovated sqm price minus asking price and renovation cost.
-- That double-counted the renovated premium for an apartment that was already renovated.
+Three bugs this week all shipped looking correct and were only caught by a real run.
+The dry-run defaults are what made each cheap to find — keep them:
 
-Expected behaviour:
-- Skrakgränd 3 must not show a large positive renovation ROI badge.
-- It should show low renovation upside / move-in-ready / neutral wording, or cautiously label any spread as a possible market gap rather than renovation ROI.
+- `booliId` declared `unique + sparse` **and** `default: null`. Sparse still indexes
+  stored nulls, so the migration died on `E11000 dup key { booliId: null }`. Uniqueness
+  over an optional field needs a **partial** index.
+- The Kommande view inherited the base `askingPriceNum ≤ maxPrice` clause. Mongo's
+  `$lte` doesn't match null, and `maxPrice` defaults to 4M — so the tab would have been
+  permanently **empty**. A budget cap can't apply to a price-less listing.
+- `nextShowing` arrives from Booli as an **object**, our schema stores a string, and
+  the cast error killed the entire stage. Every listing in the original probe happened
+  to have `nextShowing: null`. There's now a test asserting no object leaks into any
+  scalar field.
 
-## Relevant files
+Two dedup rules, both learned from live data rather than reasoning:
 
-Likely files for profitability/UI work:
-- `profitability.js`
-- `index.html`
-- `favorites.html`
-- `tests/*.test.js`
-
-Likely files for sold-status work:
-- `api/scrape.js`
-- `api/scrape-sold.js`
-- `api/listing.model.js`
-- `models/sold.model.js`
-- potentially `api/reconcile-sold.js`
-- `server.js`
+- **Never merge two records from the same source** — within a source, different ids
+  mean different records. Real Årsta data has distinct flats identical on every
+  comparable attribute (Skälderviksplan 11: two 54 m² 2-rooms, same floor, same
+  building). For sold comps a bad merge skews the kr/m² percentile; for listings it
+  makes a card **vanish**.
+- **Sold identity is "same flat AND same sale event"** — one flat legitimately sells
+  more than once, and those are separate comps. A known floor mismatch disqualifies,
+  and prices must agree within 0.5% (a 2% window merged two different flats sold weeks
+  apart).
 
 ## Project commands
 
@@ -75,53 +110,16 @@ From `/Users/clairehardman/fliphaus`:
 
 ```bash
 npm install
-npm test
+npm test        # node --test tests/*.test.js  → 298 tests
 npm start
 ```
-
-Package test script currently is:
-
-```bash
-node --test tests/*.test.js
-```
-
-## Current repo state at this handoff
-
-Checked on 2026-05-22 15:21 CEST:
-- `/Users/clairehardman/fliphaus` exists and is a git repo.
-- Remote is `https://github.com/chardma3/fliphaus.git`.
-- Branch is `main`, tracking `origin/main`.
-- Working tree was clean when this file was first created.
-- There are also directories `/Users/clairehardman/FlipHaus` and `/Users/clairehardman/Documents/fliphaus`; use `/Users/clairehardman/fliphaus` unless Claire explicitly says otherwise.
-
-## Next recommended step
-
-Latest chunk completed on 2026-05-24 13:32 CEST:
-- Added `api/hemnet-refresh-safety.js` and `tests/hemnet-refresh-safety.test.js`.
-- Active and sold scrapers now detect Hemnet bot-protection / missing `__NEXT_DATA__` pages and return clear errors instead of silently treating them as zero results.
-- Active scrape now refuses to persist a zero-listing result, so a blocked scrape cannot mark existing active listings as `disappeared`.
-- Sold scrape now supports area-bounded requests through `/api/scrape-sold?area=<area>&detailLimit=20`.
-- GitHub Actions daily refresh still runs at `20 5 * * *`, but now splits sold comparable-property scraping into separate Rissne and Farsta requests.
-- README now documents the refresh pipeline, UTC/Stockholm schedule, safety rules, stale-data checks, timeout/bot-block troubleshooting, and the background-worker fallback if split HTTP requests are still too slow.
-- Verified full `npm test` passes: 26/26 tests.
-- Verified syntax/checks: `node --check api/hemnet-refresh-safety.js`, `node --check api/scrape.js`, `node --check api/scrape-sold.js`, `node --check server.js`, and `git diff --check`.
-
-Recommended next step:
-- Commit and push these changes, then watch the next GitHub Actions refresh run. If `/api/scrape-sold` still times out, lower `detailLimit` from 20 to 10 in `.github/workflows/refresh-fliphaus.yml`.
-
-## Historical notes
-
-Previous chunk completed on 2026-05-22 15:31 CEST:
-- Added `api/listing-presenter.js` and `tests/listing-presenter.test.js` to keep listing lifecycle status separate from Claire's saved/rejected preference status.
-- Updated `/api/listings`, `/api/favorites`, and `index.html` to expose `preferenceStatus` separately and preserve lifecycle status.
-- Verified relevant presenter tests and full `npm test` passed at that time.
 
 ## Reporting template
 
 After each chunk, report to Claire:
 
-1. What I checked/changed
-2. What I verified
+1. What was checked/changed
+2. What was verified (and how — live run, tests, or neither)
 3. Any risk or blocker
-4. Exact next step
+4. The exact next step
 5. Whether a reset is safe now
