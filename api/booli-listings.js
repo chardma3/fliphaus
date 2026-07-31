@@ -102,6 +102,23 @@ function harvestForSalePage(nextData) {
   };
 }
 
+// Booli's showing field is an object; our schema wants a display string. Accepts a
+// plain string too, so a shape change either way is survivable.
+function showingText(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object") return value.fullDateAndTime || value.date || null;
+  return null;
+}
+
+// "2026-07-30 10:34:28" — parse it here rather than relying on Mongoose's implicit
+// string→Date cast, so a bad value becomes null instead of a cast error mid-ingest.
+function parsePublished(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value).replace(" ", "T"));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // One Booli for-sale listing -> our Listing shape (api/listing.model.js).
 //
 // `id` is namespaced "booli-<booliId>" because that field is uniquely indexed and
@@ -148,12 +165,17 @@ function normalizeBooliListing(raw, { area = null, imageWidth = DEFAULT_IMAGE_WI
     fee: feeText,
     feeNum: points.feeNum,
     brokerAgencyName: (agency && agency.name) || null,
-    nextShowing: raw.nextShowing || null,
+    // Booli returns this as an OBJECT ({ __typename: "Showing", fullDateAndTime:
+    // "Ons 5 aug kl 17:30" }) while our schema stores a string. Passing it through
+    // threw "Cast to string failed ... at path nextShowing" and killed the whole
+    // ingest stage in production — every listing in the original probe happened to
+    // have nextShowing: null, so the populated shape was never seen.
+    nextShowing: showingText(raw.nextShowing),
     link: raw.url ? `${BOOLI_BASE}${raw.url}` : null,
     images,
     thumbnail: primaryUrl || images[0] || null,
     coordinates: lat != null && lng != null ? { lat, lng } : null,
-    publishedAt: raw.published || null,
+    publishedAt: parsePublished(raw.published),
     daysOnMarket: rawNum(raw.daysActive),
     // Pre-market flag + Booli's own valuation, kept clearly separate from price.
     isUpcoming: upcoming,
@@ -212,6 +234,8 @@ module.exports = {
   roomRank,
   orderImagesByRoom,
   harvestForSalePage,
+  showingText,
+  parsePublished,
   normalizeBooliListing,
   collectBooliListings,
   parseNumber,
