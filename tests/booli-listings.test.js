@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  showingText,
+  parsePublished,
   booliImageUrl,
   buildForSaleSearchUrl,
   roomRank,
@@ -199,4 +201,59 @@ test("collectBooliListings stops early on an empty page", async () => {
     /page=2/.test(url) ? pageWith([], { pages: 5 }) : pageWith([pricedRaw], { pages: 5 });
   const out = await collectBooliListings({ fetchNextData, areaId: "874649", maxPages: 5 });
   assert.equal(out.listings.length, 1);
+});
+
+// ── field-type safety (a production cast error) ────────────────────────────────
+
+test("showingText unwraps Booli's Showing object", () => {
+  // The real value that broke the ingest: our schema stores a string, Booli sends
+  // an object. Every listing in the original probe had nextShowing: null, so this
+  // shape only appeared once it ran against the live feed for a day.
+  assert.equal(
+    showingText({ __typename: "Showing", fullDateAndTime: "Ons 5 aug kl 17:30" }),
+    "Ons 5 aug kl 17:30"
+  );
+  assert.equal(showingText("Ons 5 aug kl 17:30"), "Ons 5 aug kl 17:30"); // survives either shape
+  assert.equal(showingText(null), null);
+  assert.equal(showingText({ __typename: "Showing" }), null);
+});
+
+test("parsePublished turns Booli's timestamp into a Date, not a cast risk", () => {
+  const d = parsePublished("2026-07-30 10:34:28");
+  assert.ok(d instanceof Date);
+  assert.equal(d.getUTCFullYear(), 2026);
+  assert.equal(parsePublished(null), null);
+  assert.equal(parsePublished("not a date"), null); // null beats a mid-ingest throw
+});
+
+test("no nested object leaks into a scalar Listing field", () => {
+  // Guards the whole class of bug, not just nextShowing: any Booli field that is an
+  // object where the schema expects a scalar kills the ENTIRE ingest stage on cast.
+  const withShowing = {
+    ...upcomingRaw,
+    nextShowing: { __typename: "Showing", fullDateAndTime: "Ons 5 aug kl 17:30" },
+  };
+  const [record] = harvestForSalePage(pageWith([withShowing])).records;
+  const l = normalizeBooliListing(record, { area: "Årsta" });
+
+  const scalarFields = [
+    "id", "source", "booliId", "streetAddress", "locationDescription", "area",
+    "housingForm", "rooms", "size", "sizeNum", "floor", "askingPrice",
+    "askingPriceNum", "squareMeterPrice", "fee", "feeNum", "brokerAgencyName",
+    "nextShowing", "link", "thumbnail", "daysOnMarket", "isUpcoming",
+    "sourceEstimateNum", "isNewConstruction", "biddingOpen",
+  ];
+  for (const field of scalarFields) {
+    const value = l[field];
+    if (value === null || value === undefined) continue;
+    assert.notEqual(
+      typeof value, "object",
+      `${field} must be a scalar, got ${JSON.stringify(value)}`
+    );
+  }
+  assert.equal(l.nextShowing, "Ons 5 aug kl 17:30");
+  assert.ok(l.publishedAt instanceof Date);
+  // the two legitimately non-scalar fields
+  assert.ok(Array.isArray(l.images));
+  assert.deepEqual(Object.keys(l.coordinates), ["lat", "lng"]);
 });
